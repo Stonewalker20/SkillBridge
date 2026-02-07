@@ -1,0 +1,14 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: skilltree-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: skilltree
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
+
