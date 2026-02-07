@@ -1,7 +1,3 @@
-Below is a **polished, public-facing README** suitable for GitHub. It is concise, professional, and written to read well to instructors, recruiters, and external reviewers. You can copy this verbatim.
-
----
-
 # SkillTree
 
 **SkillTree** is a web application designed to organize, validate, and match technical skills using real supporting evidence such as resumes, research papers, projects, and job listings. Instead of relying on shallow keyword matching, SkillTree models skills as structured entities backed by concrete artifacts, enabling more transparent and explainable skill–job alignment.
