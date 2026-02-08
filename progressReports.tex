@@ -1,0 +1,311 @@
+\documentclass[11pt]{article}
+
+% ---------------------------
+% Packages
+% ---------------------------
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+\usepackage{lastpage}
+
+% ---------------------------
+% Header / Footer (Fancy)
+% ---------------------------
+\pagestyle{fancy}
+\fancyhf{} % clear all
+
+\fancyhead[L]{CSI 4999 -- Senior Capstone}
+\fancyhead[R]{SkillBridge Weekly Progress Reports}
+
+
+\fancyfoot[L]{Project: SkillBridge}
+\fancyfoot[C]{Page \thepage\ of \pageref{LastPage}}
+\fancyfoot[R]{Winter 2026}
+
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% ---------------------------
+% Table formatting helpers
+% ---------------------------
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+% ---------------------------
+% Week Summary Page Macro
+% Each week starts on a new page and the first page is summary + contributions table.
+% ---------------------------
+\newcommand{\WeekReport}[4]{
+  \clearpage
+  \section*{Week #1 Report}
+  \addcontentsline{toc}{section}{Week #1 Report}
+  \vspace{-0.25em}
+  \noindent\textbf{Reporting Period:} #2
+
+  \vspace{0.5em}
+  \noindent\textbf{Overall Summary:} #3
+
+  \vspace{0.75em}
+  \noindent\textbf{Team Contributions (Week #1)}
+  \vspace{0.25em}
+
+  \begin{table}[H]
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\linewidth}{@{}p{1.75in}YY@{}}
+      \toprule
+      \textbf{Team Member} & \textbf{What they completed} & \textbf{Notes / Links / Artifacts} \\
+      \midrule
+      #4
+      \bottomrule
+    \end{tabularx}
+  \end{table}
+}
+
+% ---------------------------
+% Single Image Page Macro
+% Use for one full-width screenshot/figure per page.
+% ---------------------------
+\newcommand{\ImagePage}[3]{
+  \clearpage
+  \section*{Week #1 -- Images}
+  \addcontentsline{toc}{section}{Week #1 -- Images}
+  \noindent \textbf{Caption:} #3
+
+  \vspace{0.75em}
+  \begin{figure}[H]
+    \centering
+    \fbox{\includegraphics[width=0.95\linewidth]{#2}}
+    \caption{#3}
+  \end{figure}
+}
+
+% ---------------------------
+% Multi-Image Page Macro (SECOND MACRO)
+% Layout: 2-up or 4-up image grid on a single page.
+% Usage:
+%   \MultiImagePageTwo{week}{imgA}{capA}{imgB}{capB}{page title}
+%   \MultiImagePageFour{week}{imgA}{capA}{imgB}{capB}{imgC}{capC}{imgD}{capD}{page title}
+% ---------------------------
+
+\newcommand{\MultiImagePageTwo}[6]{
+  \clearpage
+  \section*{Week #1 -- #6}
+  \addcontentsline{toc}{section}{Week #1 -- #6}
+
+  \vspace{0.5em}
+  \begin{figure}[H]
+    \centering
+    \begin{tabularx}{\linewidth}{@{}X X@{}}
+      \centering
+      \fbox{\includegraphics[width=0.95\linewidth]{#2}} &
+      \centering
+      \fbox{\includegraphics[width=0.95\linewidth]{#4}} \\
+      \small #3 & \small #5 \\
+    \end{tabularx}
+  \end{figure}
+}
+
+\newcommand{\MultiImagePageFour}[10]{
+  \clearpage
+  \section*{Week #1 -- #10}
+  \addcontentsline{toc}{section}{Week #1 -- #10}
+
+  \vspace{0.5em}
+  \begin{figure}[H]
+    \centering
+    \begin{tabularx}{\linewidth}{@{}X X@{}}
+      \centering
+      \fbox{\includegraphics[width=0.95\linewidth]{#2}} &
+      \centering
+      \fbox{\includegraphics[width=0.95\linewidth]{#4}} \\
+      \small #3 & \small #5 \\
+      \\
+      \centering
+      \fbox{\includegraphics[width=0.95\linewidth]{#6}} &
+      \centering
+      \fbox{\includegraphics[width=0.95\linewidth]{#8}} \\
+      \small #7 & \small #9 \\
+    \end{tabularx}
+  \end{figure}
+}
+
+% ---------------------------
+% Document
+% ---------------------------
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{1in}
+  {\LARGE \textbf{SkillBridge Weekly Progress Reports}\par}
+  \vspace{0.5in}
+  \includegraphics[width=0.33\textwidth]{logo.png}\\
+  \vspace{0.5in}
+  {\large CSI 4999 -- Senior Capstone (Winter 2026)\par}
+  \vspace{0.5in}
+  \begin{tabular}{rl}
+    \textbf{Team Members:} &
+    Justin Elia \\
+    & Jennifer Gonzalez \\
+    & Spencer Roeren \\
+    & Cordell Stonecipher \\
+  \end{tabular}
+
+  \vfill
+  {\large \textbf{Reports Included:} Weeks 1 through 8\par}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+% =========================================================
+% WEEK 1 (PR1-Specific Content)
+% Requirements:
+% - Brief description of collected data
+% - Screenshots of database tables
+% - Screenshots or digital UI mockups for planned use cases
+% - Short explanation of how the data will be displayed in the UI
+% =========================================================
+\WeekReport{1}{(Fill: dates)}{
+Week 1 established the project foundation by initializing the GitHub repository, setting up a local MongoDB database using Docker, and implementing a FastAPI backend skeleton. Realistic sample datasets were collected and inserted into core collections to support early UI development and validate planned display scenarios. The team aligned on primary use cases and defined how resumes, papers, and job listings will be represented as evidence-backed skills within the system.
+}{
+Justin Elia & (Fill: dataset collection tasks) & (Fill: sources, notes) \\
+Jennifer Gonzalez & (Fill: dataset collection tasks) & (Fill: sources, notes) \\
+Spencer Roeren & (Fill: UI mockups / wireframes) & (Fill: Figma link, images) \\
+Cordell Stonecipher & GitHub repo + MongoDB (Docker) + FastAPI API + seed datasets & (Fill: repo link, endpoints, seed script) \\
+}
+
+\subsection*{Week 1 -- Collected Data (Brief Description)}
+\addcontentsline{toc}{subsection}{Week 1 -- Collected Data (Brief Description)}
+\noindent
+In Week 1, we collected and seeded realistic sample data to validate the database design and planned UI flows. The initial dataset includes:
+\begin{itemize}
+  \item \textbf{Skills:} A canonical skills list with categories and aliases (e.g., Python, FastAPI, MongoDB, NLP, Information Retrieval).
+  \item \textbf{Evidence:} Artifact records representing resumes, research papers, and projects. Each artifact includes a short excerpt and a list of tagged skills.
+  \item \textbf{Jobs:} Job listings with structured required skills and a description excerpt to support skill gap analysis.
+\end{itemize}
+
+\subsection*{Week 1 -- How the Data Will Be Displayed in the UI}
+\addcontentsline{toc}{subsection}{Week 1 -- How the Data Will Be Displayed in the UI}
+\noindent
+The UI will display data using the backend API endpoints:
+\begin{itemize}
+  \item \textbf{Skill Catalog Page:} Displays the canonical list of skills (name, category, aliases) and supports filtering by category.
+  \item \textbf{Evidence Page:} Shows a user’s uploaded/linked artifacts (resume, paper, project) with excerpt previews and extracted or assigned skill tags.
+  \item \textbf{Job Browser Page:} Lists job postings with required skills. Selecting a job shows required skills and a summarized description excerpt.
+  \item \textbf{Match Results Page:} Presents a match score and highlights matched skills, missing skills (gaps), and the specific evidence items supporting each matched skill.
+\end{itemize}
+
+% -------------------------
+% Week 1 Images (DB screenshots + UI mockups)
+% Replace filenames with your actual image paths.
+% -------------------------
+
+% DB screenshots (example: 2-up page)
+% \MultiImagePageTwo{1}{images/week1_db_skills.png}{MongoDB: skills collection (sample documents)}
+%                     {images/week1_db_jobs.png}{MongoDB: jobs collection (sample documents)}
+%                     {Database Screenshots}
+
+% Evidence + another DB view (example: 2-up page)
+% \MultiImagePageTwo{1}{images/week1_db_evidence.png}{MongoDB: evidence collection (sample documents)}
+%                     {images/week1_swagger_docs.png}{FastAPI Swagger (/docs) showing endpoints}
+%                     {Database + API Screenshots}
+
+% UI mockups (example: 4-up page)
+% \MultiImagePageFour{1}{images/week1_ui_skill_catalog.png}{UI Mockup: Skill Catalog}
+%                      {images/week1_ui_evidence.png}{UI Mockup: Evidence Management}
+%                      {images/week1_ui_jobs.png}{UI Mockup: Job Browser}
+%                      {images/week1_ui_match.png}{UI Mockup: Match Results}
+%                      {UI Mockups (Planned Use Cases)}
+
+% =========================================================
+% WEEK 2
+% =========================================================
+\WeekReport{2}{(Fill: dates)}{
+(Overall summary for Week 2.)
+}{
+Justin Elia & (Fill) & (Fill) \\
+Jennifer Gonzalez & (Fill) & (Fill) \\
+Spencer Roeren & (Fill) & (Fill) \\
+Cordell Stonecipher & (Fill) & (Fill) \\
+}
+
+% =========================================================
+% WEEK 3
+% =========================================================
+\WeekReport{3}{(Fill: dates)}{
+(Overall summary for Week 3.)
+}{
+Justin Elia & (Fill) & (Fill) \\
+Jennifer Gonzalez & (Fill) & (Fill) \\
+Spencer Roeren & (Fill) & (Fill) \\
+Cordell Stonecipher & (Fill) & (Fill) \\
+}
+
+% =========================================================
+% WEEK 4
+% =========================================================
+\WeekReport{4}{(Fill: dates)}{
+(Overall summary for Week 4.)
+}{
+Justin Elia & (Fill) & (Fill) \\
+Jennifer Gonzalez & (Fill) & (Fill) \\
+Spencer Roeren & (Fill) & (Fill) \\
+Cordell Stonecipher & (Fill) & (Fill) \\
+}
+
+% =========================================================
+% WEEK 5
+% =========================================================
+\WeekReport{5}{(Fill: dates)}{
+(Overall summary for Week 5.)
+}{
+Justin Elia & (Fill) & (Fill) \\
+Jennifer Gonzalez & (Fill) & (Fill) \\
+Spencer Roeren & (Fill) & (Fill) \\
+Cordell Stonecipher & (Fill) & (Fill) \\
+}
+
+% =========================================================
+% WEEK 6
+% =========================================================
+\WeekReport{6}{(Fill: dates)}{
+(Overall summary for Week 6.)
+}{
+Justin Elia & (Fill) & (Fill) \\
+Jennifer Gonzalez & (Fill) & (Fill) \\
+Spencer Roeren & (Fill) & (Fill) \\
+Cordell Stonecipher & (Fill) & (Fill) \\
+}
+
+% =========================================================
+% WEEK 7
+% =========================================================
+\WeekReport{7}{(Fill: dates)}{
+(Overall summary for Week 7.)
+}{
+Justin Elia & (Fill) & (Fill) \\
+Jennifer Gonzalez & (Fill) & (Fill) \\
+Spencer Roeren & (Fill) & (Fill) \\
+Cordell Stonecipher & (Fill) & (Fill) \\
+}
+
+% =========================================================
+% WEEK 8
+% =========================================================
+\WeekReport{8}{(Fill: dates)}{
+(Overall summary for Week 8.)
+}{
+Justin Elia & (Fill) & (Fill) \\
+Jennifer Gonzalez & (Fill) & (Fill) \\
+Spencer Roeren & (Fill) & (Fill) \\
+Cordell Stonecipher & (Fill) & (Fill) \\
+}
+
+\end{document}
