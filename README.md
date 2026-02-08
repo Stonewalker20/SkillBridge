@@ -68,7 +68,7 @@ All collections include realistic sample data to support development and testing
 ## Repository Structure
 
 ```
-skilltree/
+skillbridge/
   backend/        # FastAPI application
   data/seed/      # Sample MongoDB seed data
   infra/          # Docker Compose configuration
