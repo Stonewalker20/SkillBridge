@@ -18,7 +18,7 @@ def load_json(filename: str):
 async def main():
     load_dotenv(ROOT / ".env")  # repo root .env
     mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-    mongo_db = os.getenv("MONGO_DB", "skilltree")
+    mongo_db = os.getenv("MONGO_DB", "skillbridge")
 
     client = AsyncIOMotorClient(mongo_uri)
     db = client[mongo_db]
