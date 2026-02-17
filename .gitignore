@@ -24,6 +24,7 @@ venv/
 
 # Logs
 *.log
+progressReports.tex
 
 # Docker
 **/.docker/
