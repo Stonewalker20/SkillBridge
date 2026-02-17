@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
+seed_mongo.py — SkillBridge PR2 seeder (MongoDB)
+
 Seeds:
 - skills (taxonomy + aliases)
-- resume_snapshots (from processed sample_resumes.jsonl)
-- jobs (from processed sample_jobs.jsonl OR raw Kaggle CSVs; schema-tolerant)
+- resume_snapshots (from processed JSONL OR raw Kaggle resume CSVs; schema-tolerant)
+- jobs (from processed JSONL OR raw Kaggle CSVs; schema-tolerant)
 - evidence (minimal rows w/ image_ref for PR2 "includes images" + supports gaps query)
 
-Key upgrade vs previous:
-- Job normalization can build description from MULTIPLE fields (e.g., description + requirements + responsibilities)
+Key upgrades:
+- Job normalization can build description from MULTIPLE fields (description + requirements + responsibilities)
 - Location can be composed from city/state/country when "location" is missing
 - More robust date parsing and safe batch insertion
+- Skill auto-expansion from text with strong junk filtering (prevents "Re", "2014 Company Name", "000.00")
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ import glob
 import argparse
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 from pymongo import MongoClient, ASCENDING
@@ -40,6 +43,8 @@ DEFAULT_RESUME_ICON = "/images/resume_icon.png"
 DEFAULT_EVIDENCE_ICON = "/images/project_icon.png"
 
 NOW = lambda: datetime.now(timezone.utc)
+
+BATCH_SIZE = 500
 
 
 # -----------------------------
@@ -76,6 +81,15 @@ def all_existing_keys(d: Dict[str, Any], candidates: List[str]) -> List[str]:
             if val is not None and str(val).strip() != "":
                 found.append(k)
     return found
+
+
+def first_existing_col(cols: Iterable[str], candidates: List[str]) -> Optional[str]:
+    """Return first candidate col that exists (case-insensitive)."""
+    lower_map = {c.lower(): c for c in cols}
+    for c in candidates:
+        if c.lower() in lower_map:
+            return lower_map[c.lower()]
+    return None
 
 
 def load_jsonl(path: Path, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -128,28 +142,6 @@ def safe_parse_datetime(value: Any) -> datetime:
         return NOW()
 
 
-def compose_location(rec: Dict[str, Any]) -> str:
-    """Try location field, else compose from city/state/country."""
-    # common location fields first
-    loc_key = first_existing_key(rec, JOB_LOCATION_KEYS)
-    if loc_key:
-        return clean_text(rec.get(loc_key))
-
-    city_key = first_existing_key(rec, ["city", "City", "job_city"])
-    state_key = first_existing_key(rec, ["state", "State", "region", "job_state"])
-    country_key = first_existing_key(rec, ["country", "Country"])
-
-    parts = []
-    if city_key:
-        parts.append(clean_text(rec.get(city_key)))
-    if state_key:
-        parts.append(clean_text(rec.get(state_key)))
-    if country_key:
-        parts.append(clean_text(rec.get(country_key)))
-
-    return ", ".join([p for p in parts if p])
-
-
 def join_text_fields(rec: Dict[str, Any], keys: List[str], sep: str = "\n\n") -> str:
     """Join multiple non-empty fields into one text blob."""
     chunks: List[str] = []
@@ -171,7 +163,11 @@ def seed_skills(db, skills_json: Path, wipe: bool = False) -> int:
     if not skills_json.exists():
         raise FileNotFoundError(f"skills taxonomy file not found: {skills_json}")
 
-    data = json.loads(skills_json.read_text(encoding="utf-8"))
+    raw = skills_json.read_text(encoding="utf-8").strip()
+    if not raw:
+        raise ValueError(f"skills taxonomy file is empty: {skills_json}")
+
+    data = json.loads(raw)
     if not isinstance(data, list):
         raise ValueError("skills.json must be a JSON array of skill objects")
 
@@ -193,6 +189,10 @@ def seed_skills(db, skills_json: Path, wipe: bool = False) -> int:
 
     return inserted
 
+
+# -----------------------------
+# Skill Auto-Expansion (filtered)
+# -----------------------------
 STOP = set("""
 a an and are as at be been but by can could did do does for from had has have he her his i if in into is it its
 just may might more most no not of on one or our out over said she should so than that the their them then there
@@ -200,6 +200,38 @@ these they this to too up us was we were what when where which who will with wou
 """.split())
 
 SKILL_TOKEN_RE = re.compile(r"[^a-z0-9\+\#\.\- ]+")
+BAD_SKILL_RE = re.compile(
+    r"(^\d+(\.\d+)?$)|"        # 000.00 / 401
+    r"(^\d{4}$)|"              # years
+    r"(^[a-z]{1,2}$)|"         # re, de, rn
+    r"(^[^\w]+$)|"             # punctuation-only
+    r"(^\d+[a-z]+$)",          # 401k, etc (often not a skill; you can loosen later)
+    re.IGNORECASE,
+)
+
+BAD_PHRASES = [
+    "ability to",
+    "equal opportunity",
+    "applicants receive",
+    "company name",
+    "base salary",
+    "benefits package",
+    "receive consideration",
+    "years of experience",
+    "must be able",
+    "all qualified applicants",
+    "race color religion sex",
+]
+
+GENERIC_NGRAM_BLACKLIST = {
+    "project management",
+    "team player",
+    "communication skills",
+    "problem solving",
+    "fast paced environment",
+    "work independently",
+}
+
 
 def normalize_skill_phrase(s: str) -> str:
     s = s.lower().strip()
@@ -207,73 +239,127 @@ def normalize_skill_phrase(s: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
+
 def title_case_skill(s: str) -> str:
-    # Keep common tech casing sensible
     overrides = {
-        "c++": "C++", "c#": "C#", "node.js": "Node.js", "react.js": "React",
-        "react": "React", "typescript": "TypeScript", "javascript": "JavaScript",
-        "mongodb": "MongoDB", "postgresql": "PostgreSQL", "mysql": "MySQL",
-        "aws": "AWS", "gcp": "GCP", "azure": "Azure", "fastapi": "FastAPI",
-        "pytorch": "PyTorch", "tensorflow": "TensorFlow", "scikit learn": "scikit-learn",
+        "c++": "C++",
+        "c#": "C#",
+        "node.js": "Node.js",
+        "react.js": "React",
+        "react": "React",
+        "typescript": "TypeScript",
+        "javascript": "JavaScript",
+        "mongodb": "MongoDB",
+        "postgresql": "PostgreSQL",
+        "postgres": "PostgreSQL",
+        "mysql": "MySQL",
+        "aws": "AWS",
+        "gcp": "GCP",
+        "azure": "Azure",
+        "fastapi": "FastAPI",
+        "pytorch": "PyTorch",
+        "tensorflow": "TensorFlow",
+        "scikit learn": "scikit-learn",
         "scikit-learn": "scikit-learn",
+        "rest": "REST",
+        "sql": "SQL",
+        "nlp": "NLP",
+        "lstm": "LSTM",
+        "svm": "SVM",
+        "bm25": "BM25",
+        "bert": "BERT",
+        "ci/cd": "CI/CD",
     }
     key = s.lower()
     if key in overrides:
         return overrides[key]
-    # Title-case words, preserve acronyms-ish
-    return " ".join([w.upper() if len(w) <= 4 and w.isalpha() and w.upper() == w else w.capitalize() for w in s.split()])
+
+    # Preserve common acronyms
+    parts = []
+    for w in s.split():
+        if w.isalpha() and 2 <= len(w) <= 5 and w.upper() == w:
+            parts.append(w)
+        else:
+            parts.append(w.capitalize())
+    return " ".join(parts)
+
 
 def guess_category(skill: str) -> str:
     s = skill.lower()
-    if any(k in s for k in ["python","java","c++","c#","javascript","typescript","golang","rust","scala","kotlin"]):
+    if any(k in s for k in ["python", "java", "c++", "c#", "javascript", "typescript", "golang", "rust", "scala", "kotlin"]):
         return "Programming"
-    if any(k in s for k in ["mongodb","sql","postgres","mysql","redis","snowflake","bigquery","dynamodb"]):
+    if any(k in s for k in ["mongodb", "sql", "postgres", "mysql", "redis", "snowflake", "bigquery", "dynamodb"]):
         return "Database"
-    if any(k in s for k in ["aws","azure","gcp","docker","kubernetes","terraform","ci/cd","jenkins"]):
+    if any(k in s for k in ["aws", "azure", "gcp", "docker", "kubernetes", "terraform", "ci/cd", "jenkins"]):
         return "DevOps/Cloud"
-    if any(k in s for k in ["pytorch","tensorflow","nlp","lstm","svm","bm25","transformer","bert","mlflow"]):
+    if any(k in s for k in ["pytorch", "tensorflow", "nlp", "lstm", "svm", "bm25", "transformer", "bert", "mlflow"]):
         return "ML"
-    if any(k in s for k in ["react","vue","angular","next.js","frontend","css","html"]):
+    if any(k in s for k in ["react", "vue", "angular", "next.js", "frontend", "css", "html"]):
         return "Frontend"
     return "Tools"
 
+
+def is_good_skill_candidate(s: str) -> bool:
+    s = (s or "").strip()
+    if not s:
+        return False
+    if len(s) < 3:
+        return False
+
+    low = s.lower()
+    if BAD_SKILL_RE.search(low):
+        return False
+    if any(p in low for p in BAD_PHRASES):
+        return False
+
+    # Too many words usually means it's boilerplate
+    if low.count(" ") >= 4:
+        return False
+
+    # reject tokens that are mostly digits/punct
+    alnum = sum(ch.isalnum() for ch in s)
+    if alnum / max(1, len(s)) < 0.6:
+        return False
+
+    return True
+
+
 def extract_skill_candidates_from_text(text: str) -> List[str]:
     """
-    Lightweight skill candidate extractor:
-    - grabs capitalized tokens, tech tokens with symbols (C++, C#, Node.js)
-    - pulls 1-3 word ngrams but filters heavily
+    Lightweight candidate extractor:
+    - tech tokens with symbols (C++, C#, Node.js, CI/CD)
+    - 1-3 word ngrams with heavy filtering
     """
     text = clean_text(text)
     if not text:
         return []
     raw = normalize_skill_phrase(text)
-
     tokens = raw.split()
+
     toks = [t for t in tokens if t and t not in STOP and len(t) > 1]
     cands: List[str] = []
 
-    # include tokens with tech symbols already normalized
+    # symbol tokens
     for t in toks:
-        if any(ch in t for ch in ["+", "#", "."]):
+        if any(ch in t for ch in ["+", "#", ".", "/"]):
             cands.append(t)
 
-    # ngrams (1-3)
-    for n in (1,2,3):
-        for i in range(0, len(toks)-n+1):
-            ng = " ".join(toks[i:i+n])
-            if len(ng) < 2:
+    # ngrams
+    for n in (1, 2, 3):
+        for i in range(0, len(toks) - n + 1):
+            ng = " ".join(toks[i : i + n]).strip()
+            if not ng:
                 continue
-            # filter junk
+            if ng in GENERIC_NGRAM_BLACKLIST:
+                continue
             if any(w in STOP for w in ng.split()):
                 continue
-            if ng.isdigit():
-                continue
-            # drop generic phrases
-            if ng in {"project management","team player","communication skills","problem solving"}:
+            if not is_good_skill_candidate(ng):
                 continue
             cands.append(ng)
 
     return cands
+
 
 def expand_skills_from_db_text(db, max_skills: int = 1500, min_freq: int = 15) -> int:
     """
@@ -282,7 +368,6 @@ def expand_skills_from_db_text(db, max_skills: int = 1500, min_freq: int = 15) -
     """
     skills_col: Collection = db.skills
 
-    # Pull text fields (limit to keep runtime reasonable)
     job_cursor = db.jobs.find({}, {"title": 1, "description": 1}).limit(10000)
     res_cursor = db.resume_snapshots.find({}, {"raw_text": 1}).limit(3000)
 
@@ -293,27 +378,29 @@ def expand_skills_from_db_text(db, max_skills: int = 1500, min_freq: int = 15) -
             freq[c] = freq.get(c, 0) + 1
 
     for j in job_cursor:
-        add_text(j.get("title",""))
-        add_text(j.get("description",""))
+        add_text(j.get("title", ""))
+        add_text(j.get("description", ""))
 
     for r in res_cursor:
-        add_text(r.get("raw_text",""))
+        add_text(r.get("raw_text", ""))
 
-    # Filter by min_freq
-    items = [(k,v) for k,v in freq.items() if v >= min_freq]
+    items = [(k, v) for k, v in freq.items() if v >= min_freq]
     items.sort(key=lambda x: x[1], reverse=True)
 
     inserted = 0
     for phrase, f in items[:max_skills]:
         norm = normalize_skill_phrase(phrase)
-        if not norm or len(norm) < 2:
+        if not is_good_skill_candidate(norm):
             continue
+
         name = title_case_skill(norm)
+        if not is_good_skill_candidate(name):
+            continue
 
         doc = {
             "name": name,
             "category": guess_category(name),
-            "aliases": [],   # keep empty for now; aliases later in PR3
+            "aliases": [],
             "tags": ["auto"],
             "created_at": NOW(),
         }
@@ -323,8 +410,9 @@ def expand_skills_from_db_text(db, max_skills: int = 1500, min_freq: int = 15) -
 
     return inserted
 
+
 # -----------------------------
-# Seeding: Resumes
+# Seeding: Resumes (processed JSONL)
 # -----------------------------
 def seed_resumes(db, resumes_jsonl: Path, user_id: str, limit: int, wipe: bool = False) -> int:
     col: Collection = db.resume_snapshots
@@ -342,14 +430,16 @@ def seed_resumes(db, resumes_jsonl: Path, user_id: str, limit: int, wipe: bool =
         if len(raw_text) < 200:
             continue
 
-        docs.append({
-            "user_id": clean_text(r.get("user_id")) or user_id,
-            "source_type": clean_text(r.get("source_type")) or "kaggle",
-            "raw_text": raw_text,
-            "metadata": r.get("metadata") or {"dataset": "unknown"},
-            "image_ref": clean_text(r.get("image_ref")) or DEFAULT_RESUME_ICON,
-            "created_at": NOW(),
-        })
+        docs.append(
+            {
+                "user_id": clean_text(r.get("user_id")) or user_id,
+                "source_type": clean_text(r.get("source_type")) or "kaggle",
+                "raw_text": raw_text,
+                "metadata": r.get("metadata") or {"dataset": "unknown"},
+                "image_ref": clean_text(r.get("image_ref")) or DEFAULT_RESUME_ICON,
+                "created_at": NOW(),
+            }
+        )
 
     if not docs:
         return 0
@@ -358,20 +448,117 @@ def seed_resumes(db, resumes_jsonl: Path, user_id: str, limit: int, wipe: bool =
     return len(res.inserted_ids)
 
 
+def seed_resumes_from_raw_csvs(db, raw_dir: Path, user_id: str, limit: int, wipe: bool = False) -> int:
+    """
+    Seeds resume_snapshots from Kaggle resume-dataset CSV(s).
+    Expected columns (case-insensitive):
+      - ID
+      - Resume_str
+      - Resume_html (optional)
+      - Category
+    """
+    col: Collection = db.resume_snapshots
+    if wipe:
+        col.delete_many({})
+
+    csvs = glob.glob(str(raw_dir / "**/*.csv"), recursive=True)
+    if not csvs:
+        print(f"[WARN] No resume CSV files found under: {raw_dir}")
+        return 0
+
+    inserted = 0
+    batch: List[Dict[str, Any]] = []
+
+    for p in sorted(csvs, key=lambda x: -Path(x).stat().st_size):
+        try:
+            df = pd.read_csv(p)
+        except Exception as e:
+            print(f"[WARN] Failed to read {p}: {e}")
+            continue
+
+        cols = list(df.columns)
+        id_col = first_existing_col(cols, ["ID", "Id", "id"])
+        text_col = first_existing_col(cols, ["Resume_str", "resume_str", "Resume", "resume", "text"])
+        html_col = first_existing_col(cols, ["Resume_html", "resume_html", "html"])
+        cat_col = first_existing_col(cols, ["Category", "category", "label", "Label"])
+
+        if not text_col:
+            print(f"[WARN] No Resume_str-like column found in {p}. Columns: {cols[:25]}")
+            continue
+
+        for _, row in df.iterrows():
+            raw_text = clean_text(row.get(text_col))
+            if len(raw_text) < 120:
+                continue
+
+            resume_id = clean_text(row.get(id_col)) if id_col else ""
+            category = clean_text(row.get(cat_col)) if cat_col else ""
+
+            doc = {
+                "user_id": user_id,
+                "source_type": "kaggle",
+                "raw_text": raw_text,
+                "metadata": {
+                    "dataset": "snehaanbhawal/resume-dataset",
+                    "source_file": Path(p).name,
+                    "resume_id": resume_id,
+                    "category": category,
+                },
+                "image_ref": DEFAULT_RESUME_ICON,
+                "created_at": NOW(),
+            }
+
+            if html_col:
+                html = clean_text(row.get(html_col))
+                if html:
+                    doc["metadata"]["resume_html"] = html[:5000]
+
+            batch.append(doc)
+
+            if len(batch) >= BATCH_SIZE:
+                res = col.insert_many(batch, ordered=False)
+                inserted += len(res.inserted_ids)
+                batch.clear()
+                if inserted >= limit:
+                    break
+
+        if inserted >= limit:
+            break
+
+    if batch and inserted < limit:
+        to_insert = batch[: max(0, limit - inserted)]
+        if to_insert:
+            res = col.insert_many(to_insert, ordered=False)
+            inserted += len(res.inserted_ids)
+
+    return min(inserted, limit)
+
+
 # -----------------------------
 # Seeding: Jobs (schema-tolerant)
 # -----------------------------
 JOB_TITLE_KEYS = ["title", "job_title", "position", "role", "jobtitle", "job title", "position_name"]
-# For description, we will join multiple fields if present
+
 JOB_DESC_KEYS_PRIMARY = ["description", "job_description", "job description", "desc", "text", "job_details", "jobdetails"]
 JOB_DESC_KEYS_SECONDARY = [
-    "responsibilities", "responsibility",
-    "requirements", "requirement",
-    "qualifications", "qualification",
-    "preferred_qualifications", "preferred qualifications",
-    "benefits", "about", "summary", "what_youll_do", "what you'll do",
-    "duties", "role_description", "role description"
+    "responsibilities",
+    "responsibility",
+    "requirements",
+    "requirement",
+    "qualifications",
+    "qualification",
+    "preferred_qualifications",
+    "preferred qualifications",
+    "benefits",
+    "about",
+    "summary",
+    "what_youll_do",
+    "what you'll do",
+    "duties",
+    "role_description",
+    "role description",
 ]
+
 JOB_COMPANY_KEYS = ["company", "company_name", "company name", "employer", "organization", "org"]
 JOB_LOCATION_KEYS = ["location", "job_location", "job location", "job_location_name", "workplace", "remote"]
 JOB_URL_KEYS = ["url", "job_url", "job url", "link", "posting_url", "posting url"]
@@ -383,20 +570,39 @@ JOB_FUNCTION_KEYS = ["function", "job_function", "job function", "category", "jo
 
 MIN_DESC_CHARS = 120
 
+
+def compose_location(rec: Dict[str, Any]) -> str:
+    """Try location field, else compose from city/state/country."""
+    loc_key = first_existing_key(rec, JOB_LOCATION_KEYS)
+    if loc_key:
+        return clean_text(rec.get(loc_key))
+
+    city_key = first_existing_key(rec, ["city", "job_city"])
+    state_key = first_existing_key(rec, ["state", "region", "job_state"])
+    country_key = first_existing_key(rec, ["country"])
+
+    parts = []
+    if city_key:
+        parts.append(clean_text(rec.get(city_key)))
+    if state_key:
+        parts.append(clean_text(rec.get(state_key)))
+    if country_key:
+        parts.append(clean_text(rec.get(country_key)))
+
+    return ", ".join([p for p in parts if p])
+
+
 def normalize_job_record(rec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    # Title: first non-empty
     title_key = first_existing_key(rec, JOB_TITLE_KEYS)
     title = clean_text(rec.get(title_key)) if title_key else ""
 
-    # Description: JOIN multiple job fields (primary + secondary)
     desc_keys = all_existing_keys(rec, JOB_DESC_KEYS_PRIMARY) + all_existing_keys(rec, JOB_DESC_KEYS_SECONDARY)
     desc = join_text_fields(rec, desc_keys, sep="\n\n") if desc_keys else ""
 
-    # Fallback: if still empty, try any large text-ish field (rare but helps)
     if len(desc) < MIN_DESC_CHARS:
-        # attempt to find any column with "description" substring
         for k in list(rec.keys()):
-            if "description" in k.lower() or "responsib" in k.lower() or "require" in k.lower():
+            kl = k.lower()
+            if "description" in kl or "responsib" in kl or "require" in kl or "qualif" in kl:
                 v = clean_text(rec.get(k))
                 if len(v) > len(desc):
                     desc = v
@@ -413,7 +619,6 @@ def normalize_job_record(rec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     location = compose_location(rec)
 
-    # Date
     posted_at = NOW()
     date_key = first_existing_key(rec, JOB_DATE_KEYS)
     if date_key:
@@ -433,7 +638,7 @@ def normalize_job_record(rec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "metadata": {
             "raw_keys": list(rec.keys())[:80],
             "title_key": title_key or "",
-            "desc_keys": desc_keys[:20],  # show which fields were joined (first 20)
+            "desc_keys": desc_keys[:20],
         },
         "posted_at": posted_at,
         "created_at": NOW(),
@@ -454,9 +659,6 @@ def seed_jobs_from_processed_jsonl(db, jobs_jsonl: Path, limit: int, wipe: bool 
     for r in rows:
         if not isinstance(r, dict):
             continue
-
-        # If already normalized (has title+description), still pass through normalize so it can
-        # join other fields if present.
         norm = normalize_job_record(r)
         if norm:
             docs.append(norm)
@@ -485,7 +687,6 @@ def seed_jobs_from_raw_csvs(db, raw_dir: Path, limit: int, wipe: bool = False) -
     inserted = 0
     batch: List[Dict[str, Any]] = []
 
-    # Prefer larger CSVs first
     for p in sorted(csvs, key=lambda x: -Path(x).stat().st_size):
         try:
             df = pd.read_csv(p)
@@ -502,96 +703,7 @@ def seed_jobs_from_raw_csvs(db, raw_dir: Path, limit: int, wipe: bool = False) -
             norm["metadata"]["source_file"] = Path(p).name
             batch.append(norm)
 
-            if len(batch) >= 500:
-                res = col.insert_many(batch, ordered=False)
-                inserted += len(res.inserted_ids)
-                batch.clear()
-                if inserted >= limit:
-                    break
-
-        if inserted >= limit:
-            break
-
-    if batch and inserted < limit:
-        to_insert = batch[: max(0, limit - inserted)]
-        if to_insert:
-            res = col.insert_many(to_insert, ordered=False)
-            inserted += len(res.inserted_ids)
-
-    return min(inserted, limit)
-
-def seed_resumes_from_raw_csvs(db, raw_dir: Path, user_id: str, limit: int, wipe: bool = False) -> int:
-    """
-    Seeds resume_snapshots from Kaggle resume-dataset CSV(s).
-    Expected columns (case-insensitive):
-      - ID
-      - Resume_str
-      - Resume_html (optional)
-      - Category
-    """
-    col: Collection = db.resume_snapshots
-    if wipe:
-        col.delete_many({})
-
-    csvs = glob.glob(str(raw_dir / "**/*.csv"), recursive=True)
-    if not csvs:
-        print(f"[WARN] No resume CSV files found under: {raw_dir}")
-        return 0
-
-    inserted = 0
-    batch: List[Dict[str, Any]] = []
-
-    # Prefer larger files first
-    for p in sorted(csvs, key=lambda x: -Path(x).stat().st_size):
-        try:
-            df = pd.read_csv(p)
-        except Exception as e:
-            print(f"[WARN] Failed to read {p}: {e}")
-            continue
-
-        cols = list(df.columns)
-        # robust column picks
-        id_col = first_existing_col(cols, ["ID", "Id", "id"])
-        text_col = first_existing_col(cols, ["Resume_str", "resume_str", "Resume", "resume", "text"])
-        html_col = first_existing_col(cols, ["Resume_html", "resume_html", "html"])
-        cat_col = first_existing_col(cols, ["Category", "category", "label", "Label"])
-
-        if not text_col:
-            print(f"[WARN] No Resume_str-like column found in {p}. Columns: {cols[:25]}")
-            continue
-
-        for _, row in df.iterrows():
-            raw_text = clean_text(row.get(text_col))
-            # Resume_str should be long; keep threshold but slightly lower to avoid accidental drops
-            if len(raw_text) < 120:
-                continue
-
-            resume_id = clean_text(row.get(id_col)) if id_col else ""
-            category = clean_text(row.get(cat_col)) if cat_col else ""
-
-            doc = {
-                "user_id": user_id,
-                "source_type": "kaggle",
-                "raw_text": raw_text,
-                "metadata": {
-                    "dataset": "snehaanbhawal/resume-dataset",
-                    "source_file": Path(p).name,
-                    "resume_id": resume_id,
-                    "category": category,
-                },
-                "image_ref": DEFAULT_RESUME_ICON,
-                "created_at": NOW(),
-            }
-
-            # Optional: store HTML (could be large; keep if you want)
-            if html_col:
-                html = clean_text(row.get(html_col))
-                if html:
-                    doc["metadata"]["resume_html"] = html[:5000]  # prevent massive docs
-
-            batch.append(doc)
-
-            if len(batch) >= 500:
+            if len(batch) >= BATCH_SIZE:
                 res = col.insert_many(batch, ordered=False)
                 inserted += len(res.inserted_ids)
                 batch.clear()
@@ -636,15 +748,17 @@ def seed_min_evidence(db, wipe: bool = False) -> int:
 
     docs = []
     for s in attach_skills:
-        docs.append({
-            "skill_ids": [s["_id"]],
-            "type": "project",
-            "description": f"Example evidence artifact for {s.get('name','skill')}",
-            "url": "",
-            "notes": "Seeded for PR2 demo.",
-            "image_ref": DEFAULT_EVIDENCE_ICON,
-            "created_at": NOW(),
-        })
+        docs.append(
+            {
+                "skill_ids": [s["_id"]],
+                "type": "project",
+                "description": f"Example evidence artifact for {s.get('name','skill')}",
+                "url": "",
+                "notes": "Seeded for PR2 demo.",
+                "image_ref": DEFAULT_EVIDENCE_ICON,
+                "created_at": NOW(),
+            }
+        )
 
     if not docs:
         return 0
@@ -652,12 +766,6 @@ def seed_min_evidence(db, wipe: bool = False) -> int:
     res = evidence_col.insert_many(docs, ordered=False)
     return len(res.inserted_ids)
 
-def first_existing_col(cols: Iterable[str], candidates: List[str]) -> Optional[str]:
-    lower_map = {c.lower(): c for c in cols}
-    for c in candidates:
-        if c.lower() in lower_map:
-            return lower_map[c.lower()]
-    return None
 
 # -----------------------------
 # Main
@@ -668,15 +776,15 @@ def main():
     parser.add_argument("--db", default=os.getenv("MONGO_DB", "skillbridge"))
     parser.add_argument("--wipe", action="store_true", help="Wipe collections before seeding")
 
+    parser.add_argument("--skills-json", default=str(DEFAULT_SKILLS_JSON))
+
     parser.add_argument("--seed-resumes-from", choices=["processed", "raw"], default="processed")
+    parser.add_argument("--resumes-jsonl", default=str(PROCESSED_ROOT / "sample_resumes.jsonl"))
     parser.add_argument("--resumes-raw-dir", default=str(RAW_ROOT / "resume_dataset"))
 
-    parser.add_argument("--skills-json", default=str(DEFAULT_SKILLS_JSON))
-    parser.add_argument("--resumes-jsonl", default=str(PROCESSED_ROOT / "sample_resumes.jsonl"))
-
+    parser.add_argument("--seed-jobs-from", choices=["processed", "raw"], default="processed")
     parser.add_argument("--jobs-jsonl", default=str(PROCESSED_ROOT / "sample_jobs.jsonl"))
     parser.add_argument("--jobs-raw-dir", default=str(RAW_ROOT / "linkedin_job_postings"))
-    parser.add_argument("--seed-jobs-from", choices=["processed", "raw"], default="processed")
 
     parser.add_argument("--resume-limit", type=int, default=1000)
     parser.add_argument("--job-limit", type=int, default=1000)
@@ -685,7 +793,6 @@ def main():
     parser.add_argument("--expand-skills", action="store_true", help="Auto-expand skills from jobs/resumes text")
     parser.add_argument("--skills-max", type=int, default=1500)
     parser.add_argument("--skills-min-freq", type=int, default=15)
-
 
     args = parser.parse_args()
 
@@ -698,31 +805,23 @@ def main():
         inserted_skills = seed_skills(db, Path(args.skills_json), wipe=args.wipe)
         print(f"[OK] skills upserted: {inserted_skills}")
 
-        inserted_resumes = 0
         if args.seed_resumes_from == "processed":
-            inserted_resumes = seed_resumes(db, Path(args.resumes_jsonl), user_id=args.user_id,
-                                            limit=args.resume_limit, wipe=args.wipe)
+            inserted_resumes = seed_resumes(
+                db, Path(args.resumes_jsonl), user_id=args.user_id, limit=args.resume_limit, wipe=args.wipe
+            )
         else:
-            inserted_resumes = seed_resumes_from_raw_csvs(db, Path(args.resumes_raw_dir),
-                                                        user_id=args.user_id, limit=args.resume_limit, wipe=args.wipe)
+            inserted_resumes = seed_resumes_from_raw_csvs(
+                db, Path(args.resumes_raw_dir), user_id=args.user_id, limit=args.resume_limit, wipe=args.wipe
+            )
         print(f"[OK] resume_snapshots inserted: {inserted_resumes}")
-
 
         if args.seed_jobs_from == "processed":
             inserted_jobs = seed_jobs_from_processed_jsonl(
-                db,
-                Path(args.jobs_jsonl),
-                limit=args.job_limit,
-                wipe=args.wipe
+                db, Path(args.jobs_jsonl), limit=args.job_limit, wipe=args.wipe
             )
             print(f"[OK] jobs inserted from processed JSONL: {inserted_jobs}")
         else:
-            inserted_jobs = seed_jobs_from_raw_csvs(
-                db,
-                Path(args.jobs_raw_dir),
-                limit=args.job_limit,
-                wipe=args.wipe
-            )
+            inserted_jobs = seed_jobs_from_raw_csvs(db, Path(args.jobs_raw_dir), limit=args.job_limit, wipe=args.wipe)
             print(f"[OK] jobs inserted from raw CSVs: {inserted_jobs}")
 
         if args.expand_skills:
@@ -742,5 +841,4 @@ def main():
 
 
 if __name__ == "__main__":
-    
     main()
