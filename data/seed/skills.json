@@ -1,0 +1,15 @@
+[
+  {"name":"Python","category":"Programming","aliases":["py"]},
+  {"name":"FastAPI","category":"Backend","aliases":["fast api"]},
+  {"name":"MongoDB","category":"Databases","aliases":["mongo"]},
+  {"name":"PostgreSQL","category":"Databases","aliases":["postgres"]},
+  {"name":"Git","category":"Tools","aliases":[]},
+  {"name":"Docker","category":"Tools","aliases":[]},
+  {"name":"REST APIs","category":"Backend","aliases":["rest"]},
+  {"name":"PyTorch","category":"ML","aliases":[]},
+  {"name":"scikit-learn","category":"ML","aliases":["sklearn"]},
+  {"name":"Information Retrieval","category":"ML/IR","aliases":["IR"]},
+  {"name":"NLP","category":"ML","aliases":["natural language processing"]},
+  {"name":"SQL","category":"Databases","aliases":[]}
+]
+

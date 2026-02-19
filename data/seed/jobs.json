@@ -1,0 +1,19 @@
+[
+  {
+    "title":"Junior Backend Engineer",
+    "company":"Campus Tech Lab",
+    "location":"Rochester Hills, MI",
+    "source":"hand-collected",
+    "description_excerpt":"Build REST APIs, integrate NoSQL storage, and support data ingestion pipelines for internal tools.",
+    "required_skills":["Python","FastAPI","MongoDB","Git","Docker"]
+  },
+  {
+    "title":"Data Analyst Intern",
+    "company":"Oakland Research Office",
+    "location":"Auburn Hills, MI",
+    "source":"hand-collected",
+    "description_excerpt":"Clean datasets, write SQL queries, and generate dashboard-ready summaries for stakeholders.",
+    "required_skills":["SQL","Python","Git"]
+  }
+]
+

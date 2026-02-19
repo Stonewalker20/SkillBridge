@@ -1,0 +1,27 @@
+[
+  {
+    "user_email":"student1@oakland.edu",
+    "type":"resume",
+    "title":"Resume - Student 1",
+    "source":"local_upload",
+    "text_excerpt":"Implemented FastAPI services for internal tooling and integrated MongoDB for structured storage of artifacts.",
+    "tags":["Python","FastAPI","MongoDB","REST APIs"]
+  },
+  {
+    "user_email":"student1@oakland.edu",
+    "type":"paper",
+    "title":"Dorm-Scale Search System: A Lightweight IR Pipeline",
+    "source":"public_preprint",
+    "text_excerpt":"We evaluate a TF-IDF baseline and compare ranking metrics under constrained compute settings.",
+    "tags":["Information Retrieval","NLP","Python"]
+  },
+  {
+    "user_email":"student2@oakland.edu",
+    "type":"project",
+    "title":"Containerized ETL Prototype",
+    "source":"github",
+    "text_excerpt":"Built a Docker-based ETL workflow with reproducible builds, versioned configs, and structured outputs.",
+    "tags":["Docker","Git","Python"]
+  }
+]
+

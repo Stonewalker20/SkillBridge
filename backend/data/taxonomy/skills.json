@@ -1,0 +1,213 @@
+[
+  {
+    "name": "Python",
+    "category": "Programming",
+    "aliases": [
+      "python3",
+      "py"
+    ],
+    "tags": [
+      "language"
+    ]
+  },
+  {
+    "name": "FastAPI",
+    "category": "Backend",
+    "aliases": [
+      "fast api",
+      "fast-api"
+    ],
+    "tags": [
+      "api"
+    ]
+  },
+  {
+    "name": "MongoDB",
+    "category": "Database",
+    "aliases": [
+      "mongo",
+      "mongodb atlas"
+    ],
+    "tags": [
+      "nosql"
+    ]
+  },
+  {
+    "name": "REST",
+    "category": "Backend",
+    "aliases": [
+      "rest api",
+      "restful"
+    ],
+    "tags": [
+      "api"
+    ]
+  },
+  {
+    "name": "Git",
+    "category": "Tools",
+    "aliases": [
+      "git version control"
+    ],
+    "tags": [
+      "vcs"
+    ]
+  },
+  {
+    "name": "Docker",
+    "category": "DevOps",
+    "aliases": [
+      "container",
+      "containers"
+    ],
+    "tags": [
+      "devops"
+    ]
+  },
+  {
+    "name": "Linux",
+    "category": "Systems",
+    "aliases": [
+      "ubuntu",
+      "debian"
+    ],
+    "tags": [
+      "os"
+    ]
+  },
+  {
+    "name": "Pandas",
+    "category": "Data",
+    "aliases": [
+      "python pandas"
+    ],
+    "tags": [
+      "python"
+    ]
+  },
+  {
+    "name": "NumPy",
+    "category": "Data",
+    "aliases": [
+      "numpy"
+    ],
+    "tags": [
+      "python"
+    ]
+  },
+  {
+    "name": "scikit-learn",
+    "category": "ML",
+    "aliases": [
+      "sklearn",
+      "scikit learn"
+    ],
+    "tags": [
+      "ml"
+    ]
+  },
+  {
+    "name": "NLP",
+    "category": "ML",
+    "aliases": [
+      "natural language processing"
+    ],
+    "tags": [
+      "ml"
+    ]
+  },
+  {
+    "name": "LSTM",
+    "category": "ML",
+    "aliases": [
+      "long short-term memory"
+    ],
+    "tags": [
+      "dl"
+    ]
+  },
+  {
+    "name": "SVM",
+    "category": "ML",
+    "aliases": [
+      "support vector machine"
+    ],
+    "tags": [
+      "ml"
+    ]
+  },
+  {
+    "name": "BM25",
+    "category": "IR",
+    "aliases": [
+      "okapi bm25"
+    ],
+    "tags": [
+      "search"
+    ]
+  },
+  {
+    "name": "Logistic Regression",
+    "category": "ML",
+    "aliases": [
+      "logreg",
+      "lr"
+    ],
+    "tags": [
+      "ml"
+    ]
+  },
+  {
+    "name": "TF-IDF",
+    "category": "IR",
+    "aliases": [
+      "tfidf",
+      "tf idf"
+    ],
+    "tags": [
+      "features"
+    ]
+  },
+  {
+    "name": "Uvicorn",
+    "category": "Backend",
+    "aliases": [
+      "uvicorn"
+    ],
+    "tags": [
+      "server"
+    ]
+  },
+  {
+    "name": "Pydantic",
+    "category": "Backend",
+    "aliases": [
+      "pydantic"
+    ],
+    "tags": [
+      "validation"
+    ]
+  },
+  {
+    "name": "React",
+    "category": "Frontend",
+    "aliases": [
+      "reactjs",
+      "react.js"
+    ],
+    "tags": [
+      "ui"
+    ]
+  },
+  {
+    "name": "TypeScript",
+    "category": "Frontend",
+    "aliases": [
+      "ts",
+      "typescript"
+    ],
+    "tags": [
+      "ui"
+    ]
+  }
+]
