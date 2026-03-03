@@ -129,8 +129,8 @@ export function Jobs() {
   };
 
   useEffect(() => {
-    const newToken = searchParams.get("new");
-    if (!newToken) return;
+    const resetToken = searchParams.get("new") ?? searchParams.get("_nav");
+    if (!resetToken) return;
 
     handleReset();
     descriptionRef.current?.focus();
@@ -138,6 +138,7 @@ export function Jobs() {
 
     const next = new URLSearchParams(searchParams);
     next.delete("new");
+    next.delete("_nav");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
