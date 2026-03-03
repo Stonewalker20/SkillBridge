@@ -1,271 +1,276 @@
 # SkillBridge
 
-### Career Intelligence & Resume Optimization Platform
+SkillBridge is a full-stack career intelligence platform for collecting evidence, confirming skills, analyzing job fit, and generating tailored resumes. The repository is split into a FastAPI backend, a React/Vite frontend, MongoDB-backed persistence, and a local transformer-backed analysis pipeline with a safe fallback path.
 
----
+## Current Architecture
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-Async%20Backend-009688.svg)
-![MongoDB](https://img.shields.io/badge/Database-MongoDB-47A248.svg)
-![React](https://img.shields.io/badge/Frontend-React-61DAFB.svg)
-![Docker](https://img.shields.io/badge/Containerized-Docker-2496ED.svg)
-![Architecture](https://img.shields.io/badge/Architecture-Modular%20System-informational.svg)
-![Status](https://img.shields.io/badge/Status-Active%20Development-success.svg)
-![License](https://img.shields.io/badge/License-MIT-black.svg)
+### Frontend
 
----
+- React 18
+- Vite 6
+- React Router 7
+- Tailwind 4 with Radix UI primitives
+- Light and dark theme support with `next-themes`
 
-**SkillBridge** is a containerized, full-stack career intelligence system that converts unstructured resumes into structured, analyzable skill intelligence.
+### Backend
 
-The platform:
+- FastAPI
+- Motor + MongoDB
+- Pydantic v2
+- Local transformer inference for semantic matching and skill extraction
+- Rule-based fallback when transformer models are unavailable
 
-* Extracts and normalizes skills
-* Quantifies job alignment
-* Identifies measurable skill gaps
-* Generates resume tailoring guidance
-* Maps skills to supporting portfolio evidence
+### Data and Dev Tooling
 
-The system is designed as a modular architecture with database-backed workflows and Docker-based deployment for reproducibility.
+- MongoDB for application data
+- Backend contract tests with `pytest` + `httpx`
+- ML sandbox notebooks under `backend/ml_sandbox/`
+- Docker assets under `infra/`
 
----
+## What the App Does
 
-# Why This Project Is Engineering-Grade
+- User authentication and session management
+- Skills catalog, confirmations, proficiency, and evidence support
+- Evidence ingestion from pasted text, PDF, and DOCX uploads
+- Job Match analysis with skill coverage, semantic alignment, and keyword overlap
+- Tailored resume generation and PDF export
+- Dashboard metrics and recent activity
+- Owner and team admin workspace
 
-SkillBridge is:
+## Repository Layout
 
-* Fully containerized using Docker
-* Backend–frontend separated
-* Database-driven (MongoDB)
-* Built with asynchronous APIs
-* Architected with subsystem isolation
-* Designed for scalable deployment
-
-It is structured as a production-style service rather than a prototype script.
-
----
-
-# System Architecture
-
-SkillBridge is composed of six modular subsystems:
-
-1. Resume Ingestion & Snapshot Engine
-2. Skill Confirmation & Normalization
-3. Job Role Library & Weighted Modeling
-4. Match & Gap Analytics
-5. Tailor Engine (Resume Optimization)
-6. Portfolio Intelligence & Evidence Mapping
-
-Each subsystem interacts with MongoDB through structured models and version-controlled data flows.
-
----
-
-# Containerized Deployment
-
-SkillBridge runs in Docker containers for consistent development and deployment environments.
-
-## Services
-
-* `backend` — FastAPI service
-* `frontend` — React + Vite client
-* `mongo` — MongoDB database
-
-## Example Docker Compose Architecture
-
-```
-Client (Browser)
-        ↓
-Frontend Container (React + Vite)
-        ↓
-Backend Container (FastAPI)
-        ↓
-MongoDB Container
+```text
+skillbridge/
+├── backend/
+│   ├── app/
+│   │   ├── core/
+│   │   ├── models/
+│   │   ├── routers/
+│   │   └── utils/
+│   ├── ml_sandbox/
+│   ├── scripts/
+│   ├── tests/
+│   ├── requirements.txt
+│   └── requirements-dev.txt
+├── frontend/
+│   ├── src/app/
+│   │   ├── components/
+│   │   ├── context/
+│   │   ├── pages/
+│   │   ├── routes.tsx
+│   │   └── services/
+│   └── package.json
+├── infra/
+│   └── docker-compose.yml
+└── README.md
 ```
 
-## Benefits of Containerization
+## Startup Guide
 
-* Environment reproducibility
-* Isolated dependency management
-* Simplified onboarding
-* Production-ready deployment path
-* Scalable service orchestration
+### Prerequisites
 
----
+- Python 3.10 or newer
+- Node.js 18 or newer
+- npm
+- MongoDB running locally on `mongodb://localhost:27017`, or another reachable MongoDB instance
 
-# Running the System
-
-## Option 1 — Docker (Recommended)
+### 1. Clone and enter the repo
 
 ```bash
-docker compose up --build
+git clone <your-repo-url>
+cd skillbridge
 ```
 
-Backend:
+### 2. Configure the backend environment
 
-```
-http://localhost:8000
-```
+Create `backend/.env` with at least:
 
-Frontend:
-
-```
-http://localhost:3000
+```env
+MONGO_URI=mongodb://localhost:27017
+MONGO_DB=skillbridge
 ```
 
-MongoDB runs as an internal service.
+Optional variables you may want during development:
 
----
-
-## Option 2 — Local Development
-
-Backend:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-Frontend:
-
-```bash
-npm run dev
-```
-
-## Local Transformer Inference
-
-SkillBridge can run Job Match semantic scoring and evidence skill extraction with local transformer models in the backend.
-
-Install backend dependencies:
-
-```bash
-cd backend
-pip install -r requirements.txt
-```
-
-Optional backend environment variables:
-
-```bash
+```env
+ALLOWED_ORIGINS=http://localhost:5173
 LOCAL_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 LOCAL_ZERO_SHOT_MODEL=MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33
 LOCAL_MODEL_DEVICE=-1
 LOCAL_MODEL_PREWARM=true
+ADMIN_OWNER_EMAILS=owner@example.com
+ADMIN_TEAM_EMAILS=teammate1@example.com,teammate2@example.com
 ```
+
+Notes:
+
+- `LOCAL_MODEL_DEVICE=-1` keeps inference on CPU.
+- `LOCAL_MODEL_PREWARM=true` loads transformer models during backend startup.
+- `ADMIN_OWNER_EMAILS` and `ADMIN_TEAM_EMAILS` bootstrap admin access on registration.
+
+### 3. Start MongoDB
+
+If you already run MongoDB locally, keep that running and skip to the backend setup.
+
+If you want a Docker-managed Mongo instance:
+
+```bash
+docker compose -f infra/docker-compose.yml up -d
+```
+
+This starts:
+
+- `mongo` on `localhost:27017`
+
+### 4. Install and run the backend
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Backend URLs:
+
+- API base: `http://localhost:8000`
+- OpenAPI docs: `http://localhost:8000/docs`
+
+On startup, the backend prints the active AI mode so you can confirm whether transformer inference or fallback mode is active.
+
+### 5. Install and run the frontend
+
+Open a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend URL:
+
+- App: `http://localhost:5173`
+
+The Vite dev server proxies `/api/*` requests to the backend at `http://localhost:8000`.
+
+## First-Run Checklist
+
+After both services are up:
+
+1. Open `http://localhost:5173`
+2. Create a user account
+3. Add evidence from text or file upload
+4. Confirm extracted skills on the Skills page
+5. Run a Job Match analysis
+6. Generate a tailored resume PDF
+
+If you want to access the admin page, sign up with an email listed in `ADMIN_OWNER_EMAILS` or `ADMIN_TEAM_EMAILS`.
+
+## Core Routes
+
+### Frontend application pages
+
+- `/` landing page
+- `/login`
+- `/signup`
+- `/app` dashboard
+- `/app/skills`
+- `/app/evidence`
+- `/app/jobs`
+- `/app/resumes`
+- `/app/account`
+- `/app/admin` for owner, admin, and team roles
+
+### Major backend API groups
+
+- `/auth`
+- `/skills`
+- `/skills/confirmations`
+- `/evidence`
+- `/jobs`
+- `/tailor`
+- `/dashboard`
+- `/taxonomy`
+- `/portfolio`
+- `/projects`
+- `/admin`
+
+## Testing
+
+Backend tests are developer-only tooling and are not exposed to end users.
+
+Install dev dependencies:
+
+```bash
+cd backend
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+```
+
+Run the backend suite:
+
+```bash
+pytest -q
+```
+
+The current backend tests cover route surface validation plus major API flows including auth, admin access, dashboard, skills, evidence, projects, portfolio, and tailoring endpoints.
+
+## Local Transformer Inference
+
+SkillBridge can run semantic matching and extraction fully in the backend.
+
+Current configured models:
+
+- Embeddings: `sentence-transformers/all-MiniLM-L6-v2`
+- Zero-shot classification: `MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33`
 
 Behavior:
 
-* if local transformer models are available, the backend uses them
-* if not, the backend falls back automatically to the lighter local rule/hash implementation
-* the active mode is visible from `GET /tailor/settings/status`
+- If local transformer dependencies and model weights are available, the backend uses them.
+- If not, the backend falls back to its lighter local rule and hash pipeline.
 
----
+You can confirm the active mode through:
 
-# Data Architecture
-
-Core MongoDB collections:
-
-* `users`
-* `resume_snapshots`
-* `skills`
-* `confirmed_skills`
-* `job_roles`
-* `role_skill_weights`
-* `match_results`
-* `tailor_sessions`
-* `portfolio_projects`
-
-The schema supports:
-
-* Resume versioning
-* Skill normalization
-* Weighted scoring
-* Tailoring history tracking
-* Longitudinal portfolio evolution
-
----
-
-# End-to-End Workflow
-
-1. Resume upload
-2. Skill extraction
-3. Skill confirmation
-4. Role selection
-5. Match score computation
-6. Tailoring recommendation generation
-7. Portfolio evidence linkage
-
-The output is a structured alignment and optimization plan.
-
----
-
-# Technology Stack
-
-### Backend
-
-* Python
-* FastAPI
-* Async MongoDB
-* Pydantic validation
-
-### Frontend
-
-* React
-* Vite
-* REST integration
-
-### Infrastructure
-
-* Docker
-* Docker Compose
-* Modular service architecture
-
----
-
-# Current Status
-
-* Resume ingestion API operational
-* Skill confirmation workflow active
-* Role modeling implemented
-* Match scoring integrated
-* Tailor engine functional
-* Portfolio subsystem integrated
-* Docker-based deployment configured
-
----
-
-# Roadmap
-
-* Semantic similarity scoring
-* Role clustering models
-* Analytics dashboards
-* Automated resume rewriting
-* Cloud deployment configuration
-
----
-
-# Repository Structure
-
-```
-backend/
-  app/
-    routers/
-    models/
-    core/
-    utils/
-  main.py
-  Dockerfile
-
-frontend/
-  src/
-  Dockerfile
-
-docker-compose.yml
+```bash
+curl http://localhost:8000/tailor/settings/status
 ```
 
----
+## ML Sandbox
 
-# Contributors
+For model tuning and notebook-based experimentation, use:
 
-**Cordell Stonecipher**
-Machine Learning Engineer
-System Architecture · Backend Engineering · Data Modeling · Analytics Design · Containerization
+- `backend/ml_sandbox/notebooks/`
+- `backend/ml_sandbox/datasets/`
+- `backend/ml_sandbox/artifacts/`
 
-**Spencer Roeren**
-Frontend Engineering Support · UI Integration
+This is intended for development workflows only and does not affect the production app unless you move changes back into `backend/app/`.
+
+## Deployment Notes
+
+SkillBridge is structured so the frontend, backend, and MongoDB can be deployed independently.
+
+At minimum, a production deployment needs:
+
+- a MongoDB connection string
+- a backend environment with the variables shown above
+- a frontend build served with an API base that reaches the backend
+- correct `ALLOWED_ORIGINS` configuration for the deployed frontend domain
+
+If you deploy with Docker, the current compose assets live in `infra/` and the service Dockerfiles live under `backend/` and `frontend/`.
+
+## Version
+
+Current application version: `0.5.0`
+
+Versioned surfaces in this repo:
+
+- frontend package version
+- backend API version
+
+## Additional Docs
+
+- [backend/README.md](/Users/cordellstonecipher/OU_Undergrad/skillbridge/backend/README.md)
+- [frontend/README.md](/Users/cordellstonecipher/OU_Undergrad/skillbridge/frontend/README.md)
+- [backend/ml_sandbox/README.md](/Users/cordellstonecipher/OU_Undergrad/skillbridge/backend/ml_sandbox/README.md)

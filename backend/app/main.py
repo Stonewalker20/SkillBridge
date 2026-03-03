@@ -28,7 +28,7 @@ async def ensure_indexes():
     await db["job_match_runs"].create_index([("user_id", 1), ("created_at", -1)])
     await db["tailored_resumes"].create_index([("user_id", 1), ("created_at", -1)])
 
-app = FastAPI(title="SkillBridge API", version="0.4.0")
+app = FastAPI(title="SkillBridge API", version="0.5.0")
 
 origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 
