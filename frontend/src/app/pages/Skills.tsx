@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 
 const PROF_LEVELS = [1, 2, 3, 4, 5] as const;
+const SKILLS_PER_PAGE = 50;
 
 // Profile mode: no snapshot required
 const PROFILE_SNAPSHOT_ID: null = null;
@@ -33,6 +34,7 @@ export function Skills() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
 
   // Confirmation state (profile context)
   const [confirmation, setConfirmation] = useState<ConfirmationOut | null>(null);
@@ -155,6 +157,22 @@ export function Skills() {
       return matchesTerm && matchesCategory;
     });
   }, [skills, searchTerm, categoryFilter, visibleConfirmedSkillIds, visibleEvidenceSkillIds]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSkills.length / SKILLS_PER_PAGE));
+  const pagedSkills = useMemo(() => {
+    const start = (page - 1) * SKILLS_PER_PAGE;
+    return filteredSkills.slice(start, start + SKILLS_PER_PAGE);
+  }, [filteredSkills, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, categoryFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const customSkills = useMemo(
     () => skills.filter((skill) => skill.can_delete).sort((a, b) => a.name.localeCompare(b.name)),
@@ -533,7 +551,7 @@ export function Skills() {
 
       {/* Skills Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSkills.map((skill) => {
+        {pagedSkills.map((skill) => {
           const confirmed = confirmedMap.has(skill.id);
           const confirmationEntry = confirmed ? confirmedMap.get(skill.id)! : null;
 
@@ -624,6 +642,29 @@ export function Skills() {
           <p className="text-gray-500">No skills found matching your search</p>
         </div>
       )}
+
+      {filteredSkills.length > 0 ? (
+        <div className="flex flex-col gap-3 border-t pt-4 md:flex-row md:items-center md:justify-between">
+          <p className="text-sm text-gray-500">
+            Showing {(page - 1) * SKILLS_PER_PAGE + 1}-{Math.min(page * SKILLS_PER_PAGE, filteredSkills.length)} of {filteredSkills.length} skills
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>
+              Previous
+            </Button>
+            <Badge variant="secondary">
+              Page {page} of {totalPages}
+            </Badge>
+            <Button
+              variant="outline"
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={page >= totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
