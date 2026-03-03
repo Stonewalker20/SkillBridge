@@ -260,6 +260,14 @@ export type EvidencePatch = {
   tags?: string[];
 };
 
+export type ResumeSnapshotListEntry = {
+  snapshot_id: string;
+  source_type: string;
+  filename?: string | null;
+  preview: string;
+  created_at?: string;
+};
+
 export type DashboardSummary = {
   totalSkills: number;
   portfolioItems: number;
@@ -436,6 +444,10 @@ export const api = {
     const form = new FormData();
     form.append("user_id", userId ?? (await getUserIdOrThrow()));
     return request<any>(`/ingest/resume/${snapshotId}/promote`, "POST", undefined, {}, { body: form });
+  },
+  listResumeSnapshots: async () => {
+    const userId = await getUserIdOrThrow();
+    return request<ResumeSnapshotListEntry[]>(`/ingest/resume?user_id=${encodeURIComponent(userId)}`, "GET");
   },
 
   listSkills: async (params?: { q?: string; category?: string; limit?: number; skip?: number }) => {
@@ -705,7 +717,7 @@ export const api = {
     return request<any>("/tailor/job/ingest", "POST", body);
   },
 
-  matchJob: async (payload: { user_id?: string; job_id: string; history_id?: string; ignored_skill_names?: string[]; persist_history?: boolean }) => {
+  matchJob: async (payload: { user_id?: string; job_id: string; history_id?: string; resume_snapshot_id?: string | null; ignored_skill_names?: string[]; added_from_missing_skills?: Array<{ skill_id: string; skill_name: string }>; persist_history?: boolean }) => {
     const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
     return request<any>("/tailor/match", "POST", body);
   },
@@ -769,7 +781,7 @@ export const api = {
   moderateAdminJob: (jobId: string, payload: { moderation_status: string; moderation_reason?: string | null }) =>
     request<AdminJob>(`/admin/jobs/${jobId}/moderation`, "PATCH", payload),
 
-  previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; ignored_skill_names?: string[]; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
+  previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; resume_snapshot_id?: string | null; ignored_skill_names?: string[]; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
     const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
     return request<any>("/tailor/preview", "POST", body);
   },

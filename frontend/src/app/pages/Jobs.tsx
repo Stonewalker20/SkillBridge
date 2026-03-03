@@ -7,7 +7,8 @@ import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
-import type { JobMatchHistoryEntry } from "../services/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import type { JobMatchHistoryEntry, ResumeSnapshotListEntry } from "../services/api";
 import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateCw, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
@@ -17,7 +18,12 @@ type MatchResult = {
   match_score?: number;
   match_confidence_label?: string;
   analysis_summary?: string;
+  resume_snapshot_id?: string | null;
+  template_source?: string | null;
   ignored_skill_names?: string[];
+  added_from_missing_skills?: Array<{ skill_id: string; skill_name: string }>;
+  matched_skill_ids?: string[];
+  missing_skill_ids?: string[];
   matched_skills?: string[];
   missing_skills?: string[];
   matched_skill_count?: number;
@@ -57,6 +63,23 @@ function downloadBlob(blob: Blob, filename: string) {
   window.URL.revokeObjectURL(url);
 }
 
+function formatResumeTemplateLabel(snapshot: ResumeSnapshotListEntry) {
+  const filename = String(snapshot.filename ?? "").trim();
+  if (filename) return `Updated Resume from Evidence • ${filename}`;
+
+  const sourceType = String(snapshot.source_type ?? "resume").trim().toLowerCase();
+  const sourceLabel =
+    sourceType === "pdf"
+      ? "PDF Resume"
+      : sourceType === "paste"
+        ? "Pasted Resume"
+        : `${sourceType.charAt(0).toUpperCase()}${sourceType.slice(1)} Resume`;
+
+  if (!snapshot.created_at) return `Updated Resume from Evidence • ${sourceLabel}`;
+
+  return `Updated Resume from Evidence • ${sourceLabel} • ${new Date(snapshot.created_at).toLocaleDateString()}`;
+}
+
 export function Jobs() {
   const { recordActivity } = useActivity();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -74,9 +97,12 @@ export function Jobs() {
   const [generating, setGenerating] = useState(false);
   const [history, setHistory] = useState<JobMatchHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [resumeSnapshots, setResumeSnapshots] = useState<ResumeSnapshotListEntry[]>([]);
+  const [selectedResumeTemplate, setSelectedResumeTemplate] = useState<string>("default");
   const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
   const [reanalyzingHistoryId, setReanalyzingHistoryId] = useState<string | null>(null);
+  const [reanalyzingCurrent, setReanalyzingCurrent] = useState(false);
   const [addingMissingSkill, setAddingMissingSkill] = useState<string | null>(null);
   const [updatingIgnoredSkill, setUpdatingIgnoredSkill] = useState<string | null>(null);
 
@@ -90,7 +116,18 @@ export function Jobs() {
       matchScore: Number(a.match_score ?? a.matchScore ?? 0) || 0,
       confidenceLabel: String(a.match_confidence_label ?? a.matchConfidenceLabel ?? "Early"),
       analysisSummary: String(a.analysis_summary ?? a.analysisSummary ?? ""),
+      resumeSnapshotId: String(a.resume_snapshot_id ?? a.resumeSnapshotId ?? "").trim() || null,
+      templateSource: String(a.template_source ?? a.templateSource ?? "").trim() || null,
       ignoredSkills: asArray<string>(a.ignored_skill_names ?? a.ignoredSkills),
+      addedFromMissingSkills: asArray<{ skill_id: string; skill_name: string }>(a.added_from_missing_skills ?? a.addedFromMissingSkills),
+      matchedSkillEntries: asArray<string>(a.matched_skills ?? a.matchedSkills).map((name, index) => ({
+        skillId: String(asArray<string>(a.matched_skill_ids ?? a.matchedSkillIds)[index] ?? "").trim(),
+        skillName: String(name ?? "").trim(),
+      })),
+      missingSkillEntries: asArray<string>(a.missing_skills ?? a.missingSkills).map((name, index) => ({
+        skillId: String(asArray<string>(a.missing_skill_ids ?? a.missingSkillIds)[index] ?? "").trim(),
+        skillName: String(name ?? "").trim(),
+      })),
       matchedSkills: asArray<string>(a.matched_skills ?? a.matchedSkills),
       missingSkills: asArray<string>(a.missing_skills ?? a.missingSkills),
       matchedSkillCount: Number(a.matched_skill_count ?? a.matchedSkillCount ?? asArray<string>(a.matched_skills ?? a.matchedSkills).length) || 0,
@@ -126,7 +163,14 @@ export function Jobs() {
     setAnalysis(null);
     setLastTailoredId(null);
     setJobId(null);
+    setSelectedResumeTemplate("default");
   };
+
+  useEffect(() => {
+    if (selectedResumeTemplate === "default") return;
+    if (resumeSnapshots.some((snapshot) => snapshot.snapshot_id === selectedResumeTemplate)) return;
+    setSelectedResumeTemplate("default");
+  }, [resumeSnapshots, selectedResumeTemplate]);
 
   useEffect(() => {
     const resetToken = searchParams.get("new") ?? searchParams.get("_nav");
@@ -154,18 +198,21 @@ export function Jobs() {
 
   useEffect(() => {
     let active = true;
-    const loadHistory = async () => {
+    const loadHistoryAndTemplates = async () => {
       setHistoryLoading(true);
       try {
-        const entries = await api.listJobMatchHistory(8);
-        if (active) setHistory(entries);
+        const [entries, snapshots] = await Promise.all([api.listJobMatchHistory(8), api.listResumeSnapshots()]);
+        if (active) {
+          setHistory(entries);
+          setResumeSnapshots(snapshots);
+        }
       } catch (error) {
         console.error("Failed to load job match history:", error);
       } finally {
         if (active) setHistoryLoading(false);
       }
     };
-    loadHistory();
+    loadHistoryAndTemplates();
     return () => {
       active = false;
     };
@@ -229,6 +276,7 @@ export function Jobs() {
     try {
       const preview = await api.previewTailoredResume({
         job_id: jobId,
+        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
         ignored_skill_names: normalized.ignoredSkills,
       });
       const previewId = String((preview as any)?.id ?? (preview as any)?.tailored_id ?? (preview as any)?.tailoredId ?? "").trim();
@@ -279,8 +327,10 @@ export function Jobs() {
     try {
       const match = await api.matchJob({
         job_id: jobId,
+        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
         history_id: currentHistoryId,
         ignored_skill_names: nextIgnored,
+        added_from_missing_skills: normalized.addedFromMissingSkills,
         persist_history: Boolean(currentHistoryId),
       });
       setAnalysis((current) => ({
@@ -322,6 +372,7 @@ export function Jobs() {
       setLocation(String(detail.location ?? "").trim());
       setJobDescription(String(detail.job_text ?? detail.text_preview ?? "").trim());
       setLastTailoredId(String(detail.tailored_resume_id ?? "").trim() || null);
+      setSelectedResumeTemplate(String((detail.analysis as any)?.resume_snapshot_id ?? "").trim() || "default");
       toast.success("Restored previous job analysis");
     } catch (error: any) {
       console.error("Failed to restore job match history:", error);
@@ -385,6 +436,45 @@ export function Jobs() {
     }
   };
 
+  const handleReanalyzeCurrent = async () => {
+    const currentJobId = String(jobId ?? "").trim();
+    if (!currentJobId) {
+      toast.error("This analysis is missing its job id");
+      return;
+    }
+
+    setReanalyzingCurrent(true);
+    try {
+      const match = await api.matchJob({
+        job_id: currentJobId,
+        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
+        history_id: String(normalized.historyId ?? "").trim() || undefined,
+        ignored_skill_names: normalized.ignoredSkills,
+        added_from_missing_skills: normalized.addedFromMissingSkills,
+        persist_history: true,
+      });
+      setAnalysis(match as MatchResult);
+      setLastTailoredId(null);
+      try {
+        await refreshHistory();
+      } catch (historyError) {
+        console.error("Failed to refresh job match history:", historyError);
+      }
+      recordActivity({
+        id: `jobs:reanalyze-current:${currentJobId}`,
+        type: "jobs",
+        action: "reanalyzed",
+        name: jobTitle || company || "Current job match",
+      });
+      toast.success("Job match score updated");
+    } catch (error: any) {
+      console.error("Failed to reanalyze current job match:", error);
+      toast.error(error?.message || "Failed to update the current job match");
+    } finally {
+      setReanalyzingCurrent(false);
+    }
+  };
+
   const handleAddMissingSkill = async (skillName: string) => {
     const normalizedName = String(skillName || "").trim();
     if (!normalizedName) return;
@@ -404,18 +494,36 @@ export function Jobs() {
       }
 
       await api.confirmSkill(null, skillId);
-
-      setAnalysis((current) => {
-        if (!current) return current;
-        const currentMissing = asArray<string>(current.missing_skills).filter((value) => value !== normalizedName);
-        const currentMatched = asArray<string>(current.matched_skills);
-        return {
-          ...current,
-          missing_skills: currentMissing,
-          matched_skills: currentMatched.includes(normalizedName) ? currentMatched : [...currentMatched, normalizedName],
-          confirmed_skill_count: Number(current.confirmed_skill_count ?? current.confirmedSkillCount ?? 0) + 1,
-        };
+      const currentHistoryId = String(normalized.historyId ?? "").trim() || undefined;
+      const currentAdded = asArray<{ skill_id: string; skill_name: string }>(analysis?.added_from_missing_skills ?? []);
+      const nextAdded = [
+        ...currentAdded.filter(
+          (entry) => String(entry?.skill_id ?? "").trim() !== skillId && String(entry?.skill_name ?? "").trim().toLowerCase() !== normalizedName.toLowerCase()
+        ),
+        { skill_id: skillId, skill_name: normalizedName },
+      ];
+      const match = await api.matchJob({
+        job_id: String(jobId ?? "").trim(),
+        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
+        history_id: currentHistoryId,
+        ignored_skill_names: normalized.ignoredSkills.filter((value) => value !== normalizedName),
+        added_from_missing_skills: nextAdded,
+        persist_history: Boolean(currentHistoryId),
       });
+      setAnalysis((current) => ({
+        ...(current ?? {}),
+        ...(match as MatchResult),
+        history_id: currentHistoryId ?? current?.history_id ?? (match as any)?.history_id ?? null,
+        tailored_resume_id: null,
+      }));
+      setLastTailoredId(null);
+      if (currentHistoryId) {
+        try {
+          await refreshHistory();
+        } catch (historyError) {
+          console.error("Failed to refresh job match history:", historyError);
+        }
+      }
 
       recordActivity({
         id: `jobs:missing-skill:add:${normalizedName}`,
@@ -429,6 +537,62 @@ export function Jobs() {
       toast.error(error?.message || "Failed to add missing skill");
     } finally {
       setAddingMissingSkill(null);
+    }
+  };
+
+  const handleRemoveMatchedSkill = async (skillName: string, skillId?: string) => {
+    const normalizedName = String(skillName || "").trim();
+    const normalizedSkillId = String(skillId || "").trim();
+    if (!normalizedName) return;
+
+    if (!normalizedSkillId) {
+      toast.error("This matched skill is missing its skill id");
+      return;
+    }
+
+    setUpdatingIgnoredSkill(normalizedName);
+    try {
+      await api.unconfirmSkill(null, normalizedSkillId);
+      const currentHistoryId = String(normalized.historyId ?? "").trim() || undefined;
+      const nextAdded = asArray<{ skill_id: string; skill_name: string }>(analysis?.added_from_missing_skills ?? []).filter((entry) => {
+        const entryId = String(entry?.skill_id ?? "").trim();
+        const entryName = String(entry?.skill_name ?? "").trim().toLowerCase();
+        return entryId !== normalizedSkillId && entryName !== normalizedName.toLowerCase();
+      });
+      const match = await api.matchJob({
+        job_id: String(jobId ?? "").trim(),
+        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
+        history_id: currentHistoryId,
+        ignored_skill_names: normalized.ignoredSkills.filter((value) => value !== normalizedName),
+        added_from_missing_skills: nextAdded,
+        persist_history: Boolean(currentHistoryId),
+      });
+      setAnalysis((current) => ({
+        ...(current ?? {}),
+        ...(match as MatchResult),
+        history_id: currentHistoryId ?? current?.history_id ?? (match as any)?.history_id ?? null,
+        tailored_resume_id: null,
+      }));
+      setLastTailoredId(null);
+      if (currentHistoryId) {
+        try {
+          await refreshHistory();
+        } catch (historyError) {
+          console.error("Failed to refresh job match history:", historyError);
+        }
+      }
+      recordActivity({
+        id: `jobs:missing-skill:remove:${normalizedSkillId}`,
+        type: "skills",
+        action: "unconfirmed",
+        name: normalizedName,
+      });
+      toast.success(`${normalizedName} removed from your confirmed skills`);
+    } catch (error: any) {
+      console.error("Failed to remove matched skill:", error);
+      toast.error(error?.message || "Failed to remove matched skill");
+    } finally {
+      setUpdatingIgnoredSkill(null);
     }
   };
 
@@ -571,9 +735,15 @@ export function Jobs() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Job Match</h1>
           <p className="text-gray-600 dark:text-slate-300">Detailed score, skill gaps, and tailored resume generation</p>
         </div>
-        <Button variant="outline" onClick={handleReset}>
-          New Analysis
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleReanalyzeCurrent} disabled={reanalyzingCurrent || !jobId}>
+            <RotateCw className={`mr-2 h-4 w-4 ${reanalyzingCurrent ? "animate-spin" : ""}`} />
+            {reanalyzingCurrent ? "Updating..." : "Reanalyze"}
+          </Button>
+          <Button variant="outline" onClick={handleReset}>
+            New Analysis
+          </Button>
+        </div>
       </div>
 
       <Card className="p-8 dark:border-slate-800 dark:bg-slate-900/80">
@@ -704,18 +874,18 @@ export function Jobs() {
             {normalized.matchedSkills.length === 0 ? (
               <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
             ) : (
-              normalized.matchedSkills.map((s) => (
+              normalized.matchedSkillEntries.map((entry) => (
                 <span
-                  key={s}
+                  key={`${entry.skillId || entry.skillName}:matched`}
                   className="inline-flex max-w-full items-center gap-1 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-sm font-medium text-green-700 dark:border-emerald-900/70 dark:bg-emerald-950/60 dark:text-emerald-200"
                 >
-                  <span className="min-w-0 break-words whitespace-normal">{s}</span>
+                  <span className="min-w-0 break-words whitespace-normal">{entry.skillName}</span>
                   <button
                     type="button"
-                    onClick={() => handleUpdateIgnoredSkills(s, true)}
-                    disabled={updatingIgnoredSkill === s}
+                    onClick={() => handleRemoveMatchedSkill(entry.skillName, entry.skillId)}
+                    disabled={updatingIgnoredSkill === entry.skillName}
                     className="rounded-full p-0.5 text-current transition hover:bg-black/10 disabled:opacity-50 dark:hover:bg-white/10"
-                    aria-label={`Remove ${s} from this analysis`}
+                    aria-label={`Remove ${entry.skillName} from this analysis`}
                     title="Remove from this analysis"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -849,17 +1019,36 @@ export function Jobs() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Tailored Resume</h3>
-            <p className="text-sm text-gray-600 dark:text-slate-300">Generate and download a tailored resume PDF without showing the full resume text on the page.</p>
+            <p className="text-sm text-gray-600 dark:text-slate-300">
+              Choose whether to generate from your uploaded updated resume or the default template, then download the tailored PDF.
+            </p>
           </div>
 
-          <Button
-            onClick={handleGenerateResume}
-            disabled={generating || !jobId}
-            className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            {generating ? "Generating PDF..." : "Generate PDF"}
-          </Button>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="min-w-[240px]">
+              <Select value={selectedResumeTemplate} onValueChange={setSelectedResumeTemplate}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Choose resume source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default Template</SelectItem>
+                  {resumeSnapshots.map((snapshot) => (
+                    <SelectItem key={snapshot.snapshot_id} value={snapshot.snapshot_id}>
+                      {formatResumeTemplateLabel(snapshot)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={handleGenerateResume}
+              disabled={generating || !jobId}
+              className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {generating ? "Generating PDF..." : "Generate PDF"}
+            </Button>
+          </div>
         </div>
 
         {lastTailoredId ? (
@@ -867,7 +1056,11 @@ export function Jobs() {
             Tailored resume generated and downloaded. Resume id: <span className="font-mono">{lastTailoredId}</span>
           </div>
         ) : (
-          <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">Generate PDF to create and download your tailored resume.</div>
+          <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">
+            {resumeSnapshots.length > 0
+              ? "Select your updated resume from evidence or use the default template, then generate the PDF."
+              : "Generate PDF to create and download your tailored resume with the default template."}
+          </div>
         )}
       </Card>
 

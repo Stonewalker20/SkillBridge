@@ -399,31 +399,31 @@ export function Evidence() {
 
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.16),_transparent_38%),linear-gradient(135deg,_#ffffff,_#f8fafc)]">
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.16),_transparent_38%),linear-gradient(135deg,_#ffffff,_#f8fafc)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.10),_transparent_34%),linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(2,6,23,0.98))]">
         <div className="flex flex-col gap-5 px-6 py-7 md:px-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium tracking-wide text-slate-600">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300">
               <Upload className="h-3.5 w-3.5 text-[#1E3A8A]" />
               Evidence Library
             </div>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900">Your proof of work, organized and skill-linked.</h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Your proof of work, organized and skill-linked.</h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600 dark:text-slate-300">
               Add project summaries, resumes, papers, certifications, or uploaded files. Only evidence you explicitly add appears here, and each item can be analyzed for skills before it is saved.
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Card className="border-white/70 bg-white/80 p-4 shadow-sm">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Evidence Items</div>
-              <div className="mt-2 text-2xl font-semibold text-slate-900">{evidenceStats.totalEvidence}</div>
+            <Card className="border-white/70 bg-white/80 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Evidence Items</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">{evidenceStats.totalEvidence}</div>
             </Card>
-            <Card className="border-white/70 bg-white/80 p-4 shadow-sm">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Extracted Skills</div>
-              <div className="mt-2 text-2xl font-semibold text-slate-900">{evidenceStats.totalExtractedSkills}</div>
+            <Card className="border-white/70 bg-white/80 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Extracted Skills</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">{evidenceStats.totalExtractedSkills}</div>
             </Card>
-            <Card className="border-white/70 bg-white/80 p-4 shadow-sm col-span-2 sm:col-span-1">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Top Evidence Type</div>
-              <div className="mt-2 text-lg font-semibold capitalize text-slate-900">{evidenceStats.topType}</div>
+            <Card className="col-span-2 border-white/70 bg-white/80 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 sm:col-span-1">
+              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Top Evidence Type</div>
+              <div className="mt-2 text-lg font-semibold capitalize text-slate-900 dark:text-slate-100">{evidenceStats.topType}</div>
             </Card>
           </div>
         </div>
@@ -734,16 +734,16 @@ export function Evidence() {
           {filteredItems.map((item) => {
             const externalUrl = item.source && /^https?:\/\//i.test(item.source) ? item.source : "";
             return (
-              <Card key={item.id} className="group overflow-hidden border-slate-200 p-0 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                <div className="border-b bg-[linear-gradient(135deg,_rgba(30,58,138,0.08),_rgba(255,255,255,0.9))] px-5 py-4">
+              <Card key={item.id} className="group overflow-hidden border-slate-200 p-0 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950">
+                <div className="border-b bg-[linear-gradient(135deg,_rgba(30,58,138,0.08),_rgba(255,255,255,0.9))] px-5 py-4 dark:border-slate-800 dark:bg-[linear-gradient(135deg,_rgba(251,191,36,0.10),_rgba(15,23,42,0.95))]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-sm">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-sm dark:bg-slate-900">
                           <FileText className="h-4 w-4 text-[#1E3A8A]" />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="truncate text-base font-semibold text-gray-900">{item.title}</h3>
+                          <h3 className="truncate text-base font-semibold text-gray-900 dark:text-slate-100">{item.title}</h3>
                           <div className="mt-1 flex flex-wrap gap-2">
                             {item.type ? <Badge variant="outline" className="capitalize">{item.type}</Badge> : null}
                             {(item.skill_ids || []).length ? <Badge variant="secondary">{item.skill_ids?.length} extracted skills</Badge> : null}
@@ -753,7 +753,7 @@ export function Evidence() {
                     </div>
 
                     {externalUrl ? (
-                      <a href={externalUrl} target="_blank" rel="noreferrer" className="text-gray-500 transition-colors hover:text-[#1E3A8A]">
+                      <a href={externalUrl} target="_blank" rel="noreferrer" className="text-gray-500 transition-colors hover:text-[#1E3A8A] dark:text-slate-400 dark:hover:text-amber-300">
                         <ExternalLink className="h-4 w-4" />
                       </a>
                     ) : null}
@@ -762,11 +762,11 @@ export function Evidence() {
 
                 <div className="px-5 py-4">
                   <div className="min-w-0">
-                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Summary</div>
-                    <div className="mt-2 text-sm leading-6 text-gray-600">
+                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Summary</div>
+                    <div className="mt-2 text-sm leading-6 text-gray-600 dark:text-slate-300">
                       {summarizeEvidenceText(item.text_excerpt || item.description || "")}
                     </div>
-                    <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                    <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-900/80 dark:text-slate-400">
                       Source: {item.source || "manual-entry"}
                     </div>
                   </div>
