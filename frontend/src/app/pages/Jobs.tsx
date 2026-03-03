@@ -506,17 +506,6 @@ export function Jobs() {
     const normalizedSkillId = String(skillId || "").trim();
     if (!normalizedName) return;
 
-    const wasAddedFromMissing = normalized.addedFromMissingSkills.some((entry) => {
-      const entryId = String(entry?.skill_id ?? "").trim();
-      const entryName = String(entry?.skill_name ?? "").trim().toLowerCase();
-      return (normalizedSkillId && entryId === normalizedSkillId) || entryName === normalizedName.toLowerCase();
-    });
-
-    if (!wasAddedFromMissing) {
-      await handleUpdateIgnoredSkills(normalizedName, true);
-      return;
-    }
-
     if (!normalizedSkillId) {
       toast.error("This matched skill is missing its skill id");
       return;

@@ -649,9 +649,7 @@ export function Skills() {
           const effectiveProficiency = confirmed
             ? Math.max(1, Math.min(5, confirmationEntry!.proficiency ?? confirmationEntry!.manualProficiency ?? 1))
             : 0;
-          // Bind the dropdown to the user's manual setting so evidence auto-raises do not mask UI changes.
-          const rawManualProf = confirmed ? (confirmationEntry!.manualProficiency ?? confirmationEntry!.proficiency ?? 1) : 1;
-          const prof = confirmed ? String(Math.max(1, Math.min(5, rawManualProf))) : "";
+          const prof = confirmed ? String(effectiveProficiency) : "";
           const categoryList = skillCategoryList(skill);
 
           return (
@@ -708,7 +706,7 @@ export function Skills() {
                 <div className="mb-1 text-[11px] text-gray-600 dark:text-slate-300">Proficiency (1–5)</div>
                 {confirmed && confirmationEntry ? (
                   <div className="mb-2 text-[12px] font-medium text-gray-900 dark:text-slate-100">
-                    Current level: {effectiveProficiency}/5
+                    {effectiveProficiency}/5
                   </div>
                 ) : null}
                 {confirmed && confirmationEntry && confirmationEntry.evidenceCount > 0 ? (
@@ -717,11 +715,6 @@ export function Skills() {
                     {confirmationEntry.autoProficiency > confirmationEntry.manualProficiency
                       ? ` Auto-raised from ${confirmationEntry.manualProficiency} to ${confirmationEntry.autoProficiency}.`
                       : ""}
-                  </div>
-                ) : null}
-                {confirmed && confirmationEntry ? (
-                  <div className="mb-2 text-[11px] text-gray-500 dark:text-slate-400">
-                    Manual setting: {Math.max(1, Math.min(5, confirmationEntry.manualProficiency || 1))}/5
                   </div>
                 ) : null}
                 <Select
