@@ -62,7 +62,7 @@ def _job_focus_lines(text: str) -> list[tuple[str, float]]:
         line = raw_line.strip(" \t-•*")
         if not line:
             continue
-        lower = line.lower()
+        lower = normalize_skill_text(line)
         matched_weight = next((weight for marker, weight in section_markers.items() if marker in lower), None)
         if matched_weight is not None:
             active_weight = matched_weight
@@ -75,7 +75,7 @@ def _job_focus_lines(text: str) -> list[tuple[str, float]]:
     return lines
 
 def _normalize_keyword_phrase(value: str) -> str:
-    value = re.sub(r"\s+", " ", str(value or "").strip().lower())
+    value = normalize_skill_text(value)
     return value.strip(" ,;:/")
 
 def _tokenize_keywords(text: str, extracted: Iterable[ExtractedSkill] | None = None) -> list[str]:
@@ -152,7 +152,7 @@ async def _load_skill_catalog(db) -> list[dict]:
     return merge_skill_docs([doc for doc in docs if not _is_hidden_skill_doc(doc)])
 
 def _match_skills(job_text: str, skills: Iterable[dict]) -> list[ExtractedSkill]:
-    text = job_text.lower()
+    text = normalize_skill_text(job_text)
     matches: dict[str, ExtractedSkill] = {}
 
     def bump(sid: str, name: str, matched_on: str):
@@ -232,9 +232,9 @@ def _score_item(item: dict, job_skill_ids: set[str], keywords: set[str]) -> floa
     pri = float(item.get("priority", 0) or 0)
 
     # keyword overlap from title + summary + bullets
-    txt = " ".join(
+    txt = normalize_skill_text(" ".join(
         [item.get("title",""), item.get("summary","")] + (item.get("bullets", []) or [])
-    ).lower()
+    ))
     kw_hit = sum(1 for k in keywords if k in txt)
 
     return overlap * 5.0 + kw_hit * 1.0 + pri * 0.25
@@ -257,7 +257,7 @@ def _normalize_text_blob(item: dict) -> str:
     parts = [item.get("title", ""), item.get("summary", ""), item.get("org", "")]
     parts.extend(item.get("bullets", []) or [])
     parts.extend(item.get("links", []) or [])
-    return " ".join(str(part or "") for part in parts).lower()
+    return normalize_skill_text(" ".join(str(part or "") for part in parts))
 
 async def _load_profile_confirmation(db, user_id: str) -> dict | None:
     confirmation = await db["resume_skill_confirmations"].find_one(
@@ -291,11 +291,17 @@ async def _load_skills_by_ids(db, skill_ids: Iterable[str]) -> dict[str, dict]:
         {"_id": {"$in": query_values}},
         {"name": 1, "category": 1, "aliases": 1, "hidden": 1},
     ).to_list(length=max(len(query_values), 1))
+    visible_docs = [doc for doc in docs if not _is_hidden_skill_doc(doc)]
+    merged_docs = merge_skill_docs(visible_docs)
     out: dict[str, dict] = {}
-    for doc in docs:
-        if _is_hidden_skill_doc(doc):
-            continue
-        out[oid_str(doc["_id"])] = doc
+    for doc in merged_docs:
+        merged_ids = list(doc.get("merged_ids") or [])
+        if not merged_ids and doc.get("_id") is not None:
+            merged_ids = [oid_str(doc.get("_id"))]
+        for merged_id in merged_ids:
+            text = str(merged_id or "").strip()
+            if text:
+                out[text] = doc
     return out
 
 def _skill_terms(doc: dict | None) -> set[str]:
@@ -307,7 +313,7 @@ def _skill_terms(doc: dict | None) -> set[str]:
     for value in values:
         if not value:
             continue
-        normalized = re.sub(r"\s+", " ", value.strip().lower())
+        normalized = normalize_skill_text(value)
         if normalized:
             terms.add(normalized)
     return terms
@@ -321,7 +327,7 @@ def _clamp_score(value: float) -> float:
     return round(max(0.0, min(100.0, value)), 2)
 
 def _skill_match_pattern(value: str) -> str:
-    return rf"(?<![A-Za-z0-9]){re.escape((value or '').lower())}(?![A-Za-z0-9])"
+    return rf"(?<![A-Za-z0-9]){re.escape(normalize_skill_text(value))}(?![A-Za-z0-9])"
 
 def _classify_job_skill_priority(job_text: str, extracted: list[dict], skill_docs: dict[str, dict]) -> tuple[set[str], set[str]]:
     required_markers = (
@@ -356,7 +362,7 @@ def _classify_job_skill_priority(job_text: str, extracted: list[dict], skill_doc
         if not line:
             current_section = None
             continue
-        lower = line.lower()
+        lower = normalize_skill_text(line)
         if any(marker in lower for marker in required_markers):
             current_section = "required"
         elif any(marker in lower for marker in preferred_markers):
@@ -387,12 +393,12 @@ def _classify_job_skill_priority(job_text: str, extracted: list[dict], skill_doc
 
     if not required_ids:
         strong_required_blob = "\n".join(
-            raw_line.strip().lower()
+            normalize_skill_text(raw_line.strip())
             for raw_line in (job_text or "").splitlines()
             if raw_line.strip()
             and (
-                any(marker in raw_line.lower() for marker in required_markers)
-                or re.search(r"\b(must|required|minimum)\b", raw_line.lower())
+                any(marker in normalize_skill_text(raw_line) for marker in required_markers)
+                or re.search(r"\b(must|required|minimum)\b", normalize_skill_text(raw_line))
             )
         )
         if strong_required_blob:
@@ -448,7 +454,7 @@ def _dedupe_skill_ids_by_name(skill_ids: Iterable[str], skill_docs: dict[str, di
     ordered: list[str] = []
     seen: set[str] = set()
     for skill_id in skill_ids:
-        name = _display_skill_name(skill_docs.get(skill_id), skill_id).lower()
+        name = normalize_skill_text(_display_skill_name(skill_docs.get(skill_id), skill_id))
         if not name or name in seen:
             continue
         seen.add(name)
