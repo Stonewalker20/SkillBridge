@@ -50,8 +50,19 @@ export function Skills() {
   const [newSkill, setNewSkill] = useState({ name: "", category: "", aliases: "" });
 
   const refreshSkills = async () => {
-    const skillsData = await api.listSkills();
-    setSkills(Array.isArray(skillsData) ? skillsData : []);
+    const pageSize = 200;
+    const allSkills: Skill[] = [];
+    let skip = 0;
+
+    while (true) {
+      const batch = await api.listSkills({ limit: pageSize, skip });
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      allSkills.push(...batch);
+      if (batch.length < pageSize) break;
+      skip += pageSize;
+    }
+
+    setSkills(allSkills);
   };
 
   const refreshConfirmation = async () => {
