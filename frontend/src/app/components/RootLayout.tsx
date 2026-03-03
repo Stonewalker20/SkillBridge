@@ -59,9 +59,12 @@ export function RootLayout() {
     navigate("/");
   };
 
-  const handleOpenNewJobAnalysis = () => {
+  const navigateFromSidebar = (href: string) => {
     setMobileMenuOpen(false);
-    navigate(`/app/jobs?new=${Date.now()}`);
+    const [pathname, rawSearch = ""] = href.split("?");
+    const next = new URLSearchParams(rawSearch);
+    next.set("_nav", String(Date.now()));
+    navigate(`${pathname}?${next.toString()}`);
   };
 
   const isDark = mounted && resolvedTheme === "dark";
@@ -115,7 +118,10 @@ export function RootLayout() {
               <Link
                 key={item.name}
                 to={item.href}
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigateFromSidebar(item.href);
+                }}
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-4 py-3 transition-all",
                   isActive
@@ -134,7 +140,10 @@ export function RootLayout() {
             <div className="mt-2 space-y-1">
               <Link
                 to="/app/skills?add=1"
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigateFromSidebar("/app/skills?add=1");
+                }}
                 className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
                 <Target className="h-5 w-5" />
@@ -142,7 +151,10 @@ export function RootLayout() {
               </Link>
               <Link
                 to="/app/evidence?add=1"
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigateFromSidebar("/app/evidence?add=1");
+                }}
                 className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
                 <FolderOpen className="h-5 w-5" />
@@ -152,7 +164,7 @@ export function RootLayout() {
                 to="/app/jobs?analyze=1"
                 onClick={(event) => {
                   event.preventDefault();
-                  handleOpenNewJobAnalysis();
+                  navigateFromSidebar("/app/jobs?analyze=1");
                 }}
                 className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
@@ -161,7 +173,10 @@ export function RootLayout() {
               </Link>
               <Link
                 to="/app/resumes"
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigateFromSidebar("/app/resumes");
+                }}
                 className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
                 <FileText className="h-5 w-5" />
