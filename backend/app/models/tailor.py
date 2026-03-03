@@ -72,6 +72,7 @@ class TailorPreviewIn(BaseModel):
     user_id: str
     job_id: str | None = Field(default=None, description="Job ingest id")
     job_text: str | None = Field(default=None, description="Optional job text if job_id not provided")
+    resume_snapshot_id: str | None = Field(default=None, description="Optional resume snapshot to use as the tailoring template")
     template: str = Field(default="ats_v1", description="Template name")
     max_items: int = Field(default=4, ge=1, le=10)
     max_bullets_per_item: int = Field(default=4, ge=1, le=10)
@@ -86,6 +87,8 @@ class TailoredResumeOut(BaseModel):
     id: str
     user_id: str
     job_id: str | None = None
+    resume_snapshot_id: str | None = None
+    template_source: str | None = None
     template: str
     selected_skill_ids: list[str]
     selected_item_ids: list[str]

@@ -21,6 +21,16 @@ function storageKey(userId: string) {
   return `sb_recent_activity:${userId}`;
 }
 
+function activityTimestamp(value: string | undefined): number {
+  if (!value) return 0;
+  const stamp = new Date(value).getTime();
+  return Number.isFinite(stamp) ? stamp : 0;
+}
+
+function sortActivitiesNewestFirst(items: ActivityItem[]): ActivityItem[] {
+  return [...items].sort((a, b) => activityTimestamp(b.date) - activityTimestamp(a.date));
+}
+
 export function ActivityProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -34,7 +44,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
     try {
       const raw = localStorage.getItem(storageKey(user.id));
       const parsed = raw ? JSON.parse(raw) : [];
-      setActivities(Array.isArray(parsed) ? parsed : []);
+      setActivities(Array.isArray(parsed) ? sortActivitiesNewestFirst(parsed) : []);
     } catch {
       setActivities([]);
     }
@@ -59,7 +69,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         };
 
         const deduped = activities.filter((item) => item.id !== nextItem.id);
-        persist([nextItem, ...deduped].slice(0, 50));
+        persist(sortActivitiesNewestFirst([nextItem, ...deduped]).slice(0, 50));
       },
       clearActivities: () => persist([]),
     }),

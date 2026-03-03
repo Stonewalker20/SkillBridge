@@ -37,6 +37,38 @@ function safeNum(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function activityTimestamp(value: any): number {
+  if (!value) return 0;
+  const stamp = new Date(value).getTime();
+  return Number.isFinite(stamp) ? stamp : 0;
+}
+
+function normalizeRecentActivityItem(item: any) {
+  const rawDate = item?.date ?? item?.created_at ?? item?.updated_at ?? "";
+  const date = rawDate ? new Date(rawDate).toISOString() : new Date(0).toISOString();
+  return {
+    id: String(item?.id ?? `${item?.type ?? "activity"}:${item?.action ?? "updated"}:${item?.name ?? "item"}:${date}`),
+    type: String(item?.type ?? "activity"),
+    action: String(item?.action ?? "updated"),
+    name: String(item?.name ?? "Untitled"),
+    date,
+  };
+}
+
+function mergeRecentActivity(sources: Array<Array<any>>): DashboardSummary["recentActivity"] {
+  const byId = new Map<string, DashboardSummary["recentActivity"][number]>();
+  for (const source of sources) {
+    for (const rawItem of source) {
+      const item = normalizeRecentActivityItem(rawItem);
+      const existing = byId.get(item.id);
+      if (!existing || activityTimestamp(item.date) > activityTimestamp(existing.date)) {
+        byId.set(item.id, item);
+      }
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => activityTimestamp(b.date) - activityTimestamp(a.date));
+}
+
 async function loadAllSkills(): Promise<Skill[]> {
   const pageSize = 200;
   const allSkills: Skill[] = [];
@@ -86,9 +118,9 @@ export function Dashboard() {
           averageMatchScore: safeNum(base?.averageMatchScore ?? base?.average_match_score ?? 0),
           tailoredResumes: safeNum(base?.tailoredResumes ?? base?.tailored_resumes ?? 0),
           recentActivity: Array.isArray(base?.recentActivity)
-            ? base.recentActivity
+            ? base.recentActivity.map(normalizeRecentActivityItem)
             : Array.isArray(base?.recent_activity)
-              ? base.recent_activity
+              ? base.recent_activity.map(normalizeRecentActivityItem)
               : [],
           topSkillCategories: Array.isArray(base?.topSkillCategories)
             ? base.topSkillCategories
@@ -131,13 +163,10 @@ export function Dashboard() {
 
         const userSpecificTotalSkills = confirmedVisibleSkillIds.size;
 
-        const mergedRecentActivity = [
-          ...activities,
-          ...normalizedBase.recentActivity,
-        ]
-          .filter((item) => !!item?.date)
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .filter((item, index, arr) => arr.findIndex((candidate) => candidate.id === item.id) === index);
+        const mergedRecentActivity = mergeRecentActivity([
+          activities,
+          normalizedBase.recentActivity,
+        ]);
 
         setSummary({
           ...normalizedBase,

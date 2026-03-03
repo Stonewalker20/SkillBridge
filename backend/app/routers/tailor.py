@@ -489,6 +489,254 @@ def _display_skill_name(doc: dict | None, fallback: str = "") -> str:
         return fallback
     return str(doc.get("name") or fallback or "").strip()
 
+_RESUME_SECTION_ALIASES: dict[str, tuple[str, ...]] = {
+    "Header": (),
+    "Summary": ("summary", "professional summary", "profile", "objective", "about"),
+    "Skills": ("skills", "technical skills", "core skills", "competencies", "technical competencies"),
+    "Experience": (
+        "experience",
+        "work experience",
+        "professional experience",
+        "employment history",
+        "relevant experience",
+    ),
+    "Projects": ("projects", "relevant projects", "selected projects", "academic projects"),
+    "Education": ("education", "academic background"),
+    "Certifications": ("certifications", "licenses", "certificates"),
+    "Leadership": ("leadership", "leadership experience", "activities", "campus involvement"),
+    "Awards": ("awards", "honors", "honours"),
+}
+
+
+def _canonical_resume_section_title(line: str) -> str | None:
+    normalized = normalize_skill_text(re.sub(r"[:\-|]+$", "", line or "").strip())
+    if not normalized:
+        return None
+    for title, aliases in _RESUME_SECTION_ALIASES.items():
+        if normalized == normalize_skill_text(title):
+            return title
+        if any(normalized == normalize_skill_text(alias) for alias in aliases):
+            return title
+    return None
+
+
+def _looks_like_resume_heading(line: str) -> str | None:
+    stripped = (line or "").strip()
+    if not stripped or len(stripped) > 48:
+        return None
+    canonical = _canonical_resume_section_title(stripped)
+    if canonical:
+        return canonical
+    plain = re.sub(r"[^A-Za-z/& ]", "", stripped).strip()
+    if plain and plain.isupper():
+        canonical = _canonical_resume_section_title(plain.title())
+        if canonical:
+            return canonical
+    return None
+
+
+async def _load_resume_template_snapshot(db, user_id: str, resume_snapshot_id: str | None) -> dict | None:
+    if resume_snapshot_id:
+        query = ref_query("_id", resume_snapshot_id)
+        query.update(ref_query("user_id", user_id))
+        return await db["resume_snapshots"].find_one(query)
+    return await db["resume_snapshots"].find_one(
+        ref_query("user_id", user_id),
+        sort=[("created_at", -1)],
+    )
+
+
+def _parse_resume_sections(raw_text: str) -> list[ResumeSection]:
+    sections: list[ResumeSection] = []
+    current_title = "Header"
+    current_lines: list[str] = []
+
+    def flush():
+        nonlocal current_lines, current_title
+        cleaned = [line.strip() for line in current_lines if str(line or "").strip()]
+        if cleaned:
+            sections.append(ResumeSection(title=current_title, lines=cleaned))
+        current_lines = []
+
+    for raw_line in (raw_text or "").splitlines():
+        line = raw_line.rstrip()
+        if not line.strip():
+            if current_lines and current_lines[-1] != "":
+                current_lines.append("")
+            continue
+        heading = _looks_like_resume_heading(line)
+        if heading:
+            flush()
+            current_title = heading
+            continue
+        current_lines.append(line)
+
+    flush()
+    return sections
+
+
+def _clean_resume_line(line: str) -> str:
+    return re.sub(r"\s+", " ", str(line or "").strip())
+
+
+def _chunk_skill_lines(skill_names: list[str], width: int = 92) -> list[str]:
+    if not skill_names:
+        return []
+    lines: list[str] = []
+    current = ""
+    for name in skill_names:
+        part = name.strip()
+        if not part:
+            continue
+        candidate = part if not current else f"{current}, {part}"
+        if current and len(candidate) > width:
+            lines.append(current)
+            current = part
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _extract_original_skills(section: ResumeSection | None) -> list[str]:
+    if not section:
+        return []
+    raw = ", ".join(line for line in section.lines if line.strip())
+    parts = re.split(r"[,\n|/•]+", raw)
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        cleaned = _clean_resume_line(part)
+        key = normalize_skill_text(cleaned)
+        if not cleaned or not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+    return out
+
+
+def _build_targeted_summary_lines(
+    base_section: ResumeSection | None,
+    target_label: str,
+    skill_names: list[str],
+    selected_items: list[dict],
+) -> list[str]:
+    lines: list[str] = []
+    seen: set[str] = set()
+    for line in (base_section.lines if base_section else []):
+        cleaned = _clean_resume_line(line)
+        key = normalize_skill_text(cleaned)
+        if cleaned and key not in seen:
+            seen.add(key)
+            lines.append(cleaned)
+        if len(lines) >= 2:
+            break
+
+    highlight_skills = ", ".join(skill_names[:6])
+    top_titles = ", ".join(_clean_resume_line(item.get("title", "")) for item in selected_items[:2] if item.get("title"))
+    tailored_line_parts = [f"Tailored for {target_label}"]
+    if highlight_skills:
+        tailored_line_parts.append(f"with emphasis on {highlight_skills}")
+    if top_titles:
+        tailored_line_parts.append(f"and evidence pulled from {top_titles}")
+    tailored_line = " ".join(tailored_line_parts).strip() + "."
+    if normalize_skill_text(tailored_line) not in seen:
+        lines.append(tailored_line)
+
+    if not lines:
+        lines.append(f"Tailored for {target_label}.")
+    return lines[:3]
+
+
+def _selected_item_lines(selected_items: list[dict], max_bullets_per_item: int) -> list[str]:
+    lines: list[str] = []
+    for item in selected_items:
+        title = _clean_resume_line(item.get("title", "") or "Relevant experience")
+        item_type = str(item.get("type") or "work").replace("evidence:", "").replace("_", " ").title()
+        header = title if item_type.lower() == "work" else f"{title} [{item_type}]"
+        lines.append(header)
+        bullets = [f"- {_clean_resume_line(bullet)}" for bullet in (item.get("bullets") or []) if _clean_resume_line(bullet)]
+        if bullets:
+            lines.extend(bullets[:max_bullets_per_item])
+        else:
+            summary = _clean_resume_line(item.get("summary", ""))
+            if summary:
+                lines.append(f"- {summary}")
+        if item.get("links"):
+            links = [str(link).strip() for link in item.get("links", []) if str(link).strip()]
+            if links:
+                lines.append(f"- Links: {', '.join(links[:3])}")
+        lines.append("")
+    return [line for line in lines if line != ""]
+
+
+def _build_sections_from_resume_template(
+    template_sections: list[ResumeSection],
+    target_label: str,
+    selected_skill_names: list[str],
+    selected_items: list[dict],
+    max_bullets_per_item: int,
+) -> list[ResumeSection]:
+    summary_section = next((section for section in template_sections if section.title == "Summary"), None)
+    skills_section = next((section for section in template_sections if section.title == "Skills"), None)
+    targeted_highlights_lines = _selected_item_lines(selected_items, max_bullets_per_item)
+    merged_skill_names = _dedupe_preserve_order(
+        [*_extract_original_skills(skills_section), *selected_skill_names]
+    )
+
+    sections: list[ResumeSection] = []
+    inserted_summary = False
+    inserted_skills = False
+    inserted_highlights = False
+
+    for section in template_sections:
+        if section.title == "Summary":
+            sections.append(
+                ResumeSection(
+                    title="Summary",
+                    lines=_build_targeted_summary_lines(summary_section, target_label, selected_skill_names, selected_items),
+                )
+            )
+            inserted_summary = True
+            continue
+        if section.title == "Skills":
+            if merged_skill_names:
+                sections.append(ResumeSection(title="Skills", lines=_chunk_skill_lines(merged_skill_names)))
+            inserted_skills = True
+            continue
+
+        if (
+            targeted_highlights_lines
+            and not inserted_highlights
+            and section.title in {"Experience", "Projects", "Education", "Certifications"}
+        ):
+            sections.append(ResumeSection(title="Targeted Highlights", lines=targeted_highlights_lines))
+            inserted_highlights = True
+
+        sections.append(ResumeSection(title=section.title, lines=[line for line in section.lines if line.strip()]))
+
+    if not inserted_summary:
+        sections.insert(
+            1 if sections and sections[0].title == "Header" else 0,
+            ResumeSection(
+                title="Summary",
+                lines=_build_targeted_summary_lines(summary_section, target_label, selected_skill_names, selected_items),
+            ),
+        )
+    if not inserted_skills and merged_skill_names:
+        insert_index = 2 if sections and sections[0].title == "Header" else 1
+        sections.insert(min(insert_index, len(sections)), ResumeSection(title="Skills", lines=_chunk_skill_lines(merged_skill_names)))
+    if targeted_highlights_lines and not inserted_highlights:
+        insert_index = len(sections)
+        for idx, section in enumerate(sections):
+            if section.title in {"Education", "Certifications", "Awards"}:
+                insert_index = idx
+                break
+        sections.insert(insert_index, ResumeSection(title="Targeted Highlights", lines=targeted_highlights_lines))
+
+    return [section for section in sections if section.lines]
+
 def _dedupe_skill_ids_by_name(skill_ids: Iterable[str], skill_docs: dict[str, dict]) -> list[str]:
     ordered: list[str] = []
     seen: set[str] = set()
@@ -524,6 +772,8 @@ def _serialize_tailored_resume(doc: dict) -> TailoredResumeOut:
         id=oid_str(doc.get("_id")),
         user_id=oid_str(doc.get("user_id")),
         job_id=str(doc.get("job_id")) if doc.get("job_id") is not None else None,
+        resume_snapshot_id=str(doc.get("resume_snapshot_id")) if doc.get("resume_snapshot_id") is not None else None,
+        template_source=str(doc.get("template_source") or "") or None,
         template=str(doc.get("template") or "ats_v1"),
         selected_skill_ids=[oid_str(value) for value in (doc.get("selected_skill_ids") or [])],
         selected_item_ids=[oid_str(value) for value in (doc.get("selected_item_ids") or [])],
@@ -963,101 +1213,59 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
             if len(selected_skill_ids) >= 15:
                 break
 
-    # Resolve skill names for display
-    skill_name_by_id: dict[str, str] = {}
-    if selected_skill_ids:
-        oids = []
-        for sid in selected_skill_ids:
-            try:
-                oids.append(ObjectId(sid))
-            except Exception:
-                continue
-        if oids:
-            docs = await db["skills"].find({"_id": {"$in": oids}}, {"name": 1}).to_list(length=200)
-            for d in docs:
-                skill_name_by_id[oid_str(d["_id"])] = d.get("name", "")
-
-    skill_names = [skill_name_by_id.get(s, s) for s in selected_skill_ids if skill_name_by_id.get(s, s)]
+    skill_docs = await _load_skills_by_ids(db, selected_skill_ids)
+    skill_name_by_id: dict[str, str] = {
+        skill_id: _display_skill_name(doc, skill_id)
+        for skill_id, doc in skill_docs.items()
+    }
+    skill_names = _dedupe_preserve_order([skill_name_by_id.get(s, s) for s in selected_skill_ids if skill_name_by_id.get(s, s)])
     skill_line = ", ".join(skill_names)[:250]
     job_title = (job_doc.get("title") or "").strip() if job_id else ""
     company = (job_doc.get("company") or "").strip() if job_id else ""
     target_label = " ".join(part for part in [job_title, f"at {company}" if company else ""] if part).strip() or "this role"
 
-    # Compose sections
-    sections: list[ResumeSection] = []
+    resume_snapshot = await _load_resume_template_snapshot(db, payload.user_id, payload.resume_snapshot_id)
+    template_sections = _parse_resume_sections(str(resume_snapshot.get("raw_text") or "")) if resume_snapshot else []
 
-    # Summary
-    sections.append(
-        ResumeSection(
-            title="Summary",
-            lines=[
-                "Software / ML-focused builder with hands-on experience delivering projects end-to-end (API, data, and deployment).",
-                f"Tailored for {target_label} with emphasis on {skill_line}." if skill_line else f"Tailored for {target_label} with emphasis on the role requirements and deliverables described in the posting.",
-            ],
+    if template_sections:
+        sections = _build_sections_from_resume_template(
+            template_sections=template_sections,
+            target_label=target_label,
+            selected_skill_names=skill_names,
+            selected_items=selected_items,
+            max_bullets_per_item=payload.max_bullets_per_item,
         )
-    )
-
-    # Skills
-    if selected_skill_ids:
-        sections.append(
-            ResumeSection(
-                title="Skills",
-                lines=[
-                    ", ".join([skill_name_by_id.get(s, s) for s in selected_skill_ids if skill_name_by_id.get(s, s)]) or skill_line
-                ],
-            )
-        )
-
-    # Portfolio
-    proj_lines: list[str] = []
-    for it in selected_items:
-        title = it.get("title", "Untitled")
-        org = it.get("org")
-        dates = ""
-        if it.get("date_start") or it.get("date_end"):
-            dates = f" ({it.get('date_start','')}-{it.get('date_end','')})".replace(" -", "-").replace("-)", ")")
-        kind = str(it.get("type") or "work").replace("evidence:", "").replace("_", " ")
-        header = f"{title}{' — ' + org if org else ''}{dates}".strip()
-        if kind:
-            header = f"{header} [{kind.title()}]"
-        proj_lines.append(header)
-
-        bullets = (it.get("bullets") or [])[: payload.max_bullets_per_item]
-        if bullets:
-            for b in bullets:
-                proj_lines.append(f"- {b}")
-        else:
-            summ = it.get("summary") or ""
-            if summ:
-                proj_lines.append(f"- {summ}")
-            else:
-                proj_lines.append("- Relevant portfolio item selected based on skills/keywords overlap with the job posting.")
-        links = it.get("links") or []
-        if links:
-            proj_lines.append(f"- Links: {', '.join(links[:3])}")
-
-        proj_lines.append("")  # spacing
-
-    if proj_lines:
-        sections.append(ResumeSection(title="Relevant Work", lines=[ln for ln in proj_lines if ln != "" ]))
-
-    if skill_names:
+        template_source = "user_resume"
+    else:
+        fallback_lines = [f"Tailored for {target_label}."]
+        if skill_line:
+            fallback_lines.append(f"Prioritized skills: {skill_line}.")
+        sections = [
+            ResumeSection(title="Summary", lines=fallback_lines),
+        ]
+        if skill_names:
+            sections.append(ResumeSection(title="Skills", lines=_chunk_skill_lines(skill_names)))
+        highlight_lines = _selected_item_lines(selected_items, payload.max_bullets_per_item)
+        if highlight_lines:
+            sections.append(ResumeSection(title="Targeted Highlights", lines=highlight_lines))
         sections.append(
             ResumeSection(
                 title="Targeted Alignment",
                 lines=[
                     f"Role focus: {target_label}",
-                    f"Prioritized skills: {', '.join(skill_names[:10])}",
                     f"Selected evidence items: {len(selected_items)}",
                 ],
             )
         )
+        template_source = "generated_fallback"
 
     # Store tailored resume record
     now = now_utc()
     record = {
         "user_id": to_object_id(payload.user_id),
         "job_id": job_id,
+        "resume_snapshot_id": resume_snapshot.get("_id") if resume_snapshot else None,
+        "template_source": template_source,
         "job_text": job_text,
         "template": payload.template,
         "selected_skill_ids": selected_skill_ids,
