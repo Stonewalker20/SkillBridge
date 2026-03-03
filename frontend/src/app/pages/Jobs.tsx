@@ -7,8 +7,8 @@ import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
-import type { JobMatchComparison, JobMatchHistoryEntry } from "../services/api";
-import { Download, CheckCircle2, AlertCircle, Sparkles, Wand2, History, GitCompareArrows, Trash2, RotateCw, Plus } from "lucide-react";
+import type { JobMatchHistoryEntry } from "../services/api";
+import { Download, CheckCircle2, AlertCircle, Sparkles, Wand2, History, Trash2, RotateCw, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 
@@ -66,9 +66,6 @@ export function Jobs() {
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
   const [reanalyzingHistoryId, setReanalyzingHistoryId] = useState<string | null>(null);
   const [addingMissingSkill, setAddingMissingSkill] = useState<string | null>(null);
-  const [selectedCompareIds, setSelectedCompareIds] = useState<string[]>([]);
-  const [comparison, setComparison] = useState<JobMatchComparison | null>(null);
-  const [comparing, setComparing] = useState(false);
 
   const normalized = useMemo(() => {
     const a = analysis || {};
@@ -153,8 +150,6 @@ export function Jobs() {
       // 2) Match job
       const match = await api.matchJob({ job_id: String(jid) });
       setAnalysis(match as any);
-      setComparison(null);
-      setSelectedCompareIds([]);
       try {
         await refreshHistory();
       } catch (historyError) {
@@ -240,40 +235,9 @@ export function Jobs() {
     setCompany("");
     setLocation("");
     setAnalysis(null);
-    setTailored(null);
-    setJobId(null);
-    setComparison(null);
-    setSelectedCompareIds([]);
-  };
-
-  const toggleCompareSelection = (historyId: string) => {
-    setSelectedCompareIds((current) => {
-      if (current.includes(historyId)) {
-        return current.filter((value) => value !== historyId);
-      }
-      if (current.length >= 2) {
-        return [current[1], historyId];
-      }
-      return [...current, historyId];
-    });
-  };
-
-  const handleCompare = async () => {
-    if (selectedCompareIds.length !== 2) {
-      toast.error("Select exactly two saved analyses to compare");
-      return;
-    }
-    setComparing(true);
-    try {
-      const result = await api.compareJobMatchHistory(selectedCompareIds[0], selectedCompareIds[1]);
-      setComparison(result);
-    } catch (error: any) {
-      console.error("Failed to compare job matches:", error);
-      toast.error(error?.message || "Failed to compare job matches");
-    } finally {
-      setComparing(false);
-    }
-  };
+      setTailored(null);
+      setJobId(null);
+    };
 
   const handleRewrite = async (focus: "balanced" | "ats" | "impact" = "balanced") => {
     if (!tailoredId) {
@@ -318,7 +282,6 @@ export function Jobs() {
       setLocation(String(detail.location ?? "").trim());
       setJobDescription(String(detail.job_text ?? detail.text_preview ?? "").trim());
       setTailored(null);
-      setComparison(null);
       toast.success("Restored previous job analysis");
     } catch (error: any) {
       console.error("Failed to restore job match history:", error);
@@ -335,12 +298,6 @@ export function Jobs() {
     try {
       await api.deleteJobMatchHistory(entry.id);
       setHistory((current) => current.filter((item) => item.id !== entry.id));
-      setSelectedCompareIds((current) => current.filter((id) => id !== entry.id));
-      setComparison((current) => {
-        if (!current) return null;
-        if (current.left.id === entry.id || current.right.id === entry.id) return null;
-        return current;
-      });
       if (normalized.historyId === entry.id) {
         setAnalysis(null);
         setTailored(null);
@@ -807,10 +764,6 @@ export function Jobs() {
             </div>
             <p className="text-sm text-gray-600">Compare recent job analyses and see how match quality changes across postings.</p>
           </div>
-          <Button variant="outline" onClick={handleCompare} disabled={selectedCompareIds.length !== 2 || comparing}>
-            <GitCompareArrows className="h-4 w-4 mr-2" />
-            {comparing ? "Comparing..." : "Compare Selected"}
-          </Button>
         </div>
 
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -820,12 +773,10 @@ export function Jobs() {
             <p className="text-sm text-gray-500">No saved analyses yet. Run a Job Match analysis to populate history.</p>
           ) : (
             history.map((entry) => {
-              const selected = selectedCompareIds.includes(entry.id);
               return (
                 <div
                   key={entry.id}
-                  onClick={() => toggleCompareSelection(entry.id)}
-                  className={`rounded-lg border p-4 text-left transition-colors ${selected ? "border-[#1E3A8A] bg-blue-50" : "border-gray-200 bg-white hover:bg-gray-50"}`}
+                  className="rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:bg-gray-50"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -875,41 +826,6 @@ export function Jobs() {
             })
           )}
         </div>
-
-        {comparison ? (
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-lg border border-gray-200 p-4">
-              <h4 className="font-semibold text-gray-900">{comparison.left.title || comparison.left.company || "Left analysis"}</h4>
-              <p className="mt-2 text-sm text-gray-600">Match: {comparison.left.match_score}%</p>
-              <p className="text-sm text-gray-600">Semantic: {comparison.left.semantic_alignment_score ?? 0}%</p>
-            </div>
-            <div className="rounded-lg border border-gray-200 p-4">
-              <h4 className="font-semibold text-gray-900">{comparison.right.title || comparison.right.company || "Right analysis"}</h4>
-              <p className="mt-2 text-sm text-gray-600">Match: {comparison.right.match_score}%</p>
-              <p className="text-sm text-gray-600">Semantic: {comparison.right.semantic_alignment_score ?? 0}%</p>
-            </div>
-            <div className="rounded-lg bg-slate-50 p-4">
-              <p className="font-medium text-gray-900">Match Delta</p>
-              <p className={`mt-1 text-sm ${comparison.match_score_delta >= 0 ? "text-green-700" : "text-orange-700"}`}>
-                {comparison.match_score_delta >= 0 ? "+" : ""}{comparison.match_score_delta} points
-              </p>
-              <p className="mt-3 font-medium text-gray-900">Newly Matched Skills</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {comparison.newly_matched_skills.length === 0 ? <span className="text-sm text-gray-500">None</span> : comparison.newly_matched_skills.map((skill) => <Badge key={skill}>{skill}</Badge>)}
-              </div>
-            </div>
-            <div className="rounded-lg bg-slate-50 p-4">
-              <p className="font-medium text-gray-900">Newly Missing Skills</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {comparison.newly_missing_skills.length === 0 ? <span className="text-sm text-gray-500">None</span> : comparison.newly_missing_skills.map((skill) => <Badge key={skill} variant="outline">{skill}</Badge>)}
-              </div>
-              <p className="mt-3 font-medium text-gray-900">Shared Strength Areas</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {comparison.shared_strength_areas.length === 0 ? <span className="text-sm text-gray-500">None</span> : comparison.shared_strength_areas.map((area) => <Badge key={area} className="bg-blue-50 text-[#1E3A8A] border-blue-200">{area}</Badge>)}
-              </div>
-            </div>
-          </div>
-        ) : null}
       </Card>
     </div>
   );
