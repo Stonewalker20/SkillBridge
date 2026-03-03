@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query, HTTPException
 from datetime import datetime, timezone
 from bson import ObjectId
 from app.core.db import get_db
-from app.utils.mongo import oid_str
+from app.utils.mongo import oid_str, ref_query, to_object_id
 from app.models.project import (
     ProjectIn,
     ProjectOut,
@@ -22,14 +22,14 @@ async def list_projects(user_id: str | None = Query(default=None)):
     db = get_db()
     q = {}
     if user_id:
-        q["user_id"] = user_id
+        q.update(ref_query("user_id", user_id))
     docs = await db["projects"].find(q).sort("created_at", -1).to_list(length=500)
     out = []
     for d in docs:
         out.append(
             {
                 "id": oid_str(d["_id"]),
-                "user_id": d.get("user_id", ""),
+                "user_id": oid_str(d.get("user_id")),
                 "title": d.get("title", ""),
                 "description": d.get("description", ""),
                 "start_date": d.get("start_date"),
@@ -46,6 +46,7 @@ async def create_project(payload: ProjectIn):
     db = get_db()
     now = now_utc()
     doc = payload.model_dump()
+    doc["user_id"] = to_object_id(payload.user_id)
     doc["created_at"] = now
     doc["updated_at"] = now
     res = await db["projects"].insert_one(doc)
@@ -63,7 +64,7 @@ async def get_project(project_id: str):
         raise HTTPException(status_code=404, detail="Project not found")
     return {
         "id": oid_str(d["_id"]),
-        "user_id": d.get("user_id", ""),
+        "user_id": oid_str(d.get("user_id")),
         "title": d.get("title", ""),
         "description": d.get("description", ""),
         "start_date": d.get("start_date"),

@@ -15,22 +15,24 @@ from app.routers.portfolio import router as portfolio_router
 from app.routers.auth import router as auth_router
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
+import os
 
 async def ensure_indexes():
     db = get_db()
     await db["users"].create_index("email", unique=True)
     await db["sessions"].create_index("token", unique=True)
     await db["sessions"].create_index("expires_at", expireAfterSeconds=0)
+    await db["job_match_runs"].create_index([("user_id", 1), ("created_at", -1)])
+    await db["tailored_resumes"].create_index([("user_id", 1), ("created_at", -1)])
 
-app = FastAPI(title="SkillBridge API", version="0.3.0")
+app = FastAPI(title="SkillBridge API", version="0.4.0")
+
+origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
-    allow_credentials=False,  # set True ONLY if you use cookie-based auth
+    allow_origins=origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

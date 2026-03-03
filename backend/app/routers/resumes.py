@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from app.core.db import get_db
 from app.models.resume import ResumeSnapshotIn, ResumeSnapshotOut
-from app.utils.mongo import oid_str
+from app.utils.mongo import oid_str, ref_values, to_object_id
 from pypdf import PdfReader
 import io
 
@@ -34,7 +34,7 @@ async def ingest_resume_text(payload: ResumeSnapshotIn):
         raise HTTPException(status_code=400, detail="Resume text too short.")
 
     doc = {
-        "user_id": payload.user_id,
+        "user_id": to_object_id(payload.user_id),
         "source_type": "paste",
         "raw_text": raw_text,
         "metadata": {"source": "paste"},
@@ -58,7 +58,7 @@ async def ingest_resume_pdf(user_id: str = Form(...), file: UploadFile = File(..
         raise HTTPException(status_code=400, detail="Extracted PDF text too short.")
 
     doc = {
-        "user_id": user_id,
+        "user_id": to_object_id(user_id),
         "source_type": "pdf",
         "raw_text": raw_text,
         "metadata": {"source": "pdf", "filename": file.filename},
@@ -84,7 +84,10 @@ async def promote_confirmed_skills(snapshot_id: str, user_id: str = Form(...)):
     if not snap:
         raise HTTPException(status_code=404, detail="Resume snapshot not found")
 
-    conf = await db["resume_skill_confirmations"].find_one({"user_id": user_id, "resume_snapshot_id": snap_oid})
+    user_ref_values = ref_values(user_id)
+    conf = await db["resume_skill_confirmations"].find_one(
+        {"user_id": {"$in": user_ref_values}, "resume_snapshot_id": {"$in": [snap_oid, snapshot_id]}}
+    )
     if not conf:
         raise HTTPException(status_code=404, detail="No confirmation found for this user + snapshot")
 
@@ -94,12 +97,13 @@ async def promote_confirmed_skills(snapshot_id: str, user_id: str = Form(...)):
 
     # Create (or reuse) a resume project anchor
     proj_title = f"Resume Snapshot {snapshot_id[:8]}"
-    existing_proj = await db["projects"].find_one({"user_id": user_id, "title": proj_title})
+    user_oid = to_object_id(user_id)
+    existing_proj = await db["projects"].find_one({"user_id": {"$in": user_ref_values}, "title": proj_title})
     if existing_proj:
         project_oid = existing_proj["_id"]
     else:
         pdoc = {
-            "user_id": user_id,
+            "user_id": user_oid,
             "title": proj_title,
             "description": "Auto-created from resume promotion.",
             "tags": ["resume"],
@@ -125,10 +129,10 @@ async def promote_confirmed_skills(snapshot_id: str, user_id: str = Form(...)):
 
         # evidence record (dedupe by snapshot+skill)
         q = {
-            "user_id": user_id,
+            "user_id": user_oid,
             "type": "resume",
-            "project_id": oid_str(project_oid),
-            "skill_ids": [oid_str(skill_oid)],
+            "project_id": project_oid,
+            "skill_ids": [skill_oid],
             "source": f"resume_snapshot:{snapshot_id}",
         }
         exists = await db["evidence"].find_one(q)
@@ -136,15 +140,16 @@ async def promote_confirmed_skills(snapshot_id: str, user_id: str = Form(...)):
             continue
 
         edoc = {
-            "user_id": user_id,
+            "user_id": user_oid,
             "user_email": None,
             "type": "resume",
             "title": c.get("skill_name", "Resume Evidence"),
             "source": f"resume_snapshot:{snapshot_id}",
             "text_excerpt": "Promoted from confirmed resume skills.",
-            "skill_ids": [oid_str(skill_oid)],
-            "project_id": oid_str(project_oid),
+            "skill_ids": [skill_oid],
+            "project_id": project_oid,
             "tags": ["resume", "promoted"],
+            "origin": "system",
             "created_at": now_utc(),
             "updated_at": now_utc(),
         }

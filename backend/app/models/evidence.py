@@ -5,6 +5,7 @@ from typing import List, Literal, Optional
 from datetime import datetime
 
 EvidenceType = Literal["resume", "paper", "job_posting", "project", "cert", "other"]
+EvidenceOrigin = Literal["user", "system"]
 
 class EvidenceIn(BaseModel):
     # Keep user_email for backward compatibility; allow user_id for user-specific dashboards.
@@ -22,6 +23,7 @@ class EvidenceIn(BaseModel):
 
     # misc metadata
     tags: List[str] = Field(default_factory=list)
+    origin: EvidenceOrigin = "user"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -36,5 +38,16 @@ class EvidenceOut(BaseModel):
     skill_ids: List[str] = Field(default_factory=list)
     project_id: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
+    origin: EvidenceOrigin = "user"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class EvidencePatch(BaseModel):
+    type: Optional[EvidenceType] = None
+    title: Optional[str] = Field(default=None, min_length=1)
+    source: Optional[str] = Field(default=None, min_length=1)
+    text_excerpt: Optional[str] = Field(default=None, min_length=1)
+    skill_ids: Optional[List[str]] = None
+    project_id: Optional[str] = None
+    tags: Optional[List[str]] = None

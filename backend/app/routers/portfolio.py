@@ -6,7 +6,7 @@ from bson import ObjectId
 
 from app.core.db import get_db
 from app.models.portfolio import PortfolioItemIn, PortfolioItemOut, PortfolioItemPatch
-from app.utils.mongo import oid_str
+from app.utils.mongo import oid_str, ref_query, to_object_id
 
 router = APIRouter()
 
@@ -17,6 +17,8 @@ def now_utc():
 async def create_portfolio_item(payload: PortfolioItemIn):
     db = get_db()
     doc = payload.model_dump()
+    doc["user_id"] = to_object_id(payload.user_id)
+    doc["skill_ids"] = [to_object_id(sid) for sid in (payload.skill_ids or [])]
     doc["created_at"] = now_utc()
     doc["updated_at"] = now_utc()
     res = await db["portfolio_items"].insert_one(doc)
@@ -30,6 +32,7 @@ async def list_portfolio_items(
 ):
     db = get_db()
     q: dict = {"user_id": user_id}
+    q = ref_query("user_id", user_id)
     if type:
         q["type"] = type
     if visibility:
@@ -42,7 +45,7 @@ async def list_portfolio_items(
         out.append(
             {
                 "id": oid_str(d["_id"]),
-                "user_id": d["user_id"],
+                "user_id": oid_str(d["user_id"]),
                 "type": d.get("type", "other"),
                 "title": d.get("title", ""),
                 "org": d.get("org"),
@@ -51,7 +54,7 @@ async def list_portfolio_items(
                 "summary": d.get("summary"),
                 "bullets": d.get("bullets", []),
                 "links": d.get("links", []),
-                "skill_ids": d.get("skill_ids", []),
+                "skill_ids": [oid_str(x) for x in d.get("skill_ids", [])],
                 "tags": d.get("tags", []),
                 "visibility": d.get("visibility", "private"),
                 "priority": d.get("priority", 0),
@@ -72,6 +75,8 @@ async def patch_portfolio_item(item_id: str, payload: PortfolioItemPatch):
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
+    if "skill_ids" in updates:
+        updates["skill_ids"] = [to_object_id(sid) for sid in updates["skill_ids"]]
 
     updates["updated_at"] = now_utc()
 
@@ -82,7 +87,7 @@ async def patch_portfolio_item(item_id: str, payload: PortfolioItemPatch):
     d = await db["portfolio_items"].find_one({"_id": oid})
     return {
         "id": oid_str(d["_id"]),
-        "user_id": d["user_id"],
+        "user_id": oid_str(d["user_id"]),
         "type": d.get("type", "other"),
         "title": d.get("title", ""),
         "org": d.get("org"),
@@ -91,7 +96,7 @@ async def patch_portfolio_item(item_id: str, payload: PortfolioItemPatch):
         "summary": d.get("summary"),
         "bullets": d.get("bullets", []),
         "links": d.get("links", []),
-        "skill_ids": d.get("skill_ids", []),
+        "skill_ids": [oid_str(x) for x in d.get("skill_ids", [])],
         "tags": d.get("tags", []),
         "visibility": d.get("visibility", "private"),
         "priority": d.get("priority", 0),

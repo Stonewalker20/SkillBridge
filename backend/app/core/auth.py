@@ -11,28 +11,75 @@ from bson import ObjectId
 
 TOKEN_TTL_DAYS = 30
 
-def now_utc():
+
+def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
+
+def as_utc_aware(dt: datetime) -> datetime:
+    """
+    Mongo can return naive datetimes (no tzinfo). In this codebase, any naive
+    datetime is interpreted as UTC. Normalize to tz-aware UTC for safe comparisons.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def normalize_exp(exp: Any) -> Optional[datetime]:
+    """
+    Normalize an expiry value into a tz-aware UTC datetime.
+    Supports:
+      - datetime (naive or aware)
+      - ISO-8601 string (with 'Z' or explicit offset)
+    Returns None for unsupported/absent values.
+    """
+    if exp is None:
+        return None
+
+    if isinstance(exp, datetime):
+        return as_utc_aware(exp)
+
+    if isinstance(exp, str):
+        try:
+            # Accept "...Z" and "+00:00" style offsets
+            parsed = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+            return as_utc_aware(parsed)
+        except Exception:
+            return None
+
+    return None
+
+
 def _pbkdf2(password: str, salt_hex: str, iterations: int = 120_000) -> str:
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), iterations)
+    dk = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        bytes.fromhex(salt_hex),
+        iterations,
+    )
     return dk.hex()
+
 
 def hash_password(password: str) -> Dict[str, Any]:
     salt = secrets.token_hex(16)
     return {"salt": salt, "hash": _pbkdf2(password, salt)}
 
+
 def verify_password(password: str, salt: str, pw_hash: str) -> bool:
     return secrets.compare_digest(_pbkdf2(password, salt), pw_hash)
+
 
 def new_token() -> str:
     # URL-safe token
     return secrets.token_urlsafe(32)
 
+
 async def require_user(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
     """Return user doc for Bearer token or raise 401."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
+
     token = authorization.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(status_code=401, detail="Missing bearer token")
@@ -42,7 +89,7 @@ async def require_user(authorization: Optional[str] = Header(default=None)) -> D
     if not sess:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    exp = sess.get("expires_at")
+    exp = normalize_exp(sess.get("expires_at"))
     if exp and exp < now_utc():
         # best-effort cleanup
         await db["sessions"].delete_one({"_id": sess["_id"]})
@@ -55,14 +102,16 @@ async def require_user(authorization: Optional[str] = Header(default=None)) -> D
 
     return user
 
+
 async def create_session(user_id: ObjectId) -> str:
     db = get_db()
     token = new_token()
+    now = now_utc()
     doc = {
         "user_id": user_id,
         "token": token,
-        "created_at": now_utc(),
-        "expires_at": now_utc() + timedelta(days=TOKEN_TTL_DAYS),
+        "created_at": now,
+        "expires_at": now + timedelta(days=TOKEN_TTL_DAYS),
     }
     await db["sessions"].insert_one(doc)
     return token

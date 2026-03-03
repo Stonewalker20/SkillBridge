@@ -27,6 +27,8 @@ from typing import Dict, List
 from bson import ObjectId
 from pymongo import MongoClient
 
+from skill_catalog_data import SKILL_CATALOG
+
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -87,15 +89,13 @@ def main():
 
     # 1) Skills
     skill_ids: Dict[str, ObjectId] = {}
-    skill_ids["Python"] = upsert_skill(db, "Python", "Programming", ["python3"])
-    skill_ids["FastAPI"] = upsert_skill(db, "FastAPI", "Framework", ["fast api"])
-    skill_ids["MongoDB"] = upsert_skill(db, "MongoDB", "Database", ["mongo"])
-    skill_ids["Docker"] = upsert_skill(db, "Docker", "DevOps", [])
-    skill_ids["React"] = upsert_skill(db, "React", "Frontend", ["reactjs"])
-    skill_ids["PyTorch"] = upsert_skill(db, "PyTorch", "ML", ["torch"])
-    skill_ids["MLflow"] = upsert_skill(db, "MLflow", "MLOps", [])
-    skill_ids["DVC"] = upsert_skill(db, "DVC", "MLOps", [])
-    skill_ids["MLOps"] = upsert_skill(db, "MLOps", "MLOps", ["ml ops", "mlops"])
+    for item in SKILL_CATALOG:
+        skill_ids[str(item["name"])] = upsert_skill(
+            db,
+            str(item["name"]),
+            str(item["category"]),
+            [str(alias) for alias in item.get("aliases", [])],
+        )
 
     # 2) Resume snapshot
     resume_text = (

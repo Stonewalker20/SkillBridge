@@ -21,7 +21,14 @@ class SkillOut(BaseModel):
     tags: List[str] = Field(default_factory=list)
     proficiency: Optional[int] = None
     last_used_at: Optional[datetime] = None
+    origin: str = "default"
+    created_by_user_id: Optional[str] = None
+    can_delete: bool = False
 
 class SkillUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1)
+    category: Optional[str] = Field(default=None, min_length=1)
+    aliases: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
     proficiency: Optional[int] = Field(default=None, ge=0, le=5)
     last_used_at: Optional[datetime] = None
