@@ -209,4 +209,13 @@
   .dark .bg-slate-50 {
     background-color: var(--secondary);
   }
+
+  .dark .bg-\[\#1E3A8A\] {
+    background-color: #3b82f6;
+  }
+
+  .dark .hover\:bg-\[\#1e3a8a\]\/90:hover,
+  .dark .bg-\[\#1E3A8A\]:hover {
+    background-color: #2563eb;
+  }
 }

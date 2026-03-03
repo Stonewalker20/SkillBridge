@@ -529,24 +529,7 @@ export function Evidence() {
                   />
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                    <Label htmlFor="evidence-text">Paste Evidence Text</Label>
-                    <Textarea
-                      id="evidence-text"
-                      value={draft.text}
-                    onChange={(e) => {
-                      const nextDraft = { ...draft, text: e.target.value };
-                      setDraft(nextDraft);
-                      if (draft.id) syncEditAnalysisFromDraft(nextDraft);
-                      else setAnalysisItems([]);
-                    }}
-                    placeholder="Paste a project summary, certificate text, paper abstract, or any other evidence here..."
-                      rows={14}
-                      className="mt-2"
-                    />
-                  </div>
-
+                <div className="space-y-4">
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
                     <div className="flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-slate-100">
                       <Upload className="h-4 w-4 text-[#1E3A8A]" />
@@ -580,6 +563,23 @@ export function Evidence() {
                         </div>
                       </div>
                     ) : null}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/70">
+                    <Label htmlFor="evidence-text">Paste Evidence Text</Label>
+                    <Textarea
+                      id="evidence-text"
+                      value={draft.text}
+                      onChange={(e) => {
+                        const nextDraft = { ...draft, text: e.target.value };
+                        setDraft(nextDraft);
+                        if (draft.id) syncEditAnalysisFromDraft(nextDraft);
+                        else setAnalysisItems([]);
+                      }}
+                      placeholder="Paste a project summary, certificate text, paper abstract, or any other evidence here..."
+                      rows={14}
+                      className="mt-2"
+                    />
                   </div>
                 </div>
 
