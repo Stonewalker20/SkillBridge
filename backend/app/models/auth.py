@@ -24,3 +24,4 @@ class AuthOut(BaseModel):
 class UserPatch(BaseModel):
     email: Optional[EmailStr] = None
     username: Optional[str] = Field(default=None, min_length=2, max_length=50)
+    password: Optional[str] = Field(default=None, min_length=8, max_length=128)

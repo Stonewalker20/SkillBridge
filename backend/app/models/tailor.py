@@ -31,6 +31,31 @@ class JobIngestOut(BaseModel):
     created_at: datetime | None = None
 
 
+class MatchScoreBreakdown(BaseModel):
+    label: str
+    score: float
+    detail: str
+
+
+class JobMatchOut(BaseModel):
+    job_id: str
+    match_score: float
+    matched_skill_ids: list[str] = Field(default_factory=list)
+    matched_skills: list[str] = Field(default_factory=list)
+    missing_skill_ids: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    strength_areas: list[str] = Field(default_factory=list)
+    related_skills: list[str] = Field(default_factory=list)
+    score_breakdown: list[MatchScoreBreakdown] = Field(default_factory=list)
+    recommended_next_steps: list[str] = Field(default_factory=list)
+    extracted_skill_count: int = 0
+    confirmed_skill_count: int = 0
+    evidence_aligned_count: int = 0
+    keyword_overlap_count: int = 0
+    semantic_alignment_score: float = 0
+    history_id: str | None = None
+
+
 class TailorPreviewIn(BaseModel):
     user_id: str
     job_id: str | None = Field(default=None, description="Job ingest id")
@@ -55,3 +80,58 @@ class TailoredResumeOut(BaseModel):
     sections: list[ResumeSection]
     plain_text: str
     created_at: datetime | None = None
+
+
+class RewriteBulletsIn(BaseModel):
+    focus: str = Field(default="balanced", description="impact|ats|balanced")
+
+
+class RewriteBulletsOut(BaseModel):
+    tailored_id: str
+    provider: str
+    focus: str
+    rewritten_count: int
+    sections: list[ResumeSection]
+    plain_text: str
+    updated_at: datetime | None = None
+
+
+class JobMatchHistoryEntryOut(BaseModel):
+    id: str
+    job_id: str
+    title: str | None = None
+    company: str | None = None
+    location: str | None = None
+    match_score: float
+    semantic_alignment_score: float = 0
+    matched_skills: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    strength_areas: list[str] = Field(default_factory=list)
+    related_skills: list[str] = Field(default_factory=list)
+    tailored_resume_id: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class JobMatchHistoryDetailOut(JobMatchHistoryEntryOut):
+    text_preview: str | None = None
+    job_text: str | None = None
+    analysis: JobMatchOut
+
+
+class JobMatchCompareOut(BaseModel):
+    left: JobMatchHistoryEntryOut
+    right: JobMatchHistoryEntryOut
+    match_score_delta: float
+    semantic_alignment_delta: float
+    newly_matched_skills: list[str] = Field(default_factory=list)
+    newly_missing_skills: list[str] = Field(default_factory=list)
+    shared_strength_areas: list[str] = Field(default_factory=list)
+
+
+class AISettingsStatusOut(BaseModel):
+    provider_mode: str
+    embeddings_provider: str
+    rewrite_provider: str
+    embedding_model: str
+    rewrite_model: str
