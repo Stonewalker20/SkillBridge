@@ -65,6 +65,7 @@ export function Jobs() {
   const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
   const [reanalyzingHistoryId, setReanalyzingHistoryId] = useState<string | null>(null);
+  const [addingMissingSkill, setAddingMissingSkill] = useState<string | null>(null);
   const [selectedCompareIds, setSelectedCompareIds] = useState<string[]>([]);
   const [comparison, setComparison] = useState<JobMatchComparison | null>(null);
   const [comparing, setComparing] = useState(false);
@@ -387,6 +388,53 @@ export function Jobs() {
     }
   };
 
+  const handleAddMissingSkill = async (skillName: string) => {
+    const normalizedName = String(skillName || "").trim();
+    if (!normalizedName) return;
+
+    setAddingMissingSkill(normalizedName);
+    try {
+      const matches = await api.listSkills({ q: normalizedName, limit: 50 });
+      const exactMatch = matches.find((skill) => String(skill.name || "").trim().toLowerCase() === normalizedName.toLowerCase());
+
+      let skillId = exactMatch?.id;
+      if (!skillId) {
+        const created = await api.createSkill({
+          name: normalizedName,
+          category: "General",
+        });
+        skillId = created.id;
+      }
+
+      await api.confirmSkill(null, skillId);
+
+      setAnalysis((current) => {
+        if (!current) return current;
+        const currentMissing = asArray<string>(current.missing_skills).filter((value) => value !== normalizedName);
+        const currentMatched = asArray<string>(current.matched_skills);
+        return {
+          ...current,
+          missing_skills: currentMissing,
+          matched_skills: currentMatched.includes(normalizedName) ? currentMatched : [...currentMatched, normalizedName],
+          confirmed_skill_count: Number(current.confirmed_skill_count ?? current.confirmedSkillCount ?? 0) + 1,
+        };
+      });
+
+      recordActivity({
+        id: `jobs:missing-skill:add:${normalizedName}`,
+        type: "skills",
+        action: "confirmed",
+        name: normalizedName,
+      });
+      toast.success("Skill added to your profile. Reanalyze to update the score.");
+    } catch (error: any) {
+      console.error("Failed to add missing skill:", error);
+      toast.error(error?.message || "Failed to add missing skill");
+    } finally {
+      setAddingMissingSkill(null);
+    }
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-green-600";
     if (score >= 60) return "text-[#0D9488]";
@@ -622,9 +670,18 @@ export function Jobs() {
               <span className="text-sm text-gray-500">None returned</span>
             ) : (
               normalized.missingSkills.map((s) => (
-                <Badge key={s} variant="outline" className="border-orange-300 text-orange-700">
-                  {s}
-                </Badge>
+                <div key={s} className="flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1">
+                  <span className="text-sm font-medium text-orange-700">{s}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleAddMissingSkill(s)}
+                    disabled={addingMissingSkill === s}
+                    className="h-7 rounded-full px-2 text-[#1E3A8A] hover:bg-white"
+                  >
+                    {addingMissingSkill === s ? "Adding..." : "Add Skill"}
+                  </Button>
+                </div>
               ))
             )}
           </div>
