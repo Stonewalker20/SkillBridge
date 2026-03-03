@@ -4,7 +4,6 @@ import {
   Briefcase, 
   FolderOpen, 
   Target,
-  User,
   Menu,
   X,
   LogOut
@@ -29,7 +28,6 @@ const navigation = [
   { name: "Skills", href: "/app/skills", icon: Target },
   { name: "Evidence", href: "/app/evidence", icon: FolderOpen },
   { name: "Job Match", href: "/app/jobs", icon: Briefcase },
-  { name: "Account", href: "/app/account", icon: User },
 ];
 
 export function RootLayout() {
@@ -50,6 +48,11 @@ export function RootLayout() {
     logout();
     navigate("/");
   };
+
+  const currentPageTitle =
+    location.pathname === "/app/account"
+      ? "Account"
+      : navigation.find((item) => item.href === location.pathname)?.name || "Page";
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -133,7 +136,7 @@ export function RootLayout() {
               </Button>
               
               <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-                {navigation.find(item => item.href === location.pathname)?.name || "Page"}
+                {currentPageTitle}
               </h2>
             </div>
             
