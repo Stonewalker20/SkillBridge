@@ -3,10 +3,8 @@ import { api, type Skill, type ConfirmationOut } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
 import { Card } from "../components/ui/card";
-import { Button } from "../components/ui/button";
-import { Target, FolderOpen, TrendingUp, FileText, Plus, Upload, Briefcase } from "lucide-react";
+import { Target, FolderOpen, TrendingUp, FileText } from "lucide-react";
 import { Badge } from "../components/ui/badge";
-import { Link } from "react-router";
 
 interface DashboardSummary {
   totalSkills: number;
@@ -275,56 +273,6 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6 hover:shadow-md transition-shadow cursor-pointer group">
-          <div className="flex flex-col items-center text-center">
-            <div className="p-4 bg-[#1E3A8A] rounded-xl mb-4 group-hover:scale-110 transition-transform">
-              <Briefcase className="h-8 w-8 text-white" />
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-2">Analyze New Job</h3>
-            <p className="text-sm text-gray-600 mb-4">Paste a job description to get instant match scores</p>
-            <Button asChild className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90">
-              <Link to="/app/jobs?analyze=1">
-                <Plus className="h-4 w-4 mr-2" />
-                Start Analysis
-              </Link>
-            </Button>
-          </div>
-        </Card>
-
-        <Card className="p-6 hover:shadow-md transition-shadow cursor-pointer group">
-          <div className="flex flex-col items-center text-center">
-            <div className="p-4 bg-[#0D9488] rounded-xl mb-4 group-hover:scale-110 transition-transform">
-              <Target className="h-8 w-8 text-white" />
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-2">Add Skill</h3>
-            <p className="text-sm text-gray-600 mb-4">Expand your skill profile and improve matches</p>
-            <Button asChild variant="outline">
-              <Link to="/app/skills?add=1">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Skill
-              </Link>
-            </Button>
-          </div>
-        </Card>
-
-        <Card className="p-6 hover:shadow-md transition-shadow cursor-pointer group">
-          <div className="flex flex-col items-center text-center">
-            <div className="p-4 bg-[#0D9488] rounded-xl mb-4 group-hover:scale-110 transition-transform">
-              <Upload className="h-8 w-8 text-white" />
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-2">Upload Evidence</h3>
-            <p className="text-sm text-gray-600 mb-4">Showcase your work and strengthen your profile</p>
-            <Button asChild variant="outline">
-              <Link to="/app/evidence?add=1">
-                <Upload className="h-4 w-4 mr-2" />
-                Add Evidence
-              </Link>
-            </Button>
-          </div>
-        </Card>
-      </div>
     </div>
   );
 }
