@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "../components/ui/label";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 const PROF_LEVELS = [1, 2, 3, 4, 5] as const;
 const SKILLS_PER_PAGE = 50;
@@ -570,11 +570,16 @@ export function Skills() {
 
       {unsupportedConfirmedSkills.length > 0 ? (
         <Card className="p-6">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Confirmed Skills Without Evidence</h3>
-            <p className="text-sm text-gray-600">
-              These skills are confirmed on your profile, but you do not have any supporting evidence attached yet.
-            </p>
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Confirmed Skills Without Evidence</h3>
+              <p className="text-sm text-gray-600">
+                These skills are confirmed on your profile, but you do not have any supporting evidence attached yet.
+              </p>
+            </div>
+            <Button asChild variant="outline">
+              <Link to="/app/evidence?add=1">Upload Evidence</Link>
+            </Button>
           </div>
           <div className="flex flex-wrap gap-2">
             {unsupportedConfirmedSkills.map((skill) => (
