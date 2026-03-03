@@ -43,9 +43,20 @@ function activityTimestamp(value: any): number {
   return Number.isFinite(stamp) ? stamp : 0;
 }
 
+function normalizedActivityDate(value: any): string {
+  const now = Date.now();
+  const stamp = activityTimestamp(value);
+  if (!stamp) return new Date(0).toISOString();
+  // Protect ordering from bad future-skewed timestamps coming from persisted records.
+  if (stamp > now + 5 * 60 * 1000) {
+    return new Date(now).toISOString();
+  }
+  return new Date(stamp).toISOString();
+}
+
 function normalizeRecentActivityItem(item: any) {
   const rawDate = item?.date ?? item?.created_at ?? item?.updated_at ?? "";
-  const date = rawDate ? new Date(rawDate).toISOString() : new Date(0).toISOString();
+  const date = normalizedActivityDate(rawDate);
   return {
     id: String(item?.id ?? `${item?.type ?? "activity"}:${item?.action ?? "updated"}:${item?.name ?? "item"}:${date}`),
     type: String(item?.type ?? "activity"),
