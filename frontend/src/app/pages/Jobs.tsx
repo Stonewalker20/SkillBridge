@@ -19,8 +19,11 @@ type MatchResult = {
   analysis_summary?: string;
   matched_skills?: string[];
   missing_skills?: string[];
+  matched_skill_count?: number;
+  missing_skill_count?: number;
   strength_areas?: string[];
   related_skills?: string[];
+  semantic_alignment_examples?: string[];
   score_breakdown?: Array<{ label?: string; score?: number; detail?: string }>;
   recommended_next_steps?: string[];
   extracted_skill_count?: number;
@@ -85,8 +88,11 @@ export function Jobs() {
       analysisSummary: String(a.analysis_summary ?? a.analysisSummary ?? ""),
       matchedSkills: asArray<string>(a.matched_skills ?? a.matchedSkills),
       missingSkills: asArray<string>(a.missing_skills ?? a.missingSkills),
+      matchedSkillCount: Number(a.matched_skill_count ?? a.matchedSkillCount ?? asArray<string>(a.matched_skills ?? a.matchedSkills).length) || 0,
+      missingSkillCount: Number(a.missing_skill_count ?? a.missingSkillCount ?? asArray<string>(a.missing_skills ?? a.missingSkills).length) || 0,
       strengthAreas: asArray<string>(a.strength_areas ?? a.strengthAreas),
       relatedSkills: asArray<string>(a.related_skills ?? a.relatedSkills),
+      semanticAlignmentExamples: asArray<string>(a.semantic_alignment_examples ?? a.semanticAlignmentExamples),
       scoreBreakdown,
       nextSteps: asArray<string>(a.recommended_next_steps ?? a.recommendedNextSteps),
       extractedSkillCount: Number(a.extracted_skill_count ?? a.extractedSkillCount ?? 0) || 0,
@@ -443,8 +449,8 @@ export function Jobs() {
           ) : history.length === 0 ? (
             <p className="text-sm text-gray-500">No prior analyses yet.</p>
           ) : (
-            <div className="space-y-3">
-              {history.slice(0, 5).map((entry) => (
+            <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-2">
+              {history.map((entry) => (
                 <div key={entry.id} className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-semibold text-gray-900">{entry.title || entry.company || "Saved job match"}</p>
@@ -528,12 +534,12 @@ export function Jobs() {
           </p>
         </Card>
         <Card className="p-5">
-          <p className="text-sm text-gray-500">Evidence-Backed Matches</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.evidenceAlignedCount}</p>
+          <p className="text-sm text-gray-500">Matched Job Skills</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.matchedSkillCount}</p>
         </Card>
         <Card className="p-5">
-          <p className="text-sm text-gray-500">Evidence Gaps</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.evidenceGapCount}</p>
+          <p className="text-sm text-gray-500">Missing Job Skills</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.missingSkillCount}</p>
         </Card>
       </div>
 
@@ -548,13 +554,30 @@ export function Jobs() {
         <Card className="p-5">
           <p className="text-sm text-gray-500">Coverage Snapshot</p>
           <div className="mt-3 space-y-2 text-sm text-gray-700">
+            <p>Matched job skills: {normalized.matchedSkillCount} of {normalized.extractedSkillCount}</p>
+            <p>Missing job skills: {normalized.missingSkillCount} of {normalized.extractedSkillCount}</p>
             <p>Required skills matched: {normalized.requiredMatchedCount} of {normalized.requiredSkillCount}</p>
             <p>Preferred skills matched: {normalized.preferredMatchedCount} of {normalized.preferredSkillCount}</p>
-            <p>Confirmed skills available overall: {normalized.confirmedSkillCount}</p>
+            <p>Evidence-backed matched skills: {normalized.evidenceAlignedCount} of {normalized.matchedSkillCount}</p>
             <p>Job keywords reflected in your work: {normalized.keywordOverlapScore}%</p>
           </div>
         </Card>
       </div>
+
+      <Card className="p-5">
+        <p className="text-sm text-gray-500">Semantic Alignment Examples</p>
+        {normalized.semanticAlignmentExamples.length === 0 ? (
+          <p className="mt-3 text-sm text-gray-600">No concrete examples yet. Add more evidence or projects tied to your confirmed skills to strengthen semantic matching.</p>
+        ) : (
+          <ul className="mt-3 space-y-2 text-sm text-gray-700">
+            {normalized.semanticAlignmentExamples.map((example) => (
+              <li key={example} className="rounded-md bg-slate-50 px-3 py-2">
+                {example}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <Card className="p-6">
         <div className="mb-4">
