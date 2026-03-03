@@ -592,7 +592,7 @@ export function Skills() {
       ) : null}
 
       {/* Skills Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {pagedSkills.map((skill) => {
           const confirmed = confirmedMap.has(skill.id);
           const confirmationEntry = confirmed ? confirmedMap.get(skill.id)! : null;
@@ -602,13 +602,13 @@ export function Skills() {
           const prof = confirmed ? String(Math.max(1, Math.min(5, rawProf))) : "";
 
           return (
-            <Card key={skill.id} className="p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between gap-3 mb-3">
+            <Card key={skill.id} className="p-4 transition-shadow hover:shadow-md">
+              <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900">{skill.name}</h3>
-                  <p className="text-sm text-gray-600">{skill.category || ""}</p>
+                  <h3 className="text-base font-semibold leading-tight text-gray-900">{skill.name}</h3>
+                  <p className="text-xs text-gray-600">{skill.category || ""}</p>
                   {Array.isArray(skill.aliases) && skill.aliases.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">Also known as: {skill.aliases.join(", ")}</p>
+                    <p className="mt-1 line-clamp-2 text-[11px] text-gray-500">Also known as: {skill.aliases.join(", ")}</p>
                   )}
                 </div>
 
@@ -618,8 +618,8 @@ export function Skills() {
                       size="sm"
                       className={
                         confirmed
-                          ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                          : "bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
+                          ? "h-8 px-2.5 text-xs bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          : "h-8 px-2.5 text-xs bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
                       }
                       onClick={() => handleToggleConfirm(skill.id)}
                       disabled={busySkillId === skill.id}
@@ -643,14 +643,14 @@ export function Skills() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                {skill.category ? <Badge variant="secondary">{skill.category}</Badge> : null}
+              <div className="flex min-h-6 items-center gap-2">
+                {skill.category ? <Badge variant="secondary" className="px-2 py-0 text-[11px]">{skill.category}</Badge> : null}
               </div>
 
-              <div className="mt-4">
-                <div className="text-xs text-gray-600 mb-2">Proficiency (1–5)</div>
+              <div className="mt-3">
+                <div className="mb-1 text-[11px] text-gray-600">Proficiency (1–5)</div>
                 {confirmed && confirmationEntry && confirmationEntry.evidenceCount > 0 ? (
-                  <div className="mb-2 text-xs text-gray-500">
+                  <div className="mb-2 text-[11px] leading-snug text-gray-500">
                     {confirmationEntry.evidenceCount} evidence item{confirmationEntry.evidenceCount === 1 ? "" : "s"} support this skill.
                     {confirmationEntry.autoProficiency > confirmationEntry.manualProficiency
                       ? ` Auto-raised to ${confirmationEntry.autoProficiency}.`
@@ -662,7 +662,7 @@ export function Skills() {
                   onValueChange={(v) => handleProficiencyChange(skill.id, v)}
                   disabled={!confirmed || busySkillId === skill.id}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm">
                     <SelectValue placeholder={confirmed ? "Select proficiency..." : "Confirm skill to set proficiency"} />
                   </SelectTrigger>
                   <SelectContent>
