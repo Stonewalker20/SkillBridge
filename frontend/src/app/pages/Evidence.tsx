@@ -234,6 +234,7 @@ export function Evidence() {
       setSaving(true);
       const savedItems: Evidence[] = [];
       const confirmedSkillIds = new Set<string>();
+      const confirmedByEvidence: Array<{ title: string; count: number }> = [];
 
       for (const analysis of analysisItems) {
         const selectedIds = selectedSkillIdsByAnalysis[analysis.analysis_id] || [];
@@ -265,6 +266,12 @@ export function Evidence() {
             })
           : await api.createEvidence(payload);
         savedItems.push(saved);
+        if (resolvedSkillIds.length > 0) {
+          confirmedByEvidence.push({
+            title: saved.title || analysis.title || "Evidence",
+            count: resolvedSkillIds.length,
+          });
+        }
         recordActivity({
           id: `evidence:${saved.id}`,
           type: "evidence",
@@ -279,12 +286,14 @@ export function Evidence() {
 
       if (confirmedSkillIds.size > 0) {
         await api.confirmProfileSkills(Array.from(confirmedSkillIds));
-        recordActivity({
-          id: `skills:evidence:${Date.now()}:${confirmedSkillIds.size}`,
-          type: "skills",
-          action: "confirmed",
-          name: `${confirmedSkillIds.size} skill${confirmedSkillIds.size === 1 ? "" : "s"} from evidence`,
-        });
+        for (const entry of confirmedByEvidence) {
+          recordActivity({
+            id: `skills:evidence:${Date.now()}:${entry.title}:${entry.count}`,
+            type: "skills",
+            action: "confirmed",
+            name: `${entry.title} confirmed ${entry.count} skill${entry.count === 1 ? "" : "s"}`,
+          });
+        }
       }
 
       setItems((prev) => {
