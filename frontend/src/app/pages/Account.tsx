@@ -9,6 +9,13 @@ import { toast } from "sonner";
 import { api } from "../services/api";
 import { useActivity } from "../context/ActivityContext";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -24,7 +31,8 @@ export function Account() {
   const { recordActivity } = useActivity();
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [aiStatus, setAiStatus] = useState<any>(null);
+  const [aiSettings, setAiSettings] = useState<any>(null);
+  const [savingAI, setSavingAI] = useState(false);
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -37,13 +45,13 @@ export function Account() {
     const load = async () => {
       setLoading(true);
       try {
-        const [me, status] = await Promise.all([
+        const [me, settings] = await Promise.all([
           api.me(),
-          api.getAISettingsStatus().catch(() => null),
+          api.getAIPreferences().catch(() => null),
         ]);
         setUsername(me?.username || "");
         setEmail(me?.email || "");
-        setAiStatus(status);
+        setAiSettings(settings);
       } catch (e: any) {
         toast.error(e?.message || "Failed to load account");
       } finally {
@@ -95,6 +103,30 @@ export function Account() {
       toast.error(e?.message || "Failed to update email");
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  const handleSaveAISettings = async () => {
+    if (!aiSettings?.preferences) return;
+    setSavingAI(true);
+    try {
+      const updated = await api.updateAIPreferences({
+        inference_mode: aiSettings.preferences.inference_mode,
+        embedding_model: aiSettings.preferences.embedding_model,
+        zero_shot_model: aiSettings.preferences.zero_shot_model,
+      });
+      setAiSettings(updated);
+      recordActivity({
+        id: `account:ai:${Date.now()}`,
+        type: "account",
+        action: "updated",
+        name: "AI model settings updated",
+      });
+      toast.success("AI settings updated");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update AI settings");
+    } finally {
+      setSavingAI(false);
     }
   };
 
@@ -158,7 +190,7 @@ export function Account() {
             <h2 className="mt-2 text-2xl font-bold text-gray-900 dark:text-slate-100">{username || "Account"}</h2>
             <p className="text-gray-600 dark:text-slate-300">{email || ""}</p>
             <div className="mt-3 inline-flex rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-              {aiStatus?.provider_mode ?? "Inference unavailable"}
+              {aiSettings?.provider_mode ?? "Inference unavailable"}
             </div>
           </div>
           </div>
@@ -228,30 +260,123 @@ export function Account() {
 
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">AI Settings</h3>
-            <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">Current local backend inference mode used for Job Match semantic analysis, evidence extraction, and bullet enhancement.</p>
+            <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">Choose how your account runs Job Match semantic analysis and evidence skill extraction. Changes here affect future analyses, not already saved results.</p>
             <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/80">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {aiSettings ? (
+              <>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Mode</p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiStatus?.provider_mode ?? "Unavailable"}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Embeddings</p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiStatus?.embeddings_provider ?? "Unavailable"}</p>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Inference Mode</p>
+                  <Select
+                    value={aiSettings?.preferences?.inference_mode ?? "auto"}
+                    onValueChange={(value) =>
+                      setAiSettings((current: any) =>
+                        current
+                          ? {
+                              ...current,
+                              preferences: { ...current.preferences, inference_mode: value },
+                            }
+                          : current
+                      )
+                    }
+                  >
+                    <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
+                      <SelectValue placeholder="Select inference mode" />
+                    </SelectTrigger>
+                    <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                      {(aiSettings?.preferences?.available_inference_modes ?? []).map((mode: string) => (
+                        <SelectItem key={mode} value={mode}>
+                          {mode}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Embedding Model</p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiStatus?.embedding_model ?? "Unavailable"}</p>
+                  <Select
+                    value={aiSettings?.preferences?.embedding_model ?? ""}
+                    onValueChange={(value) =>
+                      setAiSettings((current: any) =>
+                        current
+                          ? {
+                              ...current,
+                              preferences: { ...current.preferences, embedding_model: value },
+                            }
+                          : current
+                      )
+                    }
+                  >
+                    <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
+                      <SelectValue placeholder="Select embedding model" />
+                    </SelectTrigger>
+                    <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                      {(aiSettings?.preferences?.available_embedding_models ?? []).map((model: string) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Zero-Shot Model</p>
+                  <Select
+                    value={aiSettings?.preferences?.zero_shot_model ?? ""}
+                    onValueChange={(value) =>
+                      setAiSettings((current: any) =>
+                        current
+                          ? {
+                              ...current,
+                              preferences: { ...current.preferences, zero_shot_model: value },
+                            }
+                          : current
+                      )
+                    }
+                  >
+                    <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
+                      <SelectValue placeholder="Select zero-shot model" />
+                    </SelectTrigger>
+                    <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                      {(aiSettings?.preferences?.available_zero_shot_models ?? []).map((model: string) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Mode</p>
+                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiSettings?.provider_mode ?? "Unavailable"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Embeddings</p>
+                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiSettings?.embeddings_provider ?? "Unavailable"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Active Embedding Runtime</p>
+                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiSettings?.embedding_model ?? "Unavailable"}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Rewrite Provider</p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiStatus?.rewrite_provider ?? "Unavailable"}</p>
+                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiSettings?.rewrite_provider ?? "Unavailable"}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Rewrite Model</p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiStatus?.rewrite_model ?? "Unavailable"}</p>
+                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiSettings?.rewrite_model ?? "Unavailable"}</p>
                 </div>
               </div>
+              <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300">
+                <p>Switch to `local-fallback` if you want faster, lighter analysis without transformer loading.</p>
+                <Button onClick={handleSaveAISettings} disabled={savingAI} className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90">
+                  {savingAI ? "Saving..." : "Save AI Settings"}
+                </Button>
+              </div>
+              </>
+              ) : (
+                <p className="text-sm text-gray-600 dark:text-slate-300">AI settings are unavailable right now.</p>
+              )}
             </div>
           </div>
 

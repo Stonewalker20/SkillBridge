@@ -56,6 +56,32 @@ _TORCH_RUNTIME_CONFIGURED = False
 _EMBED_CACHE: "OrderedDict[str, list[float]]" = OrderedDict()
 _CLASSIFY_CACHE: "OrderedDict[str, tuple[bool, str]]" = OrderedDict()
 _CACHE_LIMIT = 2048
+_SENTENCE_MODELS: dict[str, object] = {}
+_ZERO_SHOT_PIPELINES: dict[str, object] = {}
+
+DEFAULT_INFERENCE_MODE = "auto"
+AVAILABLE_INFERENCE_MODES = ["auto", "local-transformer", "local-fallback"]
+
+
+def normalize_ai_preferences(preferences: dict | None = None) -> dict[str, str]:
+    raw = preferences or {}
+    mode = str(raw.get("inference_mode") or DEFAULT_INFERENCE_MODE).strip().lower()
+    if mode not in AVAILABLE_INFERENCE_MODES:
+        mode = DEFAULT_INFERENCE_MODE
+
+    embedding_model = str(raw.get("embedding_model") or settings.local_embedding_model).strip()
+    if embedding_model not in settings.local_embedding_model_options_list:
+        embedding_model = settings.local_embedding_model
+
+    zero_shot_model = str(raw.get("zero_shot_model") or settings.local_zero_shot_model).strip()
+    if zero_shot_model not in settings.local_zero_shot_model_options_list:
+        zero_shot_model = settings.local_zero_shot_model
+
+    return {
+        "inference_mode": mode,
+        "embedding_model": embedding_model,
+        "zero_shot_model": zero_shot_model,
+    }
 
 
 def _cache_get(cache: OrderedDict, key: str):
@@ -103,35 +129,35 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     return round(sum(a * b for a, b in zip(left, right)), 4)
 
 
-def _load_sentence_transformer():
-    global _SENTENCE_MODEL
-    if _SENTENCE_MODEL is not None:
-        return _SENTENCE_MODEL
+def _load_sentence_transformer(model_name: str | None = None):
+    chosen_model = str(model_name or settings.local_embedding_model).strip() or settings.local_embedding_model
+    if chosen_model in _SENTENCE_MODELS:
+        return _SENTENCE_MODELS[chosen_model]
     try:
         from sentence_transformers import SentenceTransformer
 
         _configure_torch_runtime()
-        _SENTENCE_MODEL = SentenceTransformer(settings.local_embedding_model)
-        return _SENTENCE_MODEL
+        _SENTENCE_MODELS[chosen_model] = SentenceTransformer(chosen_model)
+        return _SENTENCE_MODELS[chosen_model]
     except Exception:
         return None
 
 
-def _load_zero_shot_pipeline():
-    global _ZERO_SHOT_PIPELINE
-    if _ZERO_SHOT_PIPELINE is not None:
-        return _ZERO_SHOT_PIPELINE
+def _load_zero_shot_pipeline(model_name: str | None = None):
+    chosen_model = str(model_name or settings.local_zero_shot_model).strip() or settings.local_zero_shot_model
+    if chosen_model in _ZERO_SHOT_PIPELINES:
+        return _ZERO_SHOT_PIPELINES[chosen_model]
     try:
         from transformers import pipeline
 
         _configure_torch_runtime()
-        _ZERO_SHOT_PIPELINE = pipeline(
+        _ZERO_SHOT_PIPELINES[chosen_model] = pipeline(
             "zero-shot-classification",
-            model=settings.local_zero_shot_model,
+            model=chosen_model,
             device=settings.local_model_device,
             framework="pt",
         )
-        return _ZERO_SHOT_PIPELINE
+        return _ZERO_SHOT_PIPELINES[chosen_model]
     except Exception:
         return None
 
@@ -152,9 +178,9 @@ def _configure_torch_runtime() -> None:
 
 
 def release_local_models() -> None:
-    global _SENTENCE_MODEL, _ZERO_SHOT_PIPELINE, _EMBED_CACHE, _CLASSIFY_CACHE
+    global _SENTENCE_MODEL, _ZERO_SHOT_PIPELINE, _EMBED_CACHE, _CLASSIFY_CACHE, _SENTENCE_MODELS, _ZERO_SHOT_PIPELINES
 
-    for obj in (_SENTENCE_MODEL, _ZERO_SHOT_PIPELINE):
+    for obj in list(_SENTENCE_MODELS.values()) + list(_ZERO_SHOT_PIPELINES.values()) + [_SENTENCE_MODEL, _ZERO_SHOT_PIPELINE]:
         if obj is None:
             continue
         model = getattr(obj, "model", obj)
@@ -166,6 +192,8 @@ def release_local_models() -> None:
 
     _SENTENCE_MODEL = None
     _ZERO_SHOT_PIPELINE = None
+    _SENTENCE_MODELS.clear()
+    _ZERO_SHOT_PIPELINES.clear()
     _EMBED_CACHE.clear()
     _CLASSIFY_CACHE.clear()
     gc.collect()
@@ -174,41 +202,50 @@ def release_local_models() -> None:
 atexit.register(release_local_models)
 
 
-def get_inference_status() -> dict[str, str]:
-    embed_model = _load_sentence_transformer()
-    zero_shot = _load_zero_shot_pipeline()
+def get_inference_status(preferences: dict | None = None) -> dict[str, str]:
+    prefs = normalize_ai_preferences(preferences)
+    force_fallback = prefs["inference_mode"] == "local-fallback"
+    embed_model = None if force_fallback else _load_sentence_transformer(prefs["embedding_model"])
+    zero_shot = None if force_fallback else _load_zero_shot_pipeline(prefs["zero_shot_model"])
     embeddings_provider = "local-transformer" if embed_model is not None else "local-hash"
     rewrite_provider = "local-rule"
     return {
         "provider_mode": "Local Transformer" if embed_model is not None or zero_shot is not None else "Local Fallback",
         "embeddings_provider": embeddings_provider,
         "rewrite_provider": rewrite_provider,
-        "embedding_model": settings.local_embedding_model if embed_model is not None else "hashed-embedding-v1",
+        "embedding_model": prefs["embedding_model"] if embed_model is not None else "hashed-embedding-v1",
         "rewrite_model": "resume-rule-rewriter-v1",
     }
 
 
 async def warm_local_models() -> dict[str, str]:
-    status = get_inference_status()
+    prefs = normalize_ai_preferences()
+    status = get_inference_status(prefs)
     # Touch both paths so the first real request does not pay model init cost.
-    await embed_texts(["python fastapi mongodb", "machine learning project experience"])
-    await extract_skill_candidates("Python, FastAPI, MongoDB, machine learning, leadership", max_candidates=5)
-    return get_inference_status() if status else status
+    await embed_texts(["python fastapi mongodb", "machine learning project experience"], preferences=prefs)
+    await extract_skill_candidates("Python, FastAPI, MongoDB, machine learning, leadership", max_candidates=5, preferences=prefs)
+    return get_inference_status(prefs) if status else status
 
 
-async def embed_texts(texts: Iterable[str]) -> tuple[list[list[float]], str]:
+async def embed_texts(texts: Iterable[str], preferences: dict | None = None) -> tuple[list[list[float]], str]:
     cleaned = [str(text or "").strip() for text in texts]
     if not cleaned:
         return [], "local-hash"
 
-    model = _load_sentence_transformer()
+    prefs = normalize_ai_preferences(preferences)
+    if prefs["inference_mode"] == "local-fallback":
+        return [hashed_embedding(text) for text in cleaned], "local-hash"
+
+    model_name = prefs["embedding_model"]
+    model = _load_sentence_transformer(model_name)
     if model is not None:
         try:
             results: list[list[float] | None] = [None] * len(cleaned)
             missing_indices: list[int] = []
             missing_texts: list[str] = []
             for index, text in enumerate(cleaned):
-                cached = _cache_get(_EMBED_CACHE, text)
+                cache_key = f"{model_name}|{text}"
+                cached = _cache_get(_EMBED_CACHE, cache_key)
                 if cached is not None:
                     results[index] = cached
                 else:
@@ -220,7 +257,7 @@ async def embed_texts(texts: Iterable[str]) -> tuple[list[list[float]], str]:
                 for index, row in zip(missing_indices, vectors):
                     vector = list(map(float, row))
                     results[index] = vector
-                    _cache_put(_EMBED_CACHE, cleaned[index], vector)
+                    _cache_put(_EMBED_CACHE, f"{model_name}|{cleaned[index]}", vector)
 
             return [list(row or hashed_embedding(cleaned[index])) for index, row in enumerate(results)], "local-transformer"
         except Exception:
@@ -328,13 +365,14 @@ def _classify_candidate_locally(name: str) -> tuple[bool, str]:
     return True, "General"
 
 
-async def extract_skill_candidates(text: str, max_candidates: int = 25) -> tuple[list[dict], str]:
+async def extract_skill_candidates(text: str, max_candidates: int = 25, preferences: dict | None = None) -> tuple[list[dict], str]:
     cleaned = str(text or "").strip()
     if not cleaned:
         return [], "local-rule"
 
+    prefs = normalize_ai_preferences(preferences)
     local_candidates = _extract_candidates_locally(cleaned, max_candidates=max_candidates * 2)
-    classifier = _load_zero_shot_pipeline()
+    classifier = None if prefs["inference_mode"] == "local-fallback" else _load_zero_shot_pipeline(prefs["zero_shot_model"])
     if classifier is None:
         filtered: list[dict] = []
         for candidate in local_candidates:
@@ -352,7 +390,8 @@ async def extract_skill_candidates(text: str, max_candidates: int = 25) -> tuple
         name = str(candidate.get("name") or "").strip()
         if not name:
             continue
-        cached = _cache_get(_CLASSIFY_CACHE, name.casefold())
+        cache_key = f"{prefs['zero_shot_model']}|{name.casefold()}"
+        cached = _cache_get(_CLASSIFY_CACHE, cache_key)
         if cached is not None:
             ok, category = cached
             if ok:
@@ -385,7 +424,7 @@ async def extract_skill_candidates(text: str, max_candidates: int = 25) -> tuple
                         category = SKILL_CATEGORY_BY_LABEL.get(top_label, "General")
             if not ok:
                 ok, category = _classify_candidate_locally(name)
-            _cache_put(_CLASSIFY_CACHE, name.casefold(), (ok, category))
+            _cache_put(_CLASSIFY_CACHE, f"{prefs['zero_shot_model']}|{name.casefold()}", (ok, category))
             if ok:
                 filtered.append({"name": name, "category": category})
             if len(filtered) >= max_candidates:

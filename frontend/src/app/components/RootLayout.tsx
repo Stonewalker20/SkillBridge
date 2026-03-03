@@ -16,7 +16,7 @@ import { cn } from "./ui/utils";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Switch } from "./ui/switch";
-import LogoSvg from "../../imports/file.svg";
+import LogoImage from "../../imports/skillbridge_logo.png";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
@@ -97,9 +97,9 @@ export function RootLayout() {
         <div className="border-b border-slate-200/80 px-6 py-6 dark:border-slate-800/80">
           <Link to="/app" className="flex items-center justify-center rounded-2xl px-1 py-2 transition-opacity hover:opacity-90">
             <img
-              src={LogoSvg}
+              src={LogoImage}
               alt="SkillBridge Logo"
-              className="h-28 w-full max-w-[280px] object-contain"
+              className="h-28 w-full max-w-[220px] scale-[1.6] object-contain"
             />
           </Link>
         </div>
@@ -115,7 +115,7 @@ export function RootLayout() {
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-4 py-3 transition-all",
                   isActive
-                    ? "bg-[linear-gradient(135deg,_#1E3A8A,_#0F766E)] text-white shadow-sm"
+                    ? "bg-[linear-gradient(135deg,_#1E3A8A,_#FBBF24)] text-white shadow-sm"
                     : "text-slate-700 hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
                 )}
               >
@@ -177,7 +177,7 @@ export function RootLayout() {
               checked={isDark}
               onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
               aria-label="Toggle dark mode"
-              className="h-[18px] w-[34px] data-[state=checked]:bg-slate-900 data-[state=unchecked]:bg-amber-300 dark:data-[state=checked]:bg-teal-500 dark:data-[state=unchecked]:bg-slate-700 [&_[data-slot=switch-thumb]]:size-3 [&_[data-slot=switch-thumb]]:data-[state=checked]:translate-x-[14px]"
+              className="h-[18px] w-[34px] data-[state=checked]:bg-[#1E3A8A] data-[state=unchecked]:bg-amber-300 dark:data-[state=checked]:bg-amber-400 dark:data-[state=unchecked]:bg-slate-700 [&_[data-slot=switch-thumb]]:size-3 [&_[data-slot=switch-thumb]]:data-[state=checked]:translate-x-[14px]"
             />
           </div>
           <Button
@@ -218,7 +218,7 @@ export function RootLayout() {
               <Button asChild variant="ghost" className="relative h-11 w-11 rounded-full border border-slate-200/80 bg-white/80 p-0 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
                 <Link to="/app/account" aria-label="Open account settings" title="Account Settings">
                   <Avatar>
-                    <AvatarFallback className="bg-[linear-gradient(135deg,_#1E3A8A,_#0F766E)] text-white">
+                    <AvatarFallback className="bg-[linear-gradient(135deg,_#1E3A8A,_#FBBF24)] text-white">
                       {initials}
                     </AvatarFallback>
                   </Avatar>

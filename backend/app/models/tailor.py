@@ -168,3 +168,22 @@ class AISettingsStatusOut(BaseModel):
     rewrite_provider: str
     embedding_model: str
     rewrite_model: str
+
+
+class AIPreferencesOut(BaseModel):
+    inference_mode: str
+    embedding_model: str
+    zero_shot_model: str
+    available_inference_modes: list[str] = Field(default_factory=list)
+    available_embedding_models: list[str] = Field(default_factory=list)
+    available_zero_shot_models: list[str] = Field(default_factory=list)
+
+
+class AISettingsDetailOut(AISettingsStatusOut):
+    preferences: AIPreferencesOut
+
+
+class AIPreferencesPatchIn(BaseModel):
+    inference_mode: str | None = None
+    embedding_model: str | None = None
+    zero_shot_model: str | None = None

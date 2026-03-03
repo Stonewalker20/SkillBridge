@@ -5,7 +5,7 @@ from app.core.auth import require_user
 from datetime import datetime, timezone
 from app.core.db import get_db
 from app.models.evidence import EvidenceIn, EvidenceOut, EvidencePatch
-from app.utils.ai import extract_skill_candidates, embed_texts, cosine_similarity
+from app.utils.ai import extract_skill_candidates, embed_texts, cosine_similarity, normalize_ai_preferences
 from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 import io
@@ -102,7 +102,7 @@ def _candidate_tokens(value: str) -> set[str]:
     }
 
 
-async def _semantic_catalog_match(candidate_name: str, visible_skills: list[dict]) -> tuple[dict | None, str | None]:
+async def _semantic_catalog_match(candidate_name: str, visible_skills: list[dict], ai_preferences: dict | None = None) -> tuple[dict | None, str | None]:
     candidate_tokens = _candidate_tokens(candidate_name)
     shortlist: list[tuple[dict, str, float]] = []
     for skill in visible_skills:
@@ -123,7 +123,7 @@ async def _semantic_catalog_match(candidate_name: str, visible_skills: list[dict
         return None, None
 
     texts = [candidate_name] + [label for _skill, label, _score in shortlist]
-    vectors, provider = await embed_texts(texts)
+    vectors, provider = await embed_texts(texts, preferences=ai_preferences)
     if len(vectors) != len(texts):
         return None, None
 
@@ -142,7 +142,7 @@ async def _semantic_catalog_match(candidate_name: str, visible_skills: list[dict
     return best_skill, provider
 
 
-async def extract_skill_matches(db, text: str) -> list[dict]:
+async def extract_skill_matches(db, text: str, ai_preferences: dict | None = None) -> list[dict]:
     lowered = (text or "").lower()
     if not lowered:
         return []
@@ -174,7 +174,7 @@ async def extract_skill_matches(db, text: str) -> list[dict]:
                 "is_new": False,
             }
 
-    ai_candidates, provider = await extract_skill_candidates(text, max_candidates=25)
+    ai_candidates, provider = await extract_skill_candidates(text, max_candidates=25, preferences=ai_preferences)
     visible_skill_tokens: list[tuple[str, dict]] = []
     for skill in visible_skills:
         name = (skill.get("name") or "").strip()
@@ -202,7 +202,7 @@ async def extract_skill_matches(db, text: str) -> list[dict]:
                 matched_on = "ai-semantic"
                 break
         if matched_skill is None:
-            matched_skill, provider = await _semantic_catalog_match(candidate_name, visible_skills)
+            matched_skill, provider = await _semantic_catalog_match(candidate_name, visible_skills, ai_preferences=ai_preferences)
             if matched_skill is not None:
                 matched_on = f"ai-transformer:{provider}"
         if matched_skill is not None:
@@ -254,6 +254,7 @@ async def analyze_evidence(
     user=Depends(require_user),
 ):
     db = get_db()
+    ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
     upload_list = [upload for upload in (files or []) if upload is not None]
     if file is not None:
         upload_list.append(file)
@@ -261,7 +262,7 @@ async def analyze_evidence(
     items: list[dict] = []
     manual_text = (text or "").strip()
     if manual_text:
-        extracted_skills = await extract_skill_matches(db, manual_text)
+        extracted_skills = await extract_skill_matches(db, manual_text, ai_preferences=ai_preferences)
         resolved_title = (title or "").strip() or "Untitled Evidence"
         items.append(
             build_analysis_item(
@@ -283,7 +284,7 @@ async def analyze_evidence(
         extracted_text = extract_text_from_upload(filename, raw)
         if len(extracted_text.strip()) < 20:
             continue
-        extracted_skills = await extract_skill_matches(db, extracted_text)
+        extracted_skills = await extract_skill_matches(db, extracted_text, ai_preferences=ai_preferences)
         resolved_title = os.path.splitext(filename)[0] or "Untitled Evidence"
         items.append(
             build_analysis_item(

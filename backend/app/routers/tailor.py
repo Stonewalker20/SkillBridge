@@ -6,11 +6,16 @@ from datetime import datetime, timezone
 from typing import Iterable
 
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 
+from app.core.auth import require_user
+from app.core.config import settings
 from app.core.db import get_db
 from app.models.tailor import (
+    AIPreferencesOut,
+    AIPreferencesPatchIn,
+    AISettingsDetailOut,
     AISettingsStatusOut,
     ExtractedSkill,
     JobIngestIn,
@@ -29,13 +34,47 @@ from app.models.tailor import (
     TailorPreviewIn,
 )
 from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
-from app.utils.ai import cosine_similarity, embed_texts, get_inference_status, rewrite_resume_bullets
+from app.utils.ai import (
+    AVAILABLE_INFERENCE_MODES,
+    cosine_similarity,
+    embed_texts,
+    get_inference_status,
+    normalize_ai_preferences,
+    rewrite_resume_bullets,
+)
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 
 router = APIRouter()
 
 def now_utc():
     return datetime.now(timezone.utc)
+
+
+def _serialize_ai_preferences(user_doc: dict | None) -> AIPreferencesOut:
+    prefs = normalize_ai_preferences((user_doc or {}).get("ai_preferences"))
+    return AIPreferencesOut(
+        inference_mode=prefs["inference_mode"],
+        embedding_model=prefs["embedding_model"],
+        zero_shot_model=prefs["zero_shot_model"],
+        available_inference_modes=list(AVAILABLE_INFERENCE_MODES),
+        available_embedding_models=settings.local_embedding_model_options_list,
+        available_zero_shot_models=settings.local_zero_shot_model_options_list,
+    )
+
+
+def _build_ai_settings_detail(user_doc: dict | None) -> AISettingsDetailOut:
+    prefs = _serialize_ai_preferences(user_doc)
+    status = get_inference_status(
+        {
+            "inference_mode": prefs.inference_mode,
+            "embedding_model": prefs.embedding_model,
+            "zero_shot_model": prefs.zero_shot_model,
+        }
+    )
+    return AISettingsDetailOut(
+        preferences=prefs,
+        **status,
+    )
 
 def _job_focus_lines(text: str) -> list[tuple[str, float]]:
     section_markers = {
@@ -574,6 +613,8 @@ async def match_job(payload: dict):
     }
     """
     db = get_db()
+    user_doc = await db["users"].find_one(ref_query("_id", payload.get("user_id")), {"ai_preferences": 1})
+    ai_preferences = normalize_ai_preferences((user_doc or {}).get("ai_preferences"))
 
     try:
         job_oid = ObjectId(payload["job_id"])
@@ -664,7 +705,7 @@ async def match_job(payload: dict):
             for skill_id in ordered_user_skill_ids
         ]
         item_texts = [_normalize_text_blob(item) for item in items]
-        vectors, _provider = await embed_texts([job_doc.get("text", "")] + skill_texts + item_texts)
+        vectors, _provider = await embed_texts([job_doc.get("text", "")] + skill_texts + item_texts, preferences=ai_preferences)
         if vectors:
             job_vec = vectors[0]
             skill_vectors = vectors[1 : 1 + len(skill_texts)]
@@ -1209,6 +1250,25 @@ async def compare_job_match_history(user_id: str, left_id: str, right_id: str):
 @router.get("/settings/status", response_model=AISettingsStatusOut)
 async def get_ai_settings_status():
     return AISettingsStatusOut(**get_inference_status())
+
+
+@router.get("/settings/preferences", response_model=AISettingsDetailOut)
+async def get_ai_settings_preferences(user=Depends(require_user)):
+    return _build_ai_settings_detail(user)
+
+
+@router.patch("/settings/preferences", response_model=AISettingsDetailOut)
+async def patch_ai_settings_preferences(payload: AIPreferencesPatchIn, user=Depends(require_user)):
+    db = get_db()
+    merged = normalize_ai_preferences(
+        {
+            **((user or {}).get("ai_preferences") or {}),
+            **payload.model_dump(exclude_none=True),
+        }
+    )
+    await db["users"].update_one({"_id": user["_id"]}, {"$set": {"ai_preferences": merged}})
+    updated = await db["users"].find_one({"_id": user["_id"]}, {"ai_preferences": 1})
+    return _build_ai_settings_detail(updated)
 
 @router.post("/{tailored_id}/rewrite", response_model=RewriteBulletsOut)
 async def rewrite_tailored_resume_bullets(tailored_id: str, payload: RewriteBulletsIn):

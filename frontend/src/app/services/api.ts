@@ -336,6 +336,19 @@ export type AISettingsStatus = {
   rewrite_model: string;
 };
 
+export type AIPreferences = {
+  inference_mode: string;
+  embedding_model: string;
+  zero_shot_model: string;
+  available_inference_modes: string[];
+  available_embedding_models: string[];
+  available_zero_shot_models: string[];
+};
+
+export type AISettingsDetail = AISettingsStatus & {
+  preferences: AIPreferences;
+};
+
 export type AdminSummary = {
   total_users: number;
   team_members: number;
@@ -741,6 +754,9 @@ export const api = {
   },
 
   getAISettingsStatus: () => request<AISettingsStatus>("/tailor/settings/status", "GET"),
+  getAIPreferences: () => request<AISettingsDetail>("/tailor/settings/preferences", "GET"),
+  updateAIPreferences: (payload: Partial<Pick<AIPreferences, "inference_mode" | "embedding_model" | "zero_shot_model">>) =>
+    request<AISettingsDetail>("/tailor/settings/preferences", "PATCH", payload),
 
   getAdminSummary: () => request<AdminSummary>("/admin/summary", "GET"),
   listAdminUsers: () => request<AdminUserRecord[]>("/admin/users", "GET"),

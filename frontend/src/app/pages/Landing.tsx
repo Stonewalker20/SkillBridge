@@ -9,7 +9,7 @@ import {
   CheckCircle2,
   ArrowRight
 } from "lucide-react";
-import LogoSvg from "../../imports/file.svg";
+import LogoImage from "../../imports/skillbridge_logo.png";
 import { PublicThemeToggle } from "../components/PublicThemeToggle";
 
 export function Landing() {
@@ -53,7 +53,7 @@ export function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link to="/" className="flex items-center rounded-2xl px-1 py-1 transition-opacity hover:opacity-90">
-              <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-auto max-w-[280px] object-contain" />
+              <img src={LogoImage} alt="SkillBridge Logo" className="h-16 w-auto max-w-[280px] scale-[2.6] object-contain" />
             </Link>
             <div className="flex items-center gap-4">
               <div className="hidden sm:block">
@@ -100,7 +100,7 @@ export function Landing() {
             </div>
           </div>
 
-          <Card className="overflow-hidden border-slate-200 bg-[linear-gradient(135deg,_rgba(30,58,138,0.98),_rgba(15,118,110,0.95))] p-0 text-white shadow-xl">
+          <Card className="overflow-hidden border-slate-200 bg-[linear-gradient(135deg,_rgba(30,58,138,0.98),_rgba(245,158,11,0.94))] p-0 text-white shadow-xl">
             <div className="space-y-5 px-6 py-6 sm:px-7 sm:py-7">
               <div>
                 <div className="text-xs uppercase tracking-[0.2em] text-blue-100">Product Snapshot</div>
@@ -113,9 +113,9 @@ export function Landing() {
                     <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/80">Welcome back</p>
                     <p className="mt-1 text-lg font-semibold">Your Career Dashboard</p>
                   </div>
-                  <div className="rounded-full border border-emerald-300/30 bg-emerald-300/15 px-3 py-1 text-xs font-medium text-emerald-100">
-                    Updated today
-                  </div>
+                    <div className="rounded-full border border-amber-200/30 bg-amber-200/15 px-3 py-1 text-xs font-medium text-amber-50">
+                      Updated today
+                    </div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-3">
@@ -153,7 +153,7 @@ export function Landing() {
                           <span>7 / 9</span>
                         </div>
                         <div className="h-2 rounded-full bg-white/10">
-                          <div className="h-2 w-[78%] rounded-full bg-emerald-300" />
+                          <div className="h-2 w-[78%] rounded-full bg-amber-300" />
                         </div>
                       </div>
                       <div>
@@ -184,7 +184,7 @@ export function Landing() {
             <div className="mt-2 text-gray-600 dark:text-slate-300">Skills Tied to Real Work</div>
           </div>
           <div className="text-center">
-            <div className="text-4xl font-bold text-[#0D9488]">Job-Specific</div>
+            <div className="text-4xl font-bold text-amber-500">Job-Specific</div>
             <div className="mt-2 text-gray-600 dark:text-slate-300">Match and Gap Analysis</div>
           </div>
           <div className="text-center">
@@ -241,7 +241,7 @@ export function Landing() {
               <div className="space-y-4">
                 {benefits.map((benefit, index) => (
                   <div key={index} className="flex items-center gap-3">
-                    <CheckCircle2 className="h-5 w-5 text-[#0D9488] flex-shrink-0" />
+                    <CheckCircle2 className="h-5 w-5 text-amber-500 flex-shrink-0" />
                     <span className="text-gray-700 dark:text-slate-200">{benefit}</span>
                   </div>
                 ))}
@@ -249,7 +249,7 @@ export function Landing() {
             </div>
 
             <div className="relative">
-              <Card className="border-none bg-gradient-to-br from-[#1E3A8A] to-[#0D9488] p-8 text-white shadow-xl">
+              <Card className="border-none bg-gradient-to-br from-[#1E3A8A] to-[#F59E0B] p-8 text-white shadow-xl">
                 <h3 className="text-2xl font-bold mb-4">Ready to Get Started?</h3>
                 <p className="mb-6 text-blue-100">
                   Join thousands of professionals who have transformed their job search 
@@ -290,7 +290,7 @@ export function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-md">
-              <img src={LogoSvg} alt="SkillBridge Logo" className="h-12 w-auto max-w-[220px] object-contain" />
+              <img src={LogoImage} alt="SkillBridge Logo" className="h-12 w-auto max-w-[220px] scale-[2.6] object-contain" />
               <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
                 SkillBridge helps professionals organize evidence, validate skills, and understand job fit with local intelligence.
               </p>
