@@ -24,6 +24,7 @@ BAD_SKILL_PHRASES = [
     "base salary",
     "benefits package",
 ]
+ALLOWED_SHORT_SKILLS = {"c", "c#", "c++", "go", "r", "ui", "ux", "qa", "bi", "ml", "ai"}
 
 def now_utc():
     return datetime.now(timezone.utc)
@@ -38,7 +39,7 @@ def is_hidden_skill(doc: dict) -> bool:
     low = name.lower()
     if TEST_SKILL_PATTERN.search(name):
         return True
-    if BAD_SKILL_PATTERN.search(name):
+    if low not in ALLOWED_SHORT_SKILLS and BAD_SKILL_PATTERN.search(name):
         return True
     if any(phrase in low for phrase in BAD_SKILL_PHRASES):
         return True
