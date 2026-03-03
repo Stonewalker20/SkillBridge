@@ -15,6 +15,8 @@ import { useSearchParams } from "react-router";
 type MatchResult = {
   job_id?: string;
   match_score?: number;
+  match_confidence_label?: string;
+  analysis_summary?: string;
   matched_skills?: string[];
   missing_skills?: string[];
   strength_areas?: string[];
@@ -23,9 +25,15 @@ type MatchResult = {
   recommended_next_steps?: string[];
   extracted_skill_count?: number;
   confirmed_skill_count?: number;
+  required_skill_count?: number;
+  required_matched_count?: number;
+  preferred_skill_count?: number;
+  preferred_matched_count?: number;
   evidence_aligned_count?: number;
+  evidence_gap_count?: number;
   keyword_overlap_count?: number;
   semantic_alignment_score?: number;
+  semantic_alignment_explanation?: string;
   history_id?: string | null;
   [k: string]: any;
 };
@@ -69,19 +77,32 @@ export function Jobs() {
 
   const normalized = useMemo(() => {
     const a = analysis || {};
+    const scoreBreakdown = asArray<{ label?: string; score?: number; detail?: string }>(a.score_breakdown ?? a.scoreBreakdown);
+    const keywordOverlapBreakdown = scoreBreakdown.find(
+      (item) => String(item?.label ?? "").toLowerCase() === "keyword overlap"
+    );
     return {
       matchScore: Number(a.match_score ?? a.matchScore ?? 0) || 0,
+      confidenceLabel: String(a.match_confidence_label ?? a.matchConfidenceLabel ?? "Early"),
+      analysisSummary: String(a.analysis_summary ?? a.analysisSummary ?? ""),
       matchedSkills: asArray<string>(a.matched_skills ?? a.matchedSkills),
       missingSkills: asArray<string>(a.missing_skills ?? a.missingSkills),
       strengthAreas: asArray<string>(a.strength_areas ?? a.strengthAreas),
       relatedSkills: asArray<string>(a.related_skills ?? a.relatedSkills),
-      scoreBreakdown: asArray<{ label?: string; score?: number; detail?: string }>(a.score_breakdown ?? a.scoreBreakdown),
+      scoreBreakdown,
       nextSteps: asArray<string>(a.recommended_next_steps ?? a.recommendedNextSteps),
       extractedSkillCount: Number(a.extracted_skill_count ?? a.extractedSkillCount ?? 0) || 0,
       confirmedSkillCount: Number(a.confirmed_skill_count ?? a.confirmedSkillCount ?? 0) || 0,
+      requiredSkillCount: Number(a.required_skill_count ?? a.requiredSkillCount ?? 0) || 0,
+      requiredMatchedCount: Number(a.required_matched_count ?? a.requiredMatchedCount ?? 0) || 0,
+      preferredSkillCount: Number(a.preferred_skill_count ?? a.preferredSkillCount ?? 0) || 0,
+      preferredMatchedCount: Number(a.preferred_matched_count ?? a.preferredMatchedCount ?? 0) || 0,
       evidenceAlignedCount: Number(a.evidence_aligned_count ?? a.evidenceAlignedCount ?? 0) || 0,
+      evidenceGapCount: Number(a.evidence_gap_count ?? a.evidenceGapCount ?? 0) || 0,
       keywordOverlapCount: Number(a.keyword_overlap_count ?? a.keywordOverlapCount ?? 0) || 0,
+      keywordOverlapScore: Number(keywordOverlapBreakdown?.score ?? 0) || 0,
       semanticAlignmentScore: Number(a.semantic_alignment_score ?? a.semanticAlignmentScore ?? 0) || 0,
+      semanticAlignmentExplanation: String(a.semantic_alignment_explanation ?? a.semanticAlignmentExplanation ?? ""),
       historyId: a.history_id ?? a.historyId ?? null,
     };
   }, [analysis]);
@@ -532,13 +553,20 @@ export function Jobs() {
       </div>
 
       <Card className="p-8">
-        <div className="flex flex-col items-center">
-          <span className={`text-5xl font-bold ${getScoreColor(normalized.matchScore)}`}>{normalized.matchScore}%</span>
-          <span className="text-gray-600 text-sm mt-1">Match Score</span>
+        <div className="grid gap-6 lg:grid-cols-[220px_1fr] lg:items-center">
+          <div className="flex flex-col items-center rounded-2xl bg-slate-50 p-6 text-center">
+            <span className={`text-5xl font-bold ${getScoreColor(normalized.matchScore)}`}>{normalized.matchScore}%</span>
+            <span className="mt-1 text-sm text-gray-600">Match Score</span>
+            <Badge className="mt-4 bg-white text-gray-700 border-gray-200">{normalized.confidenceLabel} Fit</Badge>
+          </div>
 
-          <div className="mt-6 text-center">
-            <h2 className="text-xl font-semibold text-gray-900">{jobTitle || "(job)"}</h2>
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-900">{jobTitle || "(job)"}</h2>
             <p className="text-gray-600">{company || ""}</p>
+            {location ? <p className="text-sm text-gray-500 mt-1">{location}</p> : null}
+            <p className="mt-4 text-sm leading-6 text-gray-700">
+              {normalized.analysisSummary || "This score estimates how well your confirmed skills, supporting evidence, and related work align with the posting."}
+            </p>
           </div>
         </div>
       </Card>
@@ -549,24 +577,39 @@ export function Jobs() {
           <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.extractedSkillCount}</p>
         </Card>
         <Card className="p-5">
-          <p className="text-sm text-gray-500">Confirmed Skills</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.confirmedSkillCount}</p>
+          <p className="text-sm text-gray-500">Required Skills Covered</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">
+            {normalized.requiredMatchedCount}/{normalized.requiredSkillCount || normalized.extractedSkillCount || 0}
+          </p>
         </Card>
         <Card className="p-5">
           <p className="text-sm text-gray-500">Evidence-Backed Matches</p>
           <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.evidenceAlignedCount}</p>
         </Card>
         <Card className="p-5">
-          <p className="text-sm text-gray-500">Keyword Overlap</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.keywordOverlapCount}</p>
+          <p className="text-sm text-gray-500">Evidence Gaps</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.evidenceGapCount}</p>
         </Card>
       </div>
 
-      <Card className="p-5">
-        <p className="text-sm text-gray-500">Semantic Alignment</p>
-        <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.semanticAlignmentScore}%</p>
-        <p className="mt-1 text-xs text-gray-500">Embedding-based similarity between the job and your saved work.</p>
-      </Card>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="p-5">
+          <p className="text-sm text-gray-500">Semantic Alignment</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.semanticAlignmentScore}%</p>
+          <p className="mt-2 text-sm text-gray-600">
+            {normalized.semanticAlignmentExplanation || "Semantic alignment looks beyond exact keyword matches and estimates how similar your saved work is to the role's themes and responsibilities."}
+          </p>
+        </Card>
+        <Card className="p-5">
+          <p className="text-sm text-gray-500">Coverage Snapshot</p>
+          <div className="mt-3 space-y-2 text-sm text-gray-700">
+            <p>Required skills matched: {normalized.requiredMatchedCount} of {normalized.requiredSkillCount}</p>
+            <p>Preferred skills matched: {normalized.preferredMatchedCount} of {normalized.preferredSkillCount}</p>
+            <p>Confirmed skills available overall: {normalized.confirmedSkillCount}</p>
+            <p>Job keywords reflected in your work: {normalized.keywordOverlapScore}%</p>
+          </div>
+        </Card>
+      </div>
 
       <Card className="p-6">
         <div className="mb-4">
