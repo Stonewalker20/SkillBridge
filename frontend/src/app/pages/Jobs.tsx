@@ -8,7 +8,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import type { JobMatchComparison, JobMatchHistoryEntry } from "../services/api";
-import { Download, CheckCircle2, AlertCircle, Sparkles, Wand2, History, GitCompareArrows, Trash2 } from "lucide-react";
+import { Download, CheckCircle2, AlertCircle, Sparkles, Wand2, History, GitCompareArrows, Trash2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 
@@ -64,6 +64,7 @@ export function Jobs() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
+  const [reanalyzingHistoryId, setReanalyzingHistoryId] = useState<string | null>(null);
   const [selectedCompareIds, setSelectedCompareIds] = useState<string[]>([]);
   const [comparison, setComparison] = useState<JobMatchComparison | null>(null);
   const [comparing, setComparing] = useState(false);
@@ -121,6 +122,12 @@ export function Jobs() {
     };
   }, []);
 
+  const refreshHistory = async () => {
+    const entries = await api.listJobMatchHistory(8);
+    setHistory(entries);
+    return entries;
+  };
+
   const handleAnalyze = async () => {
     if (!jobDescription.trim()) {
       toast.error("Please paste a job description");
@@ -148,8 +155,7 @@ export function Jobs() {
       setComparison(null);
       setSelectedCompareIds([]);
       try {
-        const entries = await api.listJobMatchHistory(8);
-        setHistory(entries);
+        await refreshHistory();
       } catch (historyError) {
         console.error("Failed to refresh job match history:", historyError);
       }
@@ -177,8 +183,7 @@ export function Jobs() {
       const preview = await api.previewTailoredResume({ job_id: jobId });
       setTailored(preview);
       try {
-        const entries = await api.listJobMatchHistory(8);
-        setHistory(entries);
+        await refreshHistory();
       } catch (historyError) {
         console.error("Failed to refresh job match history:", historyError);
       }
@@ -355,6 +360,33 @@ export function Jobs() {
     }
   };
 
+  const handleReanalyzeHistory = async (entry: JobMatchHistoryEntry) => {
+    const historyJobId = String(entry.job_id ?? "").trim();
+    if (!historyJobId) {
+      toast.error("This saved analysis is missing its job id");
+      return;
+    }
+
+    setReanalyzingHistoryId(entry.id);
+    try {
+      await api.matchJob({ job_id: historyJobId });
+      await refreshHistory();
+
+      recordActivity({
+        id: `jobs:reanalyze:${entry.id}`,
+        type: "jobs",
+        action: "reanalyzed",
+        name: entry.title || entry.company || "Saved job match",
+      });
+      toast.success("New job match analysis saved");
+    } catch (error: any) {
+      console.error("Failed to reanalyze job match:", error);
+      toast.error(error?.message || "Failed to reanalyze job match");
+    } finally {
+      setReanalyzingHistoryId(null);
+    }
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-green-600";
     if (score >= 60) return "text-[#0D9488]";
@@ -454,6 +486,14 @@ export function Jobs() {
                     <div className={`text-sm font-semibold ${getScoreColor(Number(entry.match_score ?? 0))}`}>{Number(entry.match_score ?? 0)}%</div>
                     <Button variant="outline" onClick={() => handleRestoreHistory(entry.id)} disabled={restoringHistoryId === entry.id}>
                       {restoringHistoryId === entry.id ? "Opening..." : "Open"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleReanalyzeHistory(entry)}
+                      disabled={reanalyzingHistoryId === entry.id}
+                    >
+                      <RotateCw className={`mr-2 h-4 w-4 ${reanalyzingHistoryId === entry.id ? "animate-spin" : ""}`} />
+                      {reanalyzingHistoryId === entry.id ? "Updating..." : "Reanalyze"}
                     </Button>
                     <Button
                       variant="ghost"
@@ -739,6 +779,17 @@ export function Jobs() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-sm font-semibold ${getScoreColor(Number(entry.match_score ?? 0))}`}>{Number(entry.match_score ?? 0)}%</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleReanalyzeHistory(entry);
+                        }}
+                        disabled={reanalyzingHistoryId === entry.id}
+                      >
+                        <RotateCw className={`h-4 w-4 ${reanalyzingHistoryId === entry.id ? "animate-spin" : ""}`} />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
