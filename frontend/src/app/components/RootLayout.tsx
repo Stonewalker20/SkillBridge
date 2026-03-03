@@ -77,11 +77,11 @@ export function RootLayout() {
         </Button>
 
         <div className="border-b border-slate-200/80 px-6 py-6">
-          <Link to="/app" className="flex items-center justify-center rounded-2xl px-1 py-1 transition-opacity hover:opacity-90">
+          <Link to="/app" className="flex items-center justify-center rounded-2xl px-1 py-2 transition-opacity hover:opacity-90">
             <img
               src={LogoSvg}
               alt="SkillBridge Logo"
-              className="h-24 w-full max-w-[240px] object-contain"
+              className="h-28 w-full max-w-[280px] object-contain"
             />
           </Link>
         </div>
@@ -142,13 +142,12 @@ export function RootLayout() {
         </nav>
 
         <div className="border-t border-slate-200/80 p-4">
-          {/* Mobile Logout Button */}
           <Button
             variant="outline"
-            className="w-full lg:hidden"
+            className="w-full justify-start border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
             onClick={handleLogout}
           >
-            <LogOut className="h-4 w-4 mr-2" />
+            <LogOut className="mr-2 h-4 w-4" />
             Logout
           </Button>
         </div>

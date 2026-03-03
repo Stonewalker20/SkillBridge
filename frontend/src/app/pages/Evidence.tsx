@@ -62,6 +62,7 @@ export function Evidence() {
   const [files, setFiles] = useState<File[]>([]);
   const [analysisItems, setAnalysisItems] = useState<EvidenceAnalysis[]>([]);
   const [selectedSkillIdsByAnalysis, setSelectedSkillIdsByAnalysis] = useState<AnalysisSelectionMap>({});
+  const [expandedAnalysisTextIds, setExpandedAnalysisTextIds] = useState<string[]>([]);
 
   const loadEvidence = async () => {
     if (!user?.id) {
@@ -141,6 +142,7 @@ export function Evidence() {
     setFiles([]);
     setAnalysisItems([]);
     setSelectedSkillIdsByAnalysis({});
+    setExpandedAnalysisTextIds([]);
   };
 
   const syncEditAnalysisFromDraft = (nextDraft: typeof draft) => {
@@ -182,6 +184,7 @@ export function Evidence() {
       },
     ]);
     setSelectedSkillIdsByAnalysis({ [analysisId]: item.skill_ids || [] });
+    setExpandedAnalysisTextIds([analysisId]);
     setIsAddOpen(true);
   };
 
@@ -205,6 +208,7 @@ export function Evidence() {
       setSelectedSkillIdsByAnalysis(
         Object.fromEntries(nextItems.map((item) => [item.analysis_id, item.extracted_skills.map((skill) => skill.skill_id)]))
       );
+      setExpandedAnalysisTextIds(nextItems.length === 1 ? [nextItems[0].analysis_id] : []);
       if (nextItems.length === 1) {
         setDraft((prev) => ({ ...prev, title: nextItems[0].title || prev.title }));
       }
@@ -235,6 +239,12 @@ export function Evidence() {
   const updateAnalysisItem = (analysisId: string, updates: Partial<EvidenceAnalysis>) => {
     setAnalysisItems((prev) =>
       prev.map((item) => (item.analysis_id === analysisId ? { ...item, ...updates } : item))
+    );
+  };
+
+  const toggleAnalysisText = (analysisId: string) => {
+    setExpandedAnalysisTextIds((prev) =>
+      prev.includes(analysisId) ? prev.filter((id) => id !== analysisId) : [...prev, analysisId]
     );
   };
 
@@ -658,9 +668,26 @@ export function Evidence() {
                           </div>
 
                           <div>
-                            <div className="mb-2 px-4 text-sm font-medium text-gray-900">Full evidence text</div>
+                            <div className="mb-2 flex items-center justify-between gap-3 px-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {analysisItems.length > 1 ? "Evidence text preview" : "Full evidence text"}
+                              </div>
+                              {analysisItems.length > 1 ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => toggleAnalysisText(analysis.analysis_id)}
+                                >
+                                  {expandedAnalysisTextIds.includes(analysis.analysis_id) ? "Collapse" : "Expand"}
+                                </Button>
+                              ) : null}
+                            </div>
                             <div className="mx-4 whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3 text-sm leading-6 text-gray-700">
-                              {analysis.text_excerpt}
+                              {analysisItems.length > 1 && !expandedAnalysisTextIds.includes(analysis.analysis_id)
+                                ? summarizeEvidenceText(analysis.text_excerpt, 360)
+                                : analysis.text_excerpt}
                             </div>
                           </div>
                         </div>

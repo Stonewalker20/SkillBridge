@@ -43,7 +43,7 @@ export function Login() {
       <div className="grid w-full max-w-5xl gap-8 lg:grid-cols-[0.95fr_1.05fr]">
         <div className="hidden lg:flex flex-col justify-between rounded-[2rem] border border-slate-200 bg-[linear-gradient(135deg,_rgba(30,58,138,0.98),_rgba(15,118,110,0.95))] p-8 text-white shadow-xl">
           <div>
-            <img src={LogoSvg} alt="SkillBridge Logo" className="h-14 w-auto max-w-[180px] object-contain" />
+            <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-auto max-w-[220px] object-contain" />
             <h1 className="mt-8 text-4xl font-bold leading-tight">Return to your skill intelligence workspace.</h1>
             <p className="mt-4 text-base leading-7 text-blue-100">
               Review evidence, analyze job fit, and keep your professional profile aligned without losing momentum.
@@ -59,7 +59,7 @@ export function Login() {
         {/* Logo & Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-auto max-w-[200px] object-contain" />
+            <img src={LogoSvg} alt="SkillBridge Logo" className="h-20 w-auto max-w-[240px] object-contain" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
           <p className="text-gray-600">Sign in to your SkillBridge account</p>

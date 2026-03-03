@@ -68,7 +68,7 @@ export function Jobs() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<MatchResult | null>(null);
 
-  const [tailored, setTailored] = useState<any>(null);
+  const [lastTailoredId, setLastTailoredId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [history, setHistory] = useState<JobMatchHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -119,7 +119,7 @@ export function Jobs() {
     setCompany("");
     setLocation("");
     setAnalysis(null);
-    setTailored(null);
+    setLastTailoredId(null);
     setJobId(null);
   };
 
@@ -221,11 +221,11 @@ export function Jobs() {
     setGenerating(true);
     try {
       const preview = await api.previewTailoredResume({ job_id: jobId });
-      setTailored(preview);
       const previewId = String((preview as any)?.id ?? (preview as any)?.tailored_id ?? (preview as any)?.tailoredId ?? "").trim();
       if (!previewId) {
         throw new Error("Tailored resume was created without an export id");
       }
+      setLastTailoredId(previewId);
       const blob = await api.downloadTailoredPdf(previewId);
       downloadBlob(blob, "tailored_resume.pdf");
       try {
@@ -268,7 +268,7 @@ export function Jobs() {
       setCompany(String(detail.company ?? "").trim());
       setLocation(String(detail.location ?? "").trim());
       setJobDescription(String(detail.job_text ?? detail.text_preview ?? "").trim());
-      setTailored(null);
+      setLastTailoredId(null);
       toast.success("Restored previous job analysis");
     } catch (error: any) {
       console.error("Failed to restore job match history:", error);
@@ -287,7 +287,7 @@ export function Jobs() {
       setHistory((current) => current.filter((item) => item.id !== entry.id));
       if (normalized.historyId === entry.id) {
         setAnalysis(null);
-        setTailored(null);
+        setLastTailoredId(null);
         setJobId(null);
       }
       recordActivity({
@@ -739,7 +739,7 @@ export function Jobs() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Tailored Resume</h3>
-            <p className="text-sm text-gray-600">Generate a tailored resume preview and download the PDF.</p>
+            <p className="text-sm text-gray-600">Generate and download a tailored resume PDF without showing the full resume text on the page.</p>
           </div>
 
           <Button
@@ -752,26 +752,12 @@ export function Jobs() {
           </Button>
         </div>
 
-        {tailored ? (
-          <div className="mt-4 space-y-4">
-            <div className="text-sm text-gray-600">
-              Preview generated. Tailored id: <span className="font-mono">{String((tailored as any).id ?? (tailored as any).tailored_id ?? "")}</span>
-            </div>
-            <div className="space-y-4">
-              {asArray<any>((tailored as any)?.sections).map((section) => (
-                <div key={String(section?.title ?? "")} className="rounded-lg border border-gray-200 p-4">
-                  <h4 className="font-semibold text-gray-900">{String(section?.title ?? "")}</h4>
-                  <div className="mt-2 space-y-2 text-sm text-gray-700">
-                    {asArray<string>(section?.lines).map((line) => (
-                      <p key={line}>{line}</p>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+        {lastTailoredId ? (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            Tailored resume generated and downloaded. Resume id: <span className="font-mono">{lastTailoredId}</span>
           </div>
         ) : (
-          <div className="mt-4 text-sm text-gray-500">Generate to create a tailored resume preview.</div>
+          <div className="mt-4 text-sm text-gray-500">Generate PDF to create and download your tailored resume.</div>
         )}
       </Card>
 

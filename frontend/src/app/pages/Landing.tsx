@@ -12,6 +12,7 @@ import {
 import LogoSvg from "../../imports/file.svg";
 
 export function Landing() {
+  const currentYear = new Date().getFullYear();
   const features = [
     {
       icon: Target,
@@ -51,7 +52,7 @@ export function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link to="/" className="flex items-center rounded-2xl px-1 py-1 transition-opacity hover:opacity-90">
-              <img src={LogoSvg} alt="SkillBridge Logo" className="h-14 w-auto max-w-[220px] object-contain" />
+              <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-auto max-w-[280px] object-contain" />
             </Link>
             <div className="flex items-center gap-4">
               <Button variant="ghost" asChild className="hidden sm:inline-flex">
@@ -229,16 +230,30 @@ export function Landing() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t bg-gray-50 py-8">
+      <footer className="border-t border-slate-200 bg-slate-50/80 py-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <img src={LogoSvg} alt="SkillBridge Logo" className="h-8 w-8" />
-              <span className="text-lg font-bold text-[#1E3A8A]">SkillBridge</span>
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-md">
+              <img src={LogoSvg} alt="SkillBridge Logo" className="h-12 w-auto max-w-[220px] object-contain" />
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                SkillBridge helps professionals organize evidence, validate skills, and understand job fit with local intelligence.
+              </p>
             </div>
-            <p className="text-gray-600 text-sm text-center sm:text-left">
-              © 2026 SkillBridge. All rights reserved.
-            </p>
+            <div className="flex flex-col gap-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:gap-6">
+              <Link to="/login" className="transition-colors hover:text-slate-900">
+                Login
+              </Link>
+              <Link to="/signup" className="transition-colors hover:text-slate-900">
+                Get Started
+              </Link>
+              <a href="mailto:support@skillbridge.app" className="transition-colors hover:text-slate-900">
+                Contact
+              </a>
+            </div>
+          </div>
+          <div className="mt-6 flex flex-col gap-2 border-t border-slate-200 pt-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <p>© {currentYear} SkillBridge. All rights reserved.</p>
+            <p>Built for deployment-ready skill verification, evidence management, and job-match analysis.</p>
           </div>
         </div>
       </footer>
