@@ -209,6 +209,59 @@ def _score_percent(numerator: int, denominator: int) -> float:
         return 0.0
     return round((numerator / denominator) * 100.0, 2)
 
+def _clamp_score(value: float) -> float:
+    return round(max(0.0, min(100.0, value)), 2)
+
+def _skill_match_pattern(value: str) -> str:
+    return rf"(?<![A-Za-z0-9]){re.escape((value or '').lower())}(?![A-Za-z0-9])"
+
+def _classify_job_skill_priority(job_text: str, extracted: list[dict], skill_docs: dict[str, dict]) -> tuple[set[str], set[str]]:
+    required_markers = (
+        "required", "requirements", "must have", "must-have", "minimum qualifications",
+        "basic qualifications", "you will need", "need to have"
+    )
+    preferred_markers = (
+        "preferred", "nice to have", "nice-to-have", "bonus", "preferred qualifications",
+        "ideal", "plus", "would be a plus"
+    )
+
+    current_section: str | None = None
+    required_ids: set[str] = set()
+    preferred_ids: set[str] = set()
+
+    for raw_line in (job_text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        lower = line.lower()
+        if any(marker in lower for marker in required_markers):
+            current_section = "required"
+        elif any(marker in lower for marker in preferred_markers):
+            current_section = "preferred"
+
+        for entry in extracted:
+            skill_id = str(entry.get("skill_id") or "")
+            skill_doc = skill_docs.get(skill_id) or {}
+            candidates = [(skill_doc.get("name") or "").strip()] + [str(alias or "").strip() for alias in (skill_doc.get("aliases") or [])]
+            if not any(candidate and re.search(_skill_match_pattern(candidate), lower) for candidate in candidates):
+                continue
+            if current_section == "required":
+                required_ids.add(skill_id)
+            elif current_section == "preferred":
+                preferred_ids.add(skill_id)
+
+    preferred_ids -= required_ids
+    return required_ids, preferred_ids
+
+def _match_confidence_label(score: float) -> str:
+    if score >= 85:
+        return "Strong"
+    if score >= 70:
+        return "Promising"
+    if score >= 50:
+        return "Moderate"
+    return "Early"
+
 def _build_strength_areas(matched_skill_docs: list[dict], evidence_backed_ids: set[str], item_hits: list[dict]) -> list[str]:
     category_counts: dict[str, int] = {}
     evidence_category_counts: dict[str, int] = {}
@@ -341,8 +394,13 @@ async def match_job(payload: dict):
     }
     all_skill_docs = await _load_skills_by_ids(db, set(extracted_skill_ids) | user_skill_ids)
     extracted_skill_ids = [skill_id for skill_id in extracted_skill_ids if skill_id in all_skill_docs]
+    priority_extracted = [entry for entry in extracted if str(entry.get("skill_id") or "") in all_skill_docs]
+    required_ids, preferred_ids = _classify_job_skill_priority(job_doc.get("text", ""), priority_extracted, all_skill_docs)
+    general_ids = [skill_id for skill_id in extracted_skill_ids if skill_id not in required_ids and skill_id not in preferred_ids]
     matched_ids = [skill_id for skill_id in extracted_skill_ids if skill_id in user_skill_ids]
     missing_ids = [skill_id for skill_id in extracted_skill_ids if skill_id not in user_skill_ids]
+    matched_required_ids = [skill_id for skill_id in matched_ids if skill_id in required_ids]
+    matched_preferred_ids = [skill_id for skill_id in matched_ids if skill_id in preferred_ids]
 
     items = await _load_user_items(db, payload["user_id"])
     item_text = " ".join(_normalize_text_blob(item) for item in items)
@@ -395,23 +453,49 @@ async def match_job(payload: dict):
                 item_scores = [cosine_similarity(job_vec, vec) for vec in item_vectors]
                 positive = [score for score in item_scores if score > 0]
                 if positive:
-                    semantic_alignment_score = round(sum(sorted(positive, reverse=True)[:3]) / min(3, len(positive)) * 100.0, 2)
+                    semantic_alignment_score = round(sum(sorted(positive, reverse=True)[:4]) / min(4, len(positive)) * 100.0, 2)
 
-    coverage_score = _score_percent(len(matched_ids), len(extracted_skill_ids))
+    required_coverage_score = _score_percent(len(matched_required_ids), len(required_ids)) if required_ids else 100.0
+    preferred_coverage_score = _score_percent(len(matched_preferred_ids), len(preferred_ids)) if preferred_ids else 100.0
+    overall_coverage_score = _score_percent(len(matched_ids), len(extracted_skill_ids))
+    weighted_skill_score = _clamp_score(
+        (required_coverage_score * 0.55)
+        + (preferred_coverage_score * 0.20)
+        + (overall_coverage_score * 0.25)
+    )
     evidence_score = _score_percent(len(evidence_backed_ids), len(matched_ids) or len(extracted_skill_ids))
+    evidence_gap_count = max(0, len(matched_ids) - len(evidence_backed_ids))
     keyword_score = _score_percent(keyword_overlap_count, len(keywords))
-    overall_score = round((coverage_score * 0.55) + (evidence_score * 0.20) + (keyword_score * 0.10) + (semantic_alignment_score * 0.15), 2)
+    overall_score = _clamp_score(
+        (weighted_skill_score * 0.50)
+        + (evidence_score * 0.22)
+        + (keyword_score * 0.10)
+        + (semantic_alignment_score * 0.18)
+    )
 
     breakdown = [
         MatchScoreBreakdown(
-            label="Skill coverage",
-            score=coverage_score,
-            detail=f"{len(matched_ids)} of {len(extracted_skill_ids)} extracted job skills are already confirmed",
+            label="Required skill coverage",
+            score=required_coverage_score,
+            detail=(
+                f"{len(matched_required_ids)} of {len(required_ids)} likely required skills are already confirmed"
+                if required_ids
+                else "No clearly required skill section was detected, so this score starts at full credit"
+            ),
         ),
         MatchScoreBreakdown(
-            label="Evidence alignment",
+            label="Preferred and secondary coverage",
+            score=_clamp_score((preferred_coverage_score * 0.6) + (overall_coverage_score * 0.4)),
+            detail=(
+                f"{len(matched_preferred_ids)} of {len(preferred_ids)} preferred skills are covered, with {len(matched_ids)} total matched job skills"
+                if preferred_ids
+                else f"{len(matched_ids)} of {len(extracted_skill_ids)} total extracted job skills are covered"
+            ),
+        ),
+        MatchScoreBreakdown(
+            label="Evidence support",
             score=evidence_score,
-            detail=f"{len(evidence_backed_ids)} matched skills are backed by your evidence or portfolio",
+            detail=f"{len(evidence_backed_ids)} matched skills are backed by evidence, leaving {evidence_gap_count} matched skills without proof",
         ),
         MatchScoreBreakdown(
             label="Keyword overlap",
@@ -421,7 +505,7 @@ async def match_job(payload: dict):
         MatchScoreBreakdown(
             label="Semantic alignment",
             score=semantic_alignment_score,
-            detail="Embedding-based similarity between this job and your saved projects, evidence, and profile skills",
+            detail="Concept-level similarity between the job description and your saved work, even when the exact words do not match",
         ),
     ]
 
@@ -429,12 +513,28 @@ async def match_job(payload: dict):
     matched_names = [all_skill_docs[skill_id].get("name", skill_id) for skill_id in matched_ids if skill_id in all_skill_docs]
     related_skill_names = [all_skill_docs[skill_id].get("name", skill_id) for skill_id in related_skill_ids if skill_id in all_skill_docs]
     strength_areas = _build_strength_areas(matched_docs, evidence_backed_ids, matched_item_hits)
+    confidence_label = _match_confidence_label(overall_score)
+    semantic_alignment_explanation = (
+        "Semantic alignment estimates how closely your saved evidence, projects, and confirmed skills resemble the themes of the job posting. "
+        "It is useful when the job and your experience describe similar work with different wording."
+    )
+    analysis_summary_parts = [
+        f"{confidence_label} fit based on {len(matched_ids)} matched skills out of {len(extracted_skill_ids)} extracted job skills."
+    ]
+    if required_ids:
+        analysis_summary_parts.append(f"You currently cover {len(matched_required_ids)} of {len(required_ids)} likely required skills.")
+    if evidence_backed_ids:
+        analysis_summary_parts.append(f"{len(evidence_backed_ids)} matched skills are already supported by evidence.")
+    elif matched_ids:
+        analysis_summary_parts.append("Your confirmed skills are not yet strongly supported by evidence.")
+    analysis_summary = " ".join(analysis_summary_parts)
 
     next_steps: list[str] = []
     if missing_names:
-        next_steps.append(f"Add evidence or learning proof for {', '.join(missing_names[:3])}")
-    if len(evidence_backed_ids) < len(matched_ids):
-        next_steps.append("Attach evidence to more of your matched skills so the tailored resume has stronger proof points")
+        prefix = "Prioritize" if required_ids and any(skill_id in required_ids for skill_id in missing_ids) else "Add evidence or learning proof for"
+        next_steps.append(f"{prefix} {', '.join(missing_names[:3])}")
+    if evidence_gap_count > 0:
+        next_steps.append("Attach evidence to more matched skills so the tailored resume can prove capability instead of only claiming it")
     if not matched_item_hits:
         next_steps.append("Add projects or evidence with measurable outcomes to improve resume tailoring")
     if related_skill_names:
@@ -443,6 +543,8 @@ async def match_job(payload: dict):
     result = JobMatchOut(
         job_id=oid_str(job_doc["_id"]),
         match_score=overall_score,
+        match_confidence_label=confidence_label,
+        analysis_summary=analysis_summary,
         matched_skill_ids=matched_ids,
         matched_skills=matched_names,
         missing_skill_ids=missing_ids,
@@ -453,9 +555,15 @@ async def match_job(payload: dict):
         recommended_next_steps=next_steps[:3],
         extracted_skill_count=len(extracted_skill_ids),
         confirmed_skill_count=len(user_skill_ids),
+        required_skill_count=len(required_ids),
+        required_matched_count=len(matched_required_ids),
+        preferred_skill_count=len(preferred_ids),
+        preferred_matched_count=len(matched_preferred_ids),
         evidence_aligned_count=len(evidence_backed_ids),
+        evidence_gap_count=evidence_gap_count,
         keyword_overlap_count=keyword_overlap_count,
         semantic_alignment_score=semantic_alignment_score,
+        semantic_alignment_explanation=semantic_alignment_explanation,
     )
 
     now = now_utc()
