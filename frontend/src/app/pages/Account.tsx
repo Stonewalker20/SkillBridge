@@ -138,8 +138,8 @@ export function Account() {
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
-        <Card className="p-8">
-          <div className="text-gray-500">Loading account...</div>
+        <Card className="p-8 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="text-gray-500 dark:text-slate-400">Loading account...</div>
         </Card>
       </div>
     );
@@ -147,17 +147,17 @@ export function Account() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <Card className="overflow-hidden border-slate-200 p-0">
-        <div className="bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.18),_transparent_38%),linear-gradient(135deg,_#ffffff,_#f8fafc)] px-8 py-8">
+      <Card className="overflow-hidden border-slate-200 p-0 dark:border-slate-800 dark:bg-slate-950">
+        <div className="bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.18),_transparent_38%),linear-gradient(135deg,_#ffffff,_#f8fafc)] px-8 py-8 dark:bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.14),_transparent_34%),linear-gradient(135deg,_#0f1b2d,_#08111f)]">
           <div className="flex items-center gap-4">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#1E3A8A,_#0F766E)] text-2xl font-bold text-white shadow-sm">
             {initials}
           </div>
           <div>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Account Settings</div>
-            <h2 className="mt-2 text-2xl font-bold text-gray-900">{username || "Account"}</h2>
-            <p className="text-gray-600">{email || ""}</p>
-            <div className="mt-3 inline-flex rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600">
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Account Settings</div>
+            <h2 className="mt-2 text-2xl font-bold text-gray-900 dark:text-slate-100">{username || "Account"}</h2>
+            <p className="text-gray-600 dark:text-slate-300">{email || ""}</p>
+            <div className="mt-3 inline-flex rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
               {aiStatus?.provider_mode ?? "Inference unavailable"}
             </div>
           </div>
@@ -169,7 +169,7 @@ export function Account() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <User className="h-5 w-5 text-[#1E3A8A]" />
-              <h3 className="text-lg font-semibold text-gray-900">Username</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Username</h3>
             </div>
             <div className="flex gap-4">
               <div className="flex-1">
@@ -199,7 +199,7 @@ export function Account() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <Mail className="h-5 w-5 text-[#1E3A8A]" />
-              <h3 className="text-lg font-semibold text-gray-900">Email Address</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Email Address</h3>
             </div>
             <div className="flex gap-4">
               <div className="flex-1">
@@ -227,29 +227,29 @@ export function Account() {
           <Separator />
 
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">AI Settings</h3>
-            <p className="mt-1 text-sm text-gray-600">Current local backend inference mode used for Job Match semantic analysis, evidence extraction, and bullet enhancement.</p>
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">AI Settings</h3>
+            <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">Current local backend inference mode used for Job Match semantic analysis, evidence extraction, and bullet enhancement.</p>
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/80">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Mode</p>
-                  <p className="mt-1 font-medium text-gray-900">{aiStatus?.provider_mode ?? "Unavailable"}</p>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Mode</p>
+                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiStatus?.provider_mode ?? "Unavailable"}</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Embeddings</p>
-                  <p className="mt-1 font-medium text-gray-900">{aiStatus?.embeddings_provider ?? "Unavailable"}</p>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Embeddings</p>
+                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiStatus?.embeddings_provider ?? "Unavailable"}</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Embedding Model</p>
-                  <p className="mt-1 font-medium text-gray-900">{aiStatus?.embedding_model ?? "Unavailable"}</p>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Embedding Model</p>
+                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiStatus?.embedding_model ?? "Unavailable"}</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Rewrite Provider</p>
-                  <p className="mt-1 font-medium text-gray-900">{aiStatus?.rewrite_provider ?? "Unavailable"}</p>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Rewrite Provider</p>
+                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiStatus?.rewrite_provider ?? "Unavailable"}</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Rewrite Model</p>
-                  <p className="mt-1 font-medium text-gray-900">{aiStatus?.rewrite_model ?? "Unavailable"}</p>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Rewrite Model</p>
+                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiStatus?.rewrite_model ?? "Unavailable"}</p>
                 </div>
               </div>
             </div>
@@ -261,7 +261,7 @@ export function Account() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <Lock className="h-5 w-5 text-[#1E3A8A]" />
-              <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Change Password</h3>
             </div>
             <div className="space-y-4">
               <div>
@@ -308,17 +308,17 @@ export function Account() {
       </Card>
 
       {/* Actions Card */}
-      <Card className="border-slate-200 p-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-6">Account Actions</h3>
+      <Card className="border-slate-200 p-8 dark:border-slate-800 dark:bg-slate-900/80">
+        <h3 className="mb-6 text-lg font-semibold text-gray-900 dark:text-slate-100">Account Actions</h3>
 
         <div className="space-y-4">
           {/* Logout */}
-          <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
             <div className="flex items-center gap-3">
-              <LogOut className="h-5 w-5 text-gray-600" />
+              <LogOut className="h-5 w-5 text-gray-600 dark:text-slate-300" />
               <div>
-                <p className="font-medium text-gray-900">Logout</p>
-                <p className="text-sm text-gray-600">Sign out of your account</p>
+                <p className="font-medium text-gray-900 dark:text-slate-100">Logout</p>
+                <p className="text-sm text-gray-600 dark:text-slate-300">Sign out of your account</p>
               </div>
             </div>
             <Button variant="outline" onClick={handleLogout}>
@@ -327,13 +327,13 @@ export function Account() {
           </div>
 
           {/* Delete Account */}
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
                 <Trash2 className="h-5 w-5 text-red-600 mt-1" />
                 <div>
-                  <p className="font-medium text-red-900">Danger Zone</p>
-                  <p className="text-sm text-red-700 mt-1">
+                  <p className="font-medium text-red-900 dark:text-red-200">Danger Zone</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-300">
                     Once you delete your account, there is no going back. Please be certain.
                   </p>
                 </div>
@@ -368,8 +368,8 @@ export function Account() {
       </Card>
 
       {/* Info Card */}
-      <Card className="border-blue-200 bg-blue-50 p-6">
-        <p className="text-sm text-gray-600">
+      <Card className="border-blue-200 bg-blue-50 p-6 dark:border-blue-900/60 dark:bg-blue-950/30">
+        <p className="text-sm text-gray-600 dark:text-slate-300">
           <span className="font-semibold text-[#1E3A8A]">Note:</span> Your data is securely stored and encrypted.
         </p>
       </Card>

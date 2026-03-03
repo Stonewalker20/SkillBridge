@@ -394,11 +394,11 @@ export function Jobs() {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Job Match</h1>
-          <p className="text-gray-600">Paste a job description to get a detailed job match breakdown and generate a tailored resume</p>
+          <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-slate-100">Job Match</h1>
+          <p className="text-gray-600 dark:text-slate-300">Paste a job description to get a detailed job match breakdown and generate a tailored resume</p>
         </div>
 
-        <Card className="p-8">
+        <Card className="p-8 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -436,7 +436,7 @@ export function Jobs() {
                 rows={12}
                 className="font-mono text-sm"
               />
-              <p className="text-xs text-gray-500 mt-2">Include requirements, qualifications, and responsibilities for best results.</p>
+              <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">Include requirements, qualifications, and responsibilities for best results.</p>
             </div>
 
             <Button
@@ -459,23 +459,23 @@ export function Jobs() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
             <History className="h-5 w-5 text-[#1E3A8A]" />
-            <h3 className="text-lg font-semibold text-gray-900">Last Analyzed Jobs</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Last Analyzed Jobs</h3>
           </div>
           {historyLoading ? (
-            <p className="text-sm text-gray-500">Loading previous analyses...</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">Loading previous analyses...</p>
           ) : history.length === 0 ? (
-            <p className="text-sm text-gray-500">No prior analyses yet.</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">No prior analyses yet.</p>
           ) : (
             <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-2">
               {history.map((entry) => (
-                <div key={entry.id} className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 md:flex-row md:items-center md:justify-between">
+                <div key={entry.id} className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 md:flex-row md:items-center md:justify-between dark:border-slate-800 dark:bg-slate-950/60">
                   <div>
-                    <p className="font-semibold text-gray-900">{entry.title || entry.company || "Saved job match"}</p>
-                    <p className="text-sm text-gray-600">{[entry.company, entry.location].filter(Boolean).join(" • ")}</p>
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="font-semibold text-gray-900 dark:text-slate-100">{entry.title || entry.company || "Saved job match"}</p>
+                    <p className="text-sm text-gray-600 dark:text-slate-300">{[entry.company, entry.location].filter(Boolean).join(" • ")}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
                       Match {Number(entry.match_score ?? 0)}% • {entry.created_at ? new Date(entry.created_at).toLocaleString() : "Saved"}
                     </p>
                   </div>
@@ -520,8 +520,8 @@ export function Jobs() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Job Match</h1>
-          <p className="text-gray-600">Detailed score, skill gaps, and tailored resume generation</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Job Match</h1>
+          <p className="text-gray-600 dark:text-slate-300">Detailed score, skill gaps, and tailored resume generation</p>
         </div>
         <Button variant="outline" onClick={handleReset}>
           New Analysis

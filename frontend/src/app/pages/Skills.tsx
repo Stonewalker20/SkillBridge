@@ -455,14 +455,14 @@ export function Skills() {
               <Button variant="outline">Manage Custom Skills</Button>
             </DialogTrigger>
 
-            <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden p-0">
+            <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden p-0 dark:border-slate-800 dark:bg-slate-950">
               <div className="flex h-full max-h-[85vh] flex-col">
-                <DialogHeader className="border-b px-6 py-4">
+                <DialogHeader className="border-b px-6 py-4 dark:border-slate-800">
                   <DialogTitle>Manage Custom Skills</DialogTitle>
                 </DialogHeader>
 
-                <div className="flex items-center justify-between gap-3 border-b px-6 py-3">
-                  <p className="text-sm text-gray-600">
+                <div className="flex items-center justify-between gap-3 border-b px-6 py-3 dark:border-slate-800">
+                  <p className="text-sm text-gray-600 dark:text-slate-300">
                     Delete skills you created through evidence or the add-skill flow.
                   </p>
                   <div className="flex items-center gap-2">
@@ -492,7 +492,7 @@ export function Skills() {
 
                 <div className="flex-1 overflow-y-auto px-6 py-4">
                   {customSkills.length === 0 ? (
-                    <p className="text-sm text-gray-500">No custom skills to manage.</p>
+                    <p className="text-sm text-gray-500 dark:text-slate-400">No custom skills to manage.</p>
                   ) : (
                     <div className="space-y-3">
                       {customSkills.map((skill) => {
@@ -503,7 +503,7 @@ export function Skills() {
                         return (
                           <label
                             key={skill.id}
-                            className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:bg-gray-50"
+                            className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:bg-gray-50 dark:border-slate-800 dark:hover:bg-slate-900/80"
                           >
                             <input
                               type="checkbox"
@@ -514,8 +514,8 @@ export function Skills() {
                             />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-900">{skill.name}</span>
-                                {skill.category ? <Badge variant="secondary">{skill.category}</Badge> : null}
+                                <span className="font-medium text-gray-900 dark:text-slate-100">{skill.name}</span>
+                                {skill.category ? <Badge variant="secondary" className="dark:bg-slate-800 dark:text-slate-200">{skill.category}</Badge> : null}
                               </div>
                               <div className="mt-2 flex flex-wrap gap-2">
                                 {confirmed ? <Badge className="bg-green-50 text-green-700">Confirmed</Badge> : null}
@@ -609,11 +609,11 @@ export function Skills() {
       </div>
 
       {unsupportedConfirmedSkills.length > 0 ? (
-        <Card className="p-6">
+        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Confirmed Skills Without Evidence</h3>
-              <p className="text-sm text-gray-600">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Confirmed Skills Without Evidence</h3>
+              <p className="text-sm text-gray-600 dark:text-slate-300">
                 These skills are confirmed on your profile, but you do not have any supporting evidence attached yet.
               </p>
             </div>
@@ -652,13 +652,13 @@ export function Skills() {
           const categoryList = skillCategoryList(skill);
 
           return (
-            <Card key={skill.id} className="p-4 transition-shadow hover:shadow-md">
+            <Card key={skill.id} className="p-4 transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900/80">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="flex-1">
-                  <h3 className="text-base font-semibold leading-tight text-gray-900">{skill.name}</h3>
-                  <p className="text-xs text-gray-600">{categoryList.join(" • ")}</p>
+                  <h3 className="text-base font-semibold leading-tight text-gray-900 dark:text-slate-100">{skill.name}</h3>
+                  <p className="text-xs text-gray-600 dark:text-slate-300">{categoryList.join(" • ")}</p>
                   {Array.isArray(skill.aliases) && skill.aliases.length > 0 && (
-                    <p className="mt-1 line-clamp-2 text-[11px] text-gray-500">Also known as: {skill.aliases.join(", ")}</p>
+                    <p className="mt-1 line-clamp-2 text-[11px] text-gray-500 dark:text-slate-400">Also known as: {skill.aliases.join(", ")}</p>
                   )}
                 </div>
 
@@ -695,16 +695,16 @@ export function Skills() {
 
               <div className="flex min-h-6 items-center gap-2">
                 {categoryList.map((category) => (
-                  <Badge key={`${skill.id}:${category}`} variant="secondary" className="px-2 py-0 text-[11px]">
+                  <Badge key={`${skill.id}:${category}`} variant="secondary" className="px-2 py-0 text-[11px] dark:bg-slate-800 dark:text-slate-200">
                     {category}
                   </Badge>
                 ))}
               </div>
 
               <div className="mt-3">
-                <div className="mb-1 text-[11px] text-gray-600">Proficiency (1–5)</div>
+                <div className="mb-1 text-[11px] text-gray-600 dark:text-slate-300">Proficiency (1–5)</div>
                 {confirmed && confirmationEntry && confirmationEntry.evidenceCount > 0 ? (
-                  <div className="mb-2 text-[11px] leading-snug text-gray-500">
+                  <div className="mb-2 text-[11px] leading-snug text-gray-500 dark:text-slate-400">
                     {confirmationEntry.evidenceCount} evidence item{confirmationEntry.evidenceCount === 1 ? "" : "s"} support this skill.
                     {confirmationEntry.autoProficiency > confirmationEntry.manualProficiency
                       ? ` Auto-raised to ${confirmationEntry.autoProficiency}.`

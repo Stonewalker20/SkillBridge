@@ -110,13 +110,13 @@ export function TailoredResumes() {
   const visibleItems = items.filter((item) => !hiddenIds.includes(item.id));
 
   if (loading) {
-    return <div className="flex h-full items-center justify-center text-gray-500">Loading tailored resumes...</div>;
+    return <div className="flex h-full items-center justify-center text-gray-500 dark:text-slate-400">Loading tailored resumes...</div>;
   }
 
   return (
     <div className="space-y-6">
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
+        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl dark:border-slate-800 dark:bg-slate-950">
           <DialogHeader>
             <DialogTitle>{detail?.job_title || detail?.company || "Tailored resume"}</DialogTitle>
           </DialogHeader>
@@ -124,36 +124,36 @@ export function TailoredResumes() {
           {detail ? (
             <div className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">User</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900">{user?.username || user?.email || "Current user"}</div>
-                  {user?.email ? <div className="mt-1 text-sm text-slate-600">{user.email}</div> : null}
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/80">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">User</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{user?.username || user?.email || "Current user"}</div>
+                  {user?.email ? <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">{user.email}</div> : null}
                 </div>
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Job Target</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900">
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/80">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Job Target</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                     {detail.job_title || detail.company || "Tailored resume"}
                   </div>
-                  <div className="mt-1 text-sm text-slate-600">{[detail.company, detail.location].filter(Boolean).join(" • ") || "No extra job metadata"}</div>
+                  <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">{[detail.company, detail.location].filter(Boolean).join(" • ") || "No extra job metadata"}</div>
                 </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-4">
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Template</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900 capitalize">{detail.template}</div>
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/80">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Template</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900 capitalize dark:text-slate-100">{detail.template}</div>
                 </div>
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Skills</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900">{detail.selected_skill_count}</div>
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/80">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Skills</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{detail.selected_skill_count}</div>
                 </div>
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Evidence</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900">{detail.selected_item_count}</div>
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/80">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Evidence</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{detail.selected_item_count}</div>
                 </div>
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Created</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900">
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/80">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Created</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                     {detail.created_at ? new Date(detail.created_at).toLocaleString() : "Unknown"}
                   </div>
                 </div>
@@ -161,9 +161,9 @@ export function TailoredResumes() {
 
               <div className="space-y-4">
                 {detail.sections.map((section) => (
-                  <div key={section.title} className="rounded-2xl border border-slate-200 p-4">
-                    <div className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-900">{section.title}</div>
-                    <div className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+                  <div key={section.title} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+                    <div className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-900 dark:text-slate-100">{section.title}</div>
+                    <div className="mt-3 space-y-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
                       {section.lines.map((line, index) => (
                         <p key={`${section.title}:${index}`}>{line}</p>
                       ))}
@@ -176,14 +176,14 @@ export function TailoredResumes() {
         </DialogContent>
       </Dialog>
 
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.16),_transparent_34%),linear-gradient(135deg,_#ffffff,_#f8fafc)]">
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.16),_transparent_34%),linear-gradient(135deg,_#ffffff,_#f8fafc)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.14),_transparent_34%),linear-gradient(135deg,_#0f1b2d,_#08111f)]">
         <div className="px-6 py-7 md:px-8">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+            <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
               Resume Library
             </div>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900">Tailored resumes attached to saved jobs</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Tailored resumes attached to saved jobs</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
               View every tailored resume you have generated and download the PDF associated with each job target.
             </p>
           </div>
@@ -199,7 +199,7 @@ export function TailoredResumes() {
       </div>
 
       {visibleItems.length === 0 ? (
-        <Card className="border-slate-200 p-8 text-center text-sm text-slate-500">
+        <Card className="border-slate-200 p-8 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300">
           {items.length === 0
             ? "No tailored resumes yet. Generate one from Job Match to populate this page."
             : "All tailored resumes are currently hidden."}
@@ -209,7 +209,7 @@ export function TailoredResumes() {
           {visibleItems.map((item) => (
             <Card
               key={item.id}
-              className="cursor-pointer border-slate-200 p-4 transition-colors hover:bg-slate-50/70"
+              className="cursor-pointer border-slate-200 p-4 transition-colors hover:bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/80 dark:hover:bg-slate-900"
               onClick={() => handleOpenDetail(item)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
@@ -223,12 +223,12 @@ export function TailoredResumes() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2.5">
-                    <div className="rounded-xl bg-blue-50 p-2">
+                    <div className="rounded-xl bg-blue-50 p-2 dark:bg-slate-800">
                       <FileText className="h-4 w-4 text-[#1E3A8A]" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="truncate text-base font-semibold text-slate-900">{item.job_title || item.company || "Tailored resume"}</h3>
-                      <p className="truncate text-xs text-slate-600">
+                      <h3 className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{item.job_title || item.company || "Tailored resume"}</h3>
+                      <p className="truncate text-xs text-slate-600 dark:text-slate-300">
                         {[item.company, item.location].filter(Boolean).join(" • ") || "Saved job target"}
                       </p>
                     </div>
@@ -240,24 +240,24 @@ export function TailoredResumes() {
               </div>
 
               <div className="mt-4 grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-slate-50 px-3 py-2">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Skills</div>
-                  <div className="mt-1 text-base font-semibold text-slate-900">{item.selected_skill_count}</div>
+                <div className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Skills</div>
+                  <div className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">{item.selected_skill_count}</div>
                 </div>
-                <div className="rounded-xl bg-slate-50 px-3 py-2">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Evidence</div>
-                  <div className="mt-1 text-base font-semibold text-slate-900">{item.selected_item_count}</div>
+                <div className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Evidence</div>
+                  <div className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">{item.selected_item_count}</div>
                 </div>
-                <div className="rounded-xl bg-slate-50 px-3 py-2">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Created</div>
-                  <div className="mt-1 text-xs font-semibold text-slate-900">
+                <div className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Created</div>
+                  <div className="mt-1 text-xs font-semibold text-slate-900 dark:text-slate-100">
                     {item.created_at ? new Date(item.created_at).toLocaleDateString() : "Unknown"}
                   </div>
                 </div>
               </div>
 
               <div className="mt-4 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2 text-xs text-slate-500">
+                <div className="flex min-w-0 items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                   <Briefcase className="h-3.5 w-3.5 shrink-0" />
                   {item.job_id ? "Attached to a saved job analysis" : "Generated from standalone job text"}
                 </div>
