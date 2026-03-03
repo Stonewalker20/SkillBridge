@@ -39,6 +39,7 @@ type MatchResult = {
   semantic_alignment_score?: number;
   semantic_alignment_explanation?: string;
   history_id?: string | null;
+  tailored_resume_id?: string | null;
   [k: string]: any;
 };
 
@@ -110,6 +111,7 @@ export function Jobs() {
       semanticAlignmentScore: Number(a.semantic_alignment_score ?? a.semanticAlignmentScore ?? 0) || 0,
       semanticAlignmentExplanation: String(a.semantic_alignment_explanation ?? a.semanticAlignmentExplanation ?? ""),
       historyId: a.history_id ?? a.historyId ?? null,
+      tailoredResumeId: a.tailored_resume_id ?? a.tailoredResumeId ?? null,
     };
   }, [analysis]);
 
@@ -195,6 +197,7 @@ export function Jobs() {
       // 2) Match job
       const match = await api.matchJob({ job_id: String(jid) });
       setAnalysis(match as any);
+      setLastTailoredId(String((match as any)?.tailored_resume_id ?? (match as any)?.tailoredResumeId ?? "").trim() || null);
       try {
         await refreshHistory();
       } catch (historyError) {
@@ -226,6 +229,7 @@ export function Jobs() {
         throw new Error("Tailored resume was created without an export id");
       }
       setLastTailoredId(previewId);
+      setAnalysis((current) => (current ? { ...current, tailored_resume_id: previewId } : current));
       const blob = await api.downloadTailoredPdf(previewId);
       downloadBlob(blob, "tailored_resume.pdf");
       try {
@@ -261,6 +265,7 @@ export function Jobs() {
       const restoredAnalysis = {
         ...(detail.analysis ?? {}),
         history_id: detail.id,
+        tailored_resume_id: detail.tailored_resume_id ?? null,
       };
       setAnalysis(restoredAnalysis as MatchResult);
       setJobId(String(detail.job_id ?? restoredAnalysis.job_id ?? "").trim() || null);
@@ -268,7 +273,7 @@ export function Jobs() {
       setCompany(String(detail.company ?? "").trim());
       setLocation(String(detail.location ?? "").trim());
       setJobDescription(String(detail.job_text ?? detail.text_preview ?? "").trim());
-      setLastTailoredId(null);
+      setLastTailoredId(String(detail.tailored_resume_id ?? "").trim() || null);
       toast.success("Restored previous job analysis");
     } catch (error: any) {
       console.error("Failed to restore job match history:", error);
@@ -476,6 +481,11 @@ export function Jobs() {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className={`text-sm font-semibold ${getScoreColor(Number(entry.match_score ?? 0))}`}>{Number(entry.match_score ?? 0)}%</div>
+                    {entry.tailored_resume_id ? (
+                      <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                        Resume ready
+                      </Badge>
+                    ) : null}
                     <Button variant="outline" onClick={() => handleRestoreHistory(entry.id)} disabled={restoringHistoryId === entry.id}>
                       {restoringHistoryId === entry.id ? "Opening..." : "Open"}
                     </Button>
@@ -835,6 +845,7 @@ export function Jobs() {
                   </div>
                   <p className="mt-3 text-xs text-gray-500">
                     Semantic: {Number(entry.semantic_alignment_score ?? 0)}% • {entry.created_at ? new Date(entry.created_at).toLocaleString() : "Saved"}
+                    {entry.tailored_resume_id ? " • Resume ready" : ""}
                   </p>
                 </div>
               );

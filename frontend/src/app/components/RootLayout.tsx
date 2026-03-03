@@ -7,14 +7,17 @@ import {
   Target,
   Menu,
   X,
-  LogOut
+  LogOut,
+  Moon,
+  Sun
 } from "lucide-react";
 import { cn } from "./ui/utils";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import LogoSvg from "../../imports/file.svg";
 import { useAuth } from "../context/AuthContext";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 
 const navigation = [
   { name: "Dashboard", href: "/app", icon: LayoutDashboard },
@@ -28,6 +31,12 @@ export function RootLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const displayName = user?.username || user?.email?.split("@")[0] || "Account";
   const initials = (() => {
@@ -47,13 +56,15 @@ export function RootLayout() {
     navigate(`/app/jobs?new=${Date.now()}`);
   };
 
+  const isDark = mounted && resolvedTheme === "dark";
+
   const currentPageTitle =
     location.pathname === "/app/account"
       ? "Account"
       : navigation.find((item) => item.href === location.pathname)?.name || "Page";
 
   return (
-    <div className="flex h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)]">
+    <div className="flex h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)] text-slate-900 dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_48%,_#020617)] dark:text-slate-100">
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div 
@@ -64,7 +75,7 @@ export function RootLayout() {
 
       {/* Sidebar */}
       <div className={cn(
-        "fixed lg:static inset-y-0 left-0 z-50 w-64 border-r border-slate-200/70 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(241,245,249,0.96))] backdrop-blur-xl flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0",
+        "fixed lg:static inset-y-0 left-0 z-50 w-64 border-r border-slate-200/70 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(241,245,249,0.96))] backdrop-blur-xl flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.96))]",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Close button for mobile */}
@@ -77,7 +88,7 @@ export function RootLayout() {
           <X className="h-6 w-6" />
         </Button>
 
-        <div className="border-b border-slate-200/80 px-6 py-6">
+        <div className="border-b border-slate-200/80 px-6 py-6 dark:border-slate-800/80">
           <Link to="/app" className="flex items-center justify-center rounded-2xl px-1 py-2 transition-opacity hover:opacity-90">
             <img
               src={LogoSvg}
@@ -87,7 +98,7 @@ export function RootLayout() {
           </Link>
         </div>
         
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 space-y-1 p-4">
           {navigation.map((item) => {
             const isActive = location.pathname === item.href;
             return (
@@ -99,7 +110,7 @@ export function RootLayout() {
                   "flex items-center gap-3 rounded-xl px-4 py-3 transition-all",
                   isActive
                     ? "bg-[linear-gradient(135deg,_#1E3A8A,_#0F766E)] text-white shadow-sm"
-                    : "text-slate-700 hover:bg-white/80 hover:text-slate-900"
+                    : "text-slate-700 hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
                 )}
               >
                 <item.icon className="h-5 w-5" />
@@ -108,8 +119,8 @@ export function RootLayout() {
             );
           })}
 
-          <div className="mt-6 border-t border-slate-200/80 pt-4">
-            <p className="px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Quick Actions</p>
+          <div className="mt-6 border-t border-slate-200/80 pt-4 dark:border-slate-800/80">
+            <p className="px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quick Actions</p>
             <div className="mt-2 space-y-1">
               <Link
                 to="/app/jobs?analyze=1"
@@ -117,7 +128,7 @@ export function RootLayout() {
                   event.preventDefault();
                   handleOpenNewJobAnalysis();
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
                 <Briefcase className="h-5 w-5" />
                 <span className="font-medium">Analyze New Job</span>
@@ -125,7 +136,7 @@ export function RootLayout() {
               <Link
                 to="/app/skills?add=1"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
                 <Target className="h-5 w-5" />
                 <span className="font-medium">Add Skill</span>
@@ -133,7 +144,7 @@ export function RootLayout() {
               <Link
                 to="/app/evidence?add=1"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
                 <FolderOpen className="h-5 w-5" />
                 <span className="font-medium">Upload Evidence</span>
@@ -141,7 +152,7 @@ export function RootLayout() {
               <Link
                 to="/app/resumes"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
                 <FileText className="h-5 w-5" />
                 <span className="font-medium">View Tailored Resumes</span>
@@ -150,10 +161,18 @@ export function RootLayout() {
           </div>
         </nav>
 
-        <div className="border-t border-slate-200/80 p-4">
+        <div className="border-t border-slate-200/80 p-4 dark:border-slate-800/80">
           <Button
             variant="outline"
-            className="w-full justify-start border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+            className="mb-3 w-full justify-start border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+          >
+            {isDark ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+            {isDark ? "Light Mode" : "Dark Mode"}
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full justify-start border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
             onClick={handleLogout}
           >
             <LogOut className="mr-2 h-4 w-4" />
@@ -164,7 +183,7 @@ export function RootLayout() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="border-b border-white/70 bg-white/70 px-4 py-4 backdrop-blur-xl sm:px-8">
+        <header className="border-b border-white/70 bg-white/70 px-4 py-4 backdrop-blur-xl sm:px-8 dark:border-slate-800/80 dark:bg-slate-950/55">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               {/* Mobile Menu Button */}
@@ -178,15 +197,15 @@ export function RootLayout() {
               </Button>
               
               <div>
-                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Workspace</p>
-                <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Workspace</p>
+                <h2 className="text-lg font-semibold text-slate-900 sm:text-xl dark:text-slate-100">
                 {currentPageTitle}
                 </h2>
               </div>
             </div>
             
             <div className="flex items-center gap-2 sm:gap-4">
-              <Button asChild variant="ghost" className="relative h-11 w-11 rounded-full border border-slate-200/80 bg-white/80 p-0 shadow-sm">
+              <Button asChild variant="ghost" className="relative h-11 w-11 rounded-full border border-slate-200/80 bg-white/80 p-0 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
                 <Link to="/app/account" aria-label="Open account settings" title="Account Settings">
                   <Avatar>
                     <AvatarFallback className="bg-[linear-gradient(135deg,_#1E3A8A,_#0F766E)] text-white">

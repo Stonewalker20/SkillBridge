@@ -162,10 +162,12 @@ export type Skill = {
   id: string;
   name: string;
   category?: string;
+  categories?: string[];
   aliases?: string[];
   tags?: string[];
   proficiency?: number | null;
   last_used_at?: string | null;
+  merged_ids?: string[];
   [k: string]: any;
 };
 
@@ -399,8 +401,10 @@ export const api = {
       .map((skill) => ({
         ...skill,
         id: String(skill?.id ?? skill?._id ?? "").trim(),
+        categories: asArray<string>(skill?.categories),
         aliases: asArray<string>(skill?.aliases),
         tags: asArray<string>(skill?.tags),
+        merged_ids: asArray<string>(skill?.merged_ids).map((value) => String(value || "").trim()).filter(Boolean),
       }))
       .filter((skill) => skill.id);
   },

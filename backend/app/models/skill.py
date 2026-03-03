@@ -17,6 +17,7 @@ class SkillOut(BaseModel):
     id: str
     name: str
     category: str
+    categories: List[str] = Field(default_factory=list)
     aliases: List[str]
     tags: List[str] = Field(default_factory=list)
     proficiency: Optional[int] = None
@@ -24,6 +25,7 @@ class SkillOut(BaseModel):
     origin: str = "default"
     created_by_user_id: Optional[str] = None
     can_delete: bool = False
+    merged_ids: List[str] = Field(default_factory=list)
 
 class SkillUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1)

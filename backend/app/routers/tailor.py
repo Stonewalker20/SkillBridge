@@ -28,6 +28,7 @@ from app.models.tailor import (
     TailoredResumeOut,
     TailorPreviewIn,
 )
+from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
 from app.utils.ai import cosine_similarity, embed_texts, get_inference_status, rewrite_resume_bullets
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 
@@ -148,7 +149,7 @@ def _is_hidden_skill_doc(doc: dict) -> bool:
 async def _load_skill_catalog(db) -> list[dict]:
     cursor = db["skills"].find({}, {"name": 1, "aliases": 1, "category": 1, "hidden": 1})
     docs = await cursor.to_list(length=5000)
-    return [doc for doc in docs if not _is_hidden_skill_doc(doc)]
+    return merge_skill_docs([doc for doc in docs if not _is_hidden_skill_doc(doc)])
 
 def _match_skills(job_text: str, skills: Iterable[dict]) -> list[ExtractedSkill]:
     text = job_text.lower()
@@ -168,7 +169,7 @@ def _match_skills(job_text: str, skills: Iterable[dict]) -> list[ExtractedSkill]
             continue
 
         # word-boundary match for names; allow special tokens like C++ / C# via loose matching
-        n = name.lower()
+        n = normalize_skill_text(name)
         if len(n) >= 2:
             if re.search(rf"(?<![A-Za-z0-9]){re.escape(n)}(?![A-Za-z0-9])", text):
                 bump(sid, name, "name")
@@ -177,7 +178,7 @@ def _match_skills(job_text: str, skills: Iterable[dict]) -> list[ExtractedSkill]
             a = (a or "").strip()
             if not a:
                 continue
-            al = a.lower()
+            al = normalize_skill_text(a)
             if re.search(rf"(?<![A-Za-z0-9]){re.escape(al)}(?![A-Za-z0-9])", text):
                 bump(sid, name, "alias")
 

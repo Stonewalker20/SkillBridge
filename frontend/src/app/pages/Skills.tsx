@@ -24,6 +24,19 @@ function errMsg(e: any) {
   return String(e?.message || e || "Unknown error");
 }
 
+function skillVariantIds(skill: Skill): string[] {
+  const merged = Array.isArray(skill.merged_ids) ? skill.merged_ids.map((value) => String(value || "").trim()).filter(Boolean) : [];
+  const ownId = String(skill.id || "").trim();
+  return Array.from(new Set([ownId, ...merged].filter(Boolean)));
+}
+
+function skillCategoryList(skill: Skill): string[] {
+  const categories = Array.isArray(skill.categories) ? skill.categories.map((value) => String(value || "").trim()).filter(Boolean) : [];
+  if (categories.length > 0) return Array.from(new Set(categories));
+  const single = String(skill.category || "").trim();
+  return single ? [single] : [];
+}
+
 export function Skills() {
   const { user } = useAuth();
   const { recordActivity } = useActivity();
@@ -126,28 +139,35 @@ export function Skills() {
     () => new Set(skills.map((skill) => String(skill.id || "").trim()).filter(Boolean)),
     [skills]
   );
-  const visibleConfirmedSkillIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const id of confirmedMap.keys()) {
-      if (visibleSkillIdSet.has(id)) ids.add(id);
-    }
-    return ids;
-  }, [confirmedMap, visibleSkillIdSet]);
-  const visibleEvidenceSkillIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const id of evidenceSkillIdSet) {
-      if (visibleSkillIdSet.has(id)) ids.add(id);
-    }
-    return ids;
-  }, [evidenceSkillIdSet, visibleSkillIdSet]);
+  const visibleConfirmedSkillIds = useMemo(
+    () =>
+      new Set(
+        skills
+          .filter((skill) => skillVariantIds(skill).some((id) => confirmedMap.has(id)))
+          .map((skill) => skill.id)
+          .filter((id) => visibleSkillIdSet.has(id))
+      ),
+    [skills, confirmedMap, visibleSkillIdSet]
+  );
+  const visibleEvidenceSkillIds = useMemo(
+    () =>
+      new Set(
+        skills
+          .filter((skill) => skillVariantIds(skill).some((id) => evidenceSkillIdSet.has(id)))
+          .map((skill) => skill.id)
+          .filter((id) => visibleSkillIdSet.has(id))
+      ),
+    [skills, evidenceSkillIdSet, visibleSkillIdSet]
+  );
 
   const categories = useMemo(() => {
     const set = new Set<string>();
     for (const s of skills) {
       const belongsToUser = visibleConfirmedSkillIds.has(s.id) || visibleEvidenceSkillIds.has(s.id);
       if (!belongsToUser) continue;
-      const c = (s.category ?? "").trim();
-      if (c) set.add(c);
+      for (const c of skillCategoryList(s)) {
+        if (c) set.add(c);
+      }
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [skills, visibleConfirmedSkillIds, visibleEvidenceSkillIds]);
@@ -159,11 +179,11 @@ export function Skills() {
       if (!belongsToUser) return false;
 
       const name = (s.name ?? "").toLowerCase();
-      const cat = (s.category ?? "").toLowerCase();
+      const cat = skillCategoryList(s).join(" ").toLowerCase();
       const aliases = Array.isArray(s.aliases) ? s.aliases.join(" ").toLowerCase() : "";
 
       const matchesTerm = !term || name.includes(term) || cat.includes(term) || aliases.includes(term);
-      const matchesCategory = categoryFilter === "all" || (s.category ?? "") === categoryFilter;
+      const matchesCategory = categoryFilter === "all" || skillCategoryList(s).includes(categoryFilter);
 
       return matchesTerm && matchesCategory;
     });
@@ -209,17 +229,26 @@ export function Skills() {
       toast.error("This skill is missing an id from the backend (check /skills reponse).");
       return;
     }
-    const wasConfirmed = confirmedMap.has(skillId);
+    const skill = skills.find((entry) => entry.id === skillId);
+    const variantIds = skill ? skillVariantIds(skill) : [skillId];
+    const confirmedVariantIds = variantIds.filter((variantId) => confirmedMap.has(variantId));
+    const wasConfirmed = confirmedVariantIds.length > 0;
 
     try {
       setBusySkillId(skillId);
-      await api.toggleConfirmSkill(PROFILE_SNAPSHOT_ID, skillId);
+      if (wasConfirmed) {
+        for (const variantId of confirmedVariantIds) {
+          await api.unconfirmSkill(PROFILE_SNAPSHOT_ID, variantId);
+        }
+      } else {
+        await api.confirmSkill(PROFILE_SNAPSHOT_ID, skillId);
+      }
       await refreshConfirmation();
       recordActivity({
         id: `skills:${skillId}`,
         type: "skills",
         action: wasConfirmed ? "unconfirmed" : "confirmed",
-        name: skills.find((skill) => skill.id === skillId)?.name || "Skill",
+        name: skill?.name || "Skill",
       });
       toast.success(wasConfirmed ? "Skill unconfirmed" : "Skill confirmed");
     } catch (e: any) {
@@ -233,16 +262,22 @@ export function Skills() {
   const handleProficiencyChange = async (skillId: string, val: string) => {
     const p = parseInt(val, 10);
     if (!Number.isFinite(p)) return;
+    const skill = skills.find((entry) => entry.id === skillId);
+    const variantIds = skill ? skillVariantIds(skill) : [skillId];
+    const confirmedVariantIds = variantIds.filter((variantId) => confirmedMap.has(variantId));
+    const targetIds = confirmedVariantIds.length > 0 ? confirmedVariantIds : [skillId];
 
     try {
       setBusySkillId(skillId);
-      await api.setSkillProficiency(PROFILE_SNAPSHOT_ID, skillId, p);
+      for (const targetId of targetIds) {
+        await api.setSkillProficiency(PROFILE_SNAPSHOT_ID, targetId, p);
+      }
       await refreshConfirmation();
       recordActivity({
         id: `skills:proficiency:${skillId}`,
         type: "skills",
         action: "updated",
-        name: `${skills.find((skill) => skill.id === skillId)?.name || "Skill"} proficiency set to ${p}`,
+        name: `${skill?.name || "Skill"} proficiency set to ${p}`,
       });
       toast.success("Proficiency updated");
     } catch (e: any) {
@@ -314,10 +349,13 @@ export function Skills() {
   const handleDeleteCustomSkill = async (skill: Skill) => {
     if (!skill.can_delete) return;
     if (!window.confirm(`Delete custom skill "${skill.name}"? This cannot be undone.`)) return;
+    const targetIds = skillVariantIds(skill);
 
     try {
       setDeletingSkillId(skill.id);
-      await api.deleteSkill(skill.id);
+      for (const targetId of targetIds) {
+        await api.deleteSkill(targetId);
+      }
       setSkills((prev) => prev.filter((item) => item.id !== skill.id));
       setSelectedCustomSkillIds((prev) => prev.filter((id) => id !== skill.id));
       await Promise.all([refreshConfirmation(), refreshEvidenceSkills()]);
@@ -356,7 +394,9 @@ export function Skills() {
     try {
       setBulkDeleting(true);
       for (const skill of selectedCustomSkills) {
-        await api.deleteSkill(skill.id);
+        for (const targetId of skillVariantIds(skill)) {
+          await api.deleteSkill(targetId);
+        }
         recordActivity({
           id: `skills:delete:${skill.id}`,
           type: "skills",
@@ -594,19 +634,29 @@ export function Skills() {
       {/* Skills Grid */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {pagedSkills.map((skill) => {
-          const confirmed = confirmedMap.has(skill.id);
-          const confirmationEntry = confirmed ? confirmedMap.get(skill.id)! : null;
+          const variantIds = skillVariantIds(skill);
+          const variantEntries = variantIds.map((variantId) => confirmedMap.get(variantId)).filter(Boolean);
+          const confirmed = variantEntries.length > 0;
+          const confirmationEntry = confirmed
+            ? {
+                proficiency: Math.max(...variantEntries.map((entry) => entry!.proficiency)),
+                manualProficiency: Math.max(...variantEntries.map((entry) => entry!.manualProficiency)),
+                autoProficiency: Math.max(...variantEntries.map((entry) => entry!.autoProficiency)),
+                evidenceCount: variantEntries.reduce((sum, entry) => sum + (entry?.evidenceCount ?? 0), 0),
+              }
+            : null;
 
           // Bind the dropdown to the user's manual setting so evidence auto-raises do not mask UI changes.
           const rawManualProf = confirmed ? (confirmationEntry!.manualProficiency ?? confirmationEntry!.proficiency ?? 1) : 1;
           const prof = confirmed ? String(Math.max(1, Math.min(5, rawManualProf))) : "";
+          const categoryList = skillCategoryList(skill);
 
           return (
             <Card key={skill.id} className="p-4 transition-shadow hover:shadow-md">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="flex-1">
                   <h3 className="text-base font-semibold leading-tight text-gray-900">{skill.name}</h3>
-                  <p className="text-xs text-gray-600">{skill.category || ""}</p>
+                  <p className="text-xs text-gray-600">{categoryList.join(" • ")}</p>
                   {Array.isArray(skill.aliases) && skill.aliases.length > 0 && (
                     <p className="mt-1 line-clamp-2 text-[11px] text-gray-500">Also known as: {skill.aliases.join(", ")}</p>
                   )}
@@ -644,7 +694,11 @@ export function Skills() {
               </div>
 
               <div className="flex min-h-6 items-center gap-2">
-                {skill.category ? <Badge variant="secondary" className="px-2 py-0 text-[11px]">{skill.category}</Badge> : null}
+                {categoryList.map((category) => (
+                  <Badge key={`${skill.id}:${category}`} variant="secondary" className="px-2 py-0 text-[11px]">
+                    {category}
+                  </Badge>
+                ))}
               </div>
 
               <div className="mt-3">
