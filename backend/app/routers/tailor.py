@@ -26,7 +26,7 @@ from app.models.tailor import (
     TailoredResumeOut,
     ResumeSection,
 )
-from app.utils.ai import cosine_similarity, embed_texts, rewrite_resume_bullets
+from app.utils.ai import cosine_similarity, embed_texts, get_inference_status, rewrite_resume_bullets
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 
 router = APIRouter()
@@ -403,6 +403,22 @@ def _build_strength_areas(matched_skill_docs: list[dict], evidence_backed_ids: s
 
     return strengths[:4]
 
+def _display_skill_name(doc: dict | None, fallback: str = "") -> str:
+    if not doc:
+        return fallback
+    return str(doc.get("name") or fallback or "").strip()
+
+def _dedupe_skill_ids_by_name(skill_ids: Iterable[str], skill_docs: dict[str, dict]) -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for skill_id in skill_ids:
+        name = _display_skill_name(skill_docs.get(skill_id), skill_id).lower()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        ordered.append(skill_id)
+    return ordered
+
 def _serialize_history(doc: dict) -> JobMatchHistoryEntryOut:
     analysis = doc.get("analysis") or {}
     return JobMatchHistoryEntryOut(
@@ -514,8 +530,11 @@ async def match_job(payload: dict):
     }
     all_skill_docs = await _load_skills_by_ids(db, set(raw_extracted_skill_ids) | user_skill_ids | item_skill_ids)
     extracted_skill_ids = [skill_id for skill_id in raw_extracted_skill_ids if skill_id in all_skill_docs]
+    extracted_skill_ids = _dedupe_skill_ids_by_name(extracted_skill_ids, all_skill_docs)
     priority_extracted = [entry for entry in extracted if str(entry.get("skill_id") or "") in all_skill_docs]
     required_ids, preferred_ids = _classify_job_skill_priority(job_doc.get("text", ""), priority_extracted, all_skill_docs)
+    required_ids = set(_dedupe_skill_ids_by_name(required_ids, all_skill_docs))
+    preferred_ids = set(_dedupe_skill_ids_by_name(preferred_ids, all_skill_docs)) - required_ids
     confirmed_term_lookup = {
         term
         for skill_id in user_skill_ids
@@ -528,6 +547,7 @@ async def match_job(payload: dict):
             continue
         if _skill_terms(all_skill_docs.get(skill_id)) & confirmed_term_lookup:
             matched_ids.append(skill_id)
+    matched_ids = _dedupe_skill_ids_by_name(matched_ids, all_skill_docs)
     matched_skill_id_set = set(matched_ids)
     missing_ids = [skill_id for skill_id in extracted_skill_ids if skill_id not in matched_skill_id_set]
     matched_required_ids = [skill_id for skill_id in matched_ids if skill_id in required_ids]
@@ -588,6 +608,7 @@ async def match_job(payload: dict):
             ranked_related.sort(key=lambda item: item[0], reverse=True)
             related_skill_ids = [skill_id for _score, skill_id in ranked_related[:5]]
 
+            semantic_examples: list[tuple[float, str]] = []
             if item_vectors:
                 extracted_skill_id_set = set(extracted_skill_ids)
                 weighted_item_scores: list[float] = []
@@ -603,7 +624,11 @@ async def match_job(payload: dict):
                     }
                     if item_terms & matched_term_lookup:
                         bonus += 0.08
-                    weighted_item_scores.append(sim + bonus)
+                    combined_score = sim + bonus
+                    weighted_item_scores.append(combined_score)
+                    title = str(item.get("title") or item.get("summary") or "Saved evidence").strip()
+                    if combined_score >= 0.22 and title:
+                        semantic_examples.append((combined_score, f"{title} aligns with the posting language and matched skills"))
                 top_item_alignment = _top_average(weighted_item_scores, 5)
             else:
                 top_item_alignment = 0.0
@@ -613,6 +638,10 @@ async def match_job(payload: dict):
                 5,
             )
             overall_skill_alignment = _top_average(skill_similarity_by_id.values(), 6)
+            for skill_id in related_skill_ids[:3]:
+                name = _display_skill_name(all_skill_docs.get(skill_id), skill_id)
+                if name:
+                    semantic_examples.append((skill_similarity_by_id.get(skill_id, 0.0), f"Related confirmed skill: {name}"))
             semantic_alignment_score = _clamp_score(
                 (
                     (top_item_alignment * 0.50)
@@ -620,6 +649,10 @@ async def match_job(payload: dict):
                     + (overall_skill_alignment * 0.15)
                 ) * 100.0
             )
+        else:
+            semantic_examples = []
+    else:
+        semantic_examples = []
 
     required_coverage_score = _score_percent(len(matched_required_ids), len(required_ids)) if required_ids else 100.0
     preferred_coverage_score = _score_percent(len(matched_preferred_ids), len(preferred_ids)) if preferred_ids else 100.0
@@ -675,14 +708,14 @@ async def match_job(payload: dict):
         ),
     ]
 
-    missing_names = [all_skill_docs[skill_id].get("name", skill_id) for skill_id in missing_ids if skill_id in all_skill_docs]
-    matched_names = [all_skill_docs[skill_id].get("name", skill_id) for skill_id in matched_ids if skill_id in all_skill_docs]
+    missing_names = [_display_skill_name(all_skill_docs.get(skill_id), skill_id) for skill_id in missing_ids if skill_id in all_skill_docs]
+    matched_names = [_display_skill_name(all_skill_docs.get(skill_id), skill_id) for skill_id in matched_ids if skill_id in all_skill_docs]
     related_skill_names = [all_skill_docs[skill_id].get("name", skill_id) for skill_id in related_skill_ids if skill_id in all_skill_docs]
+    semantic_alignment_examples = [text for _score, text in sorted(semantic_examples, key=lambda item: item[0], reverse=True)[:4]]
     strength_areas = _build_strength_areas(matched_docs, evidence_backed_ids, matched_item_hits)
     confidence_label = _match_confidence_label(overall_score)
     semantic_alignment_explanation = (
-        "Semantic alignment estimates how closely your saved evidence, projects, and confirmed skills resemble the themes of the job posting. "
-        "It is useful when the job and your experience describe similar work with different wording."
+        "Semantic alignment estimates how closely your saved evidence, projects, and confirmed skills resemble the responsibilities and tools in the job posting, even when the wording is different."
     )
     analysis_summary_parts = [
         f"{confidence_label} fit based on {len(matched_ids)} matched skills out of {len(extracted_skill_ids)} extracted job skills."
@@ -715,11 +748,14 @@ async def match_job(payload: dict):
         matched_skills=matched_names,
         missing_skill_ids=missing_ids,
         missing_skills=missing_names,
+        matched_skill_count=len(matched_names),
+        missing_skill_count=len(missing_names),
         strength_areas=strength_areas,
         related_skills=related_skill_names,
+        semantic_alignment_examples=semantic_alignment_examples,
         score_breakdown=breakdown,
         recommended_next_steps=next_steps[:3],
-        extracted_skill_count=len(raw_extracted_skill_ids),
+        extracted_skill_count=len(extracted_skill_ids),
         confirmed_skill_count=len(user_skill_ids),
         required_skill_count=len(required_ids),
         required_matched_count=len(matched_required_ids),
@@ -1020,13 +1056,7 @@ async def compare_job_match_history(user_id: str, left_id: str, right_id: str):
 
 @router.get("/settings/status", response_model=AISettingsStatusOut)
 async def get_ai_settings_status():
-    return AISettingsStatusOut(
-        provider_mode="Local Backend",
-        embeddings_provider="local-hash",
-        rewrite_provider="local-rule",
-        embedding_model="hashed-embedding-v1",
-        rewrite_model="resume-rule-rewriter-v1",
-    )
+    return AISettingsStatusOut(**get_inference_status())
 
 @router.post("/{tailored_id}/rewrite", response_model=RewriteBulletsOut)
 async def rewrite_tailored_resume_bullets(tailored_id: str, payload: RewriteBulletsIn):

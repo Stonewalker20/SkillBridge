@@ -46,8 +46,11 @@ class JobMatchOut(BaseModel):
     matched_skills: list[str] = Field(default_factory=list)
     missing_skill_ids: list[str] = Field(default_factory=list)
     missing_skills: list[str] = Field(default_factory=list)
+    matched_skill_count: int = 0
+    missing_skill_count: int = 0
     strength_areas: list[str] = Field(default_factory=list)
     related_skills: list[str] = Field(default_factory=list)
+    semantic_alignment_examples: list[str] = Field(default_factory=list)
     score_breakdown: list[MatchScoreBreakdown] = Field(default_factory=list)
     recommended_next_steps: list[str] = Field(default_factory=list)
     extracted_skill_count: int = 0
