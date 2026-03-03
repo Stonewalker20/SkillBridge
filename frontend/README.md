@@ -1,7 +1,7 @@
 
-  # SkillBridge Web Application Design
+  # Proj1
 
-  This is a code bundle for SkillBridge Web Application Design. The original project is available at https://www.figma.com/design/C4OyaJcmwRsg2ZAFaZFQ2I/SkillBridge-Web-Application-Design.
+  This is a code bundle for Proj1. The original project is available at https://www.figma.com/design/uMCgarStfzdzOOB183R4Mx/Proj1.
 
   ## Running the code
 
