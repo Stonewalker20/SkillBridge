@@ -77,29 +77,6 @@ async def dashboard_summary(
             }
         )
 
-    confirmation_docs = await (
-        db["resume_skill_confirmations"]
-        .find(
-            {"user_id": {"$in": user_refs}, "resume_snapshot_id": None},
-            {"confirmed": 1, "updated_at": 1, "created_at": 1},
-        )
-        .sort("updated_at", -1)
-        .limit(5)
-        .to_list(length=5)
-    )
-    for confirmation in confirmation_docs:
-        stamp = confirmation.get("updated_at") or confirmation.get("created_at")
-        count = len(confirmation.get("confirmed", []) or [])
-        recent_activity.append(
-            {
-                "id": f"skills:{oid_str(confirmation['_id'])}",
-                "type": "skills",
-                "action": "updated",
-                "name": f"{count} confirmed skill{'s' if count != 1 else ''}",
-                "date": stamp,
-            }
-        )
-
     recent_activity = sorted(
         [item for item in recent_activity if item.get("date")],
         key=lambda item: item["date"],
