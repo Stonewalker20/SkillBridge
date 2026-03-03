@@ -15,6 +15,7 @@ BAD_SKILL_PHRASES = [
     "base salary",
     "benefits package",
 ]
+ALLOWED_SHORT_SKILLS = {"c", "c#", "c++", "go", "r", "ui", "ux", "qa", "bi", "ml", "ai"}
 
 
 def should_hide(name: str) -> bool:
@@ -24,7 +25,7 @@ def should_hide(name: str) -> bool:
     lower = normalized.lower()
     if TEST_SKILL_PATTERN.search(normalized):
         return True
-    if BAD_SKILL_PATTERN.search(normalized):
+    if lower not in ALLOWED_SHORT_SKILLS and BAD_SKILL_PATTERN.search(normalized):
         return True
     if any(phrase in lower for phrase in BAD_SKILL_PHRASES):
         return True
