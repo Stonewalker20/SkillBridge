@@ -696,9 +696,9 @@ export function Jobs() {
               normalized.matchedSkills.map((s) => (
                 <span
                   key={s}
-                  className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-sm font-medium text-green-700 dark:border-emerald-900/70 dark:bg-emerald-950/60 dark:text-emerald-200"
+                  className="inline-flex max-w-full items-center gap-1 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-sm font-medium text-green-700 dark:border-emerald-900/70 dark:bg-emerald-950/60 dark:text-emerald-200"
                 >
-                  <span>{s}</span>
+                  <span className="min-w-0 break-words whitespace-normal">{s}</span>
                   <button
                     type="button"
                     onClick={() => handleUpdateIgnoredSkills(s, true)}
@@ -727,16 +727,16 @@ export function Jobs() {
               normalized.missingSkills.map((s) => (
                 <span
                   key={s}
-                  className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-white px-1.5 py-1 text-sm font-medium text-orange-700 dark:border-orange-900/60 dark:bg-slate-900 dark:text-orange-200"
+                  className="inline-flex max-w-full items-center gap-1 rounded-full border border-orange-300 bg-white px-1.5 py-1 text-sm font-medium text-orange-700 dark:border-orange-900/60 dark:bg-slate-900 dark:text-orange-200"
                 >
                   <Button
                     variant="ghost"
                     onClick={() => handleAddMissingSkill(s)}
                     disabled={addingMissingSkill === s}
-                    className="h-auto rounded-full px-1.5 py-0 text-sm font-medium text-orange-700 hover:bg-orange-50 dark:text-orange-200 dark:hover:bg-orange-950/40"
+                    className="h-auto max-w-full rounded-full px-1.5 py-0 text-sm font-medium text-orange-700 hover:bg-orange-50 dark:text-orange-200 dark:hover:bg-orange-950/40"
                   >
                     <Plus className="mr-1 h-3.5 w-3.5" />
-                    {addingMissingSkill === s ? "Adding..." : s}
+                    <span className="break-words whitespace-normal text-left">{addingMissingSkill === s ? "Adding..." : s}</span>
                   </Button>
                   <button
                     type="button"
@@ -764,7 +764,7 @@ export function Jobs() {
               <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
             ) : (
               normalized.strengthAreas.map((s) => (
-                <Badge key={s} className="border-blue-200 bg-blue-50 text-[#1E3A8A] dark:border-sky-900/60 dark:bg-sky-950/50 dark:text-sky-200">
+                <Badge key={s} className="max-w-full whitespace-normal break-words border-blue-200 bg-blue-50 text-left text-[#1E3A8A] dark:border-sky-900/60 dark:bg-sky-950/50 dark:text-sky-200">
                   {s}
                 </Badge>
               ))
