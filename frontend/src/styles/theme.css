@@ -180,4 +180,33 @@
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
   }
+
+  .dark .text-gray-900 {
+    color: #eef4ff;
+  }
+
+  .dark .text-gray-800 {
+    color: #d9e5f6;
+  }
+
+  .dark .text-gray-700 {
+    color: #c8d5e8;
+  }
+
+  .dark .text-gray-600 {
+    color: #b7c4d8;
+  }
+
+  .dark .text-gray-500 {
+    color: #96a8c2;
+  }
+
+  .dark .bg-white {
+    background-color: var(--card);
+  }
+
+  .dark .bg-gray-50,
+  .dark .bg-slate-50 {
+    background-color: var(--secondary);
+  }
 }
