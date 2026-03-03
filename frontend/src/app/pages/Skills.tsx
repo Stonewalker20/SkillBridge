@@ -13,6 +13,7 @@ import { Label } from "../components/ui/label";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router";
+import { useHeaderTheme } from "../lib/headerTheme";
 
 const PROF_LEVELS = [1, 2, 3, 4, 5] as const;
 const SKILLS_PER_PAGE = 50;
@@ -40,6 +41,7 @@ function skillCategoryList(skill: Skill): string[] {
 export function Skills() {
   const { user } = useAuth();
   const { recordActivity } = useActivity();
+  const { activeHeaderTheme } = useHeaderTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [evidenceSkillIds, setEvidenceSkillIds] = useState<string[]>([]);
@@ -547,7 +549,7 @@ export function Skills() {
             }}
           >
             <DialogTrigger asChild>
-              <Button className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90">
+              <Button className={activeHeaderTheme.buttonClass}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Skill
               </Button>
@@ -599,7 +601,7 @@ export function Skills() {
                   <Label htmlFor="auto-confirm">Auto-confirm after creating</Label>
                 </div>
 
-                <Button onClick={handleCreateSkill} className="w-full bg-[#1E3A8A] hover:bg-[#1e3a8a]/90">
+                <Button onClick={handleCreateSkill} className={`w-full ${activeHeaderTheme.buttonClass}`}>
                   Create Skill
                 </Button>
               </div>
@@ -670,7 +672,7 @@ export function Skills() {
                       className={
                         confirmed
                           ? "h-8 px-2.5 text-xs bg-gray-200 text-gray-700 hover:bg-gray-300"
-                          : "h-8 px-2.5 text-xs bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
+                          : `h-8 px-2.5 text-xs ${activeHeaderTheme.buttonClass}`
                       }
                       onClick={() => handleToggleConfirm(skill.id)}
                       disabled={busySkillId === skill.id}

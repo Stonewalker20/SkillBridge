@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
+import { useHeaderTheme } from "../lib/headerTheme";
 
 export function Account() {
   const { recordActivity } = useActivity();
@@ -40,6 +41,7 @@ export function Account() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const { headerTheme, setHeaderTheme, activeHeaderTheme, themes } = useHeaderTheme();
 
   useEffect(() => {
     const load = async () => {
@@ -180,23 +182,43 @@ export function Account() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <Card className="overflow-hidden border-slate-200 p-0 dark:border-slate-800 dark:bg-slate-950">
-        <div className="bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.18),_transparent_38%),linear-gradient(135deg,_#ffffff,_#f8fafc)] px-8 py-8 dark:bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.14),_transparent_34%),linear-gradient(135deg,_#0f1b2d,_#08111f)]">
-          <div className="flex items-center gap-4">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#1E3A8A,_#0F766E)] text-2xl font-bold text-white shadow-sm">
-            {initials}
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Account Settings</div>
-            <h2 className="mt-2 text-2xl font-bold text-gray-900 dark:text-slate-100">{username || "Account"}</h2>
-            <p className="text-gray-600 dark:text-slate-300">{email || ""}</p>
-            <div className="mt-3 inline-flex rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-              {aiSettings?.provider_mode ?? "Inference unavailable"}
+        <div className={`${activeHeaderTheme.heroClass} px-8 py-8`}>
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-center gap-4">
+              <div className={`flex h-20 w-20 items-center justify-center rounded-full ${activeHeaderTheme.avatarClass} text-2xl font-bold text-white shadow-sm`}>
+                {initials}
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Account Settings</div>
+                <h2 className="mt-2 text-2xl font-bold text-gray-900 dark:text-slate-100">{username || "Account"}</h2>
+                <p className="text-gray-600 dark:text-slate-300">{email || ""}</p>
+                <div className="mt-3 inline-flex rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                  {aiSettings?.provider_mode ?? "Inference unavailable"}
+                </div>
+              </div>
             </div>
-          </div>
+            <div className="w-full max-w-xs">
+              <Label htmlFor="account-header-style" className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
+                Header Style
+              </Label>
+              <Select value={headerTheme} onValueChange={(value) => setHeaderTheme(value as typeof headerTheme)}>
+                <SelectTrigger id="account-header-style" className="mt-2 border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100">
+                  <SelectValue placeholder="Choose header style" />
+                </SelectTrigger>
+                <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                  {themes.map((theme) => (
+                    <SelectItem key={theme.value} value={theme.value}>
+                      {theme.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
         <div className="space-y-6 p-8">
+
           {/* Username Section */}
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -214,11 +236,7 @@ export function Account() {
                 />
               </div>
               <div className="flex items-end">
-                <Button
-                  onClick={handleUpdateUsername}
-                  disabled={savingProfile}
-                  className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
-                >
+                <Button onClick={handleUpdateUsername} disabled={savingProfile} className={activeHeaderTheme.buttonClass}>
                   Update
                 </Button>
               </div>
@@ -245,11 +263,7 @@ export function Account() {
                 />
               </div>
               <div className="flex items-end">
-                <Button
-                  onClick={handleUpdateEmail}
-                  disabled={savingProfile}
-                  className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
-                >
+                <Button onClick={handleUpdateEmail} disabled={savingProfile} className={activeHeaderTheme.buttonClass}>
                   Update
                 </Button>
               </div>
@@ -369,7 +383,7 @@ export function Account() {
               </div>
               <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300">
                 <p>Switch to `local-fallback` if you want faster, lighter analysis without transformer loading.</p>
-                <Button onClick={handleSaveAISettings} disabled={savingAI} className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90">
+                <Button onClick={handleSaveAISettings} disabled={savingAI} className={activeHeaderTheme.buttonClass}>
                   {savingAI ? "Saving..." : "Save AI Settings"}
                 </Button>
               </div>
@@ -421,10 +435,7 @@ export function Account() {
                   />
                 </div>
               </div>
-              <Button
-                onClick={handleChangePassword}
-                className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
-              >
+              <Button onClick={handleChangePassword} className={activeHeaderTheme.buttonClass}>
                 Change Password
               </Button>
             </div>

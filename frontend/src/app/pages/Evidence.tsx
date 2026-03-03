@@ -14,6 +14,7 @@ import { Checkbox } from "../components/ui/checkbox";
 import { Plus, ExternalLink, FileText, Upload, ScanSearch, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
+import { useHeaderTheme } from "../lib/headerTheme";
 
 const EVIDENCE_TYPES = [
   { value: "project", label: "Project" },
@@ -22,6 +23,10 @@ const EVIDENCE_TYPES = [
   { value: "cert", label: "Certification" },
   { value: "other", label: "Other" },
 ] as const;
+
+const FULL_TEXT_CHUNK_SIZE = 1400;
+const DRAFT_TEXT_COLLAPSED_ROWS = 8;
+const DRAFT_TEXT_EXPANDED_ROWS = 18;
 
 type AnalysisSelectionMap = Record<string, string[]>;
 
@@ -41,6 +46,7 @@ function summarizeEvidenceText(text: string, maxLength: number = 280) {
 export function Evidence() {
   const { user } = useAuth();
   const { recordActivity } = useActivity();
+  const { activeHeaderTheme } = useHeaderTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<Evidence[]>([]);
   const [skillNameById, setSkillNameById] = useState<Record<string, string>>({});
@@ -63,6 +69,8 @@ export function Evidence() {
   const [analysisItems, setAnalysisItems] = useState<EvidenceAnalysis[]>([]);
   const [selectedSkillIdsByAnalysis, setSelectedSkillIdsByAnalysis] = useState<AnalysisSelectionMap>({});
   const [expandedAnalysisTextIds, setExpandedAnalysisTextIds] = useState<string[]>([]);
+  const [analysisTextVisibleChars, setAnalysisTextVisibleChars] = useState<Record<string, number>>({});
+  const [isDraftTextExpanded, setIsDraftTextExpanded] = useState(false);
 
   const loadEvidence = async () => {
     if (!user?.id) {
@@ -74,9 +82,20 @@ export function Evidence() {
   };
 
   const loadSkillNames = async () => {
-    const skills = await api.listSkills();
+    const allSkills: Awaited<ReturnType<typeof api.listSkills>> = [];
+    let skip = 0;
+    const limit = 200;
+
+    while (true) {
+      const batch = await api.listSkills({ limit, skip });
+      if (!batch.length) break;
+      allSkills.push(...batch);
+      if (batch.length < limit) break;
+      skip += limit;
+    }
+
     const next: Record<string, string> = {};
-    for (const skill of skills) {
+    for (const skill of allSkills) {
       const id = String(skill?.id ?? "").trim();
       const name = String(skill?.name ?? "").trim();
       if (!id || !name) continue;
@@ -143,6 +162,8 @@ export function Evidence() {
     setAnalysisItems([]);
     setSelectedSkillIdsByAnalysis({});
     setExpandedAnalysisTextIds([]);
+    setAnalysisTextVisibleChars({});
+    setIsDraftTextExpanded(false);
   };
 
   const syncEditAnalysisFromDraft = (nextDraft: typeof draft) => {
@@ -178,13 +199,15 @@ export function Evidence() {
         filename: null,
         extracted_skills: (item.skill_ids || []).map((skillId) => ({
           skill_id: skillId,
-          skill_name: skillNameById[skillId] || skillId,
+          skill_name: skillNameById[skillId] || "Unknown skill",
           is_new: false,
         })),
       },
     ]);
     setSelectedSkillIdsByAnalysis({ [analysisId]: item.skill_ids || [] });
     setExpandedAnalysisTextIds([analysisId]);
+    setAnalysisTextVisibleChars({ [analysisId]: FULL_TEXT_CHUNK_SIZE });
+    setIsDraftTextExpanded(false);
     setIsAddOpen(true);
   };
 
@@ -209,6 +232,10 @@ export function Evidence() {
         Object.fromEntries(nextItems.map((item) => [item.analysis_id, item.extracted_skills.map((skill) => skill.skill_id)]))
       );
       setExpandedAnalysisTextIds(nextItems.length === 1 ? [nextItems[0].analysis_id] : []);
+      setAnalysisTextVisibleChars(
+        Object.fromEntries(nextItems.map((item) => [item.analysis_id, FULL_TEXT_CHUNK_SIZE]))
+      );
+      setIsDraftTextExpanded(false);
       if (nextItems.length === 1) {
         setDraft((prev) => ({ ...prev, title: nextItems[0].title || prev.title }));
       }
@@ -246,6 +273,20 @@ export function Evidence() {
     setExpandedAnalysisTextIds((prev) =>
       prev.includes(analysisId) ? prev.filter((id) => id !== analysisId) : [...prev, analysisId]
     );
+  };
+
+  const loadMoreAnalysisText = (analysisId: string, fullText: string) => {
+    setAnalysisTextVisibleChars((prev) => ({
+      ...prev,
+      [analysisId]: Math.min((prev[analysisId] || FULL_TEXT_CHUNK_SIZE) + FULL_TEXT_CHUNK_SIZE, fullText.length),
+    }));
+  };
+
+  const collapseAnalysisText = (analysisId: string) => {
+    setAnalysisTextVisibleChars((prev) => ({
+      ...prev,
+      [analysisId]: FULL_TEXT_CHUNK_SIZE,
+    }));
   };
 
   const ensureSkillId = async (skill: EvidenceAnalysis["extracted_skills"][number]) => {
@@ -399,7 +440,7 @@ export function Evidence() {
 
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.16),_transparent_38%),linear-gradient(135deg,_#ffffff,_#f8fafc)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.10),_transparent_34%),linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(2,6,23,0.98))]">
+      <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
         <div className="flex flex-col gap-5 px-6 py-7 md:px-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300">
@@ -458,7 +499,7 @@ export function Evidence() {
             }}
           >
             <DialogTrigger asChild>
-              <Button className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90">
+              <Button className={activeHeaderTheme.buttonClass}>
                 <Plus className="mr-2 h-4 w-4" />
                 Add Evidence
               </Button>
@@ -577,17 +618,26 @@ export function Evidence() {
                         else setAnalysisItems([]);
                       }}
                       placeholder="Paste a project summary, certificate text, paper abstract, or any other evidence here..."
-                      rows={14}
+                      rows={isDraftTextExpanded ? DRAFT_TEXT_EXPANDED_ROWS : DRAFT_TEXT_COLLAPSED_ROWS}
                       className="mt-2"
                     />
+                    {draft.text.length > 1200 ? (
+                      <div className="mt-3 flex justify-center">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-3 text-xs"
+                          onClick={() => setIsDraftTextExpanded((prev) => !prev)}
+                        >
+                          {isDraftTextExpanded ? "Show less" : "Load more"}
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
-                <Button
-                  onClick={handleAnalyze}
-                  disabled={analyzing}
-                  className="w-full bg-[#1E3A8A] hover:bg-[#1e3a8a]/90 h-11"
-                >
+                <Button onClick={handleAnalyze} disabled={analyzing} className={`h-11 w-full ${activeHeaderTheme.buttonClass}`}>
                   {analyzing ? "Analyzing..." : (
                     <>
                       <ScanSearch className="mr-2 h-4 w-4" />
@@ -668,26 +718,53 @@ export function Evidence() {
                           </div>
 
                           <div>
-                            <div className="mb-2 flex items-center justify-between gap-3 px-4">
+                            <div className="mb-2 px-4">
                               <div className="text-sm font-medium text-gray-900 dark:text-slate-100">
                                 {analysisItems.length > 1 ? "Evidence text preview" : "Full evidence text"}
                               </div>
+                            </div>
+                            <div className="mx-4 whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3 text-sm leading-6 text-gray-700 dark:bg-slate-900/80 dark:text-slate-200">
+                              {analysisItems.length > 1 && !expandedAnalysisTextIds.includes(analysis.analysis_id)
+                                ? summarizeEvidenceText(analysis.text_excerpt, 360)
+                                : analysis.text_excerpt.slice(0, analysisTextVisibleChars[analysis.analysis_id] || FULL_TEXT_CHUNK_SIZE)}
+                            </div>
+                            <div className="mt-3 flex justify-center gap-2">
                               {analysisItems.length > 1 ? (
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 px-2 text-xs"
+                                  className="h-8 px-3 text-xs"
                                   onClick={() => toggleAnalysisText(analysis.analysis_id)}
                                 >
                                   {expandedAnalysisTextIds.includes(analysis.analysis_id) ? "Collapse" : "Expand"}
                                 </Button>
                               ) : null}
-                            </div>
-                            <div className="mx-4 whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3 text-sm leading-6 text-gray-700 dark:bg-slate-900/80 dark:text-slate-200">
-                              {analysisItems.length > 1 && !expandedAnalysisTextIds.includes(analysis.analysis_id)
-                                ? summarizeEvidenceText(analysis.text_excerpt, 360)
-                                : analysis.text_excerpt}
+                              {analysis.text_excerpt.length > (analysisTextVisibleChars[analysis.analysis_id] || FULL_TEXT_CHUNK_SIZE) &&
+                              (analysisItems.length === 1 || expandedAnalysisTextIds.includes(analysis.analysis_id)) ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 px-3 text-xs"
+                                  onClick={() => loadMoreAnalysisText(analysis.analysis_id, analysis.text_excerpt)}
+                                >
+                                  Load more
+                                </Button>
+                              ) : null}
+                              {analysis.text_excerpt.length > FULL_TEXT_CHUNK_SIZE &&
+                              (analysisTextVisibleChars[analysis.analysis_id] || FULL_TEXT_CHUNK_SIZE) > FULL_TEXT_CHUNK_SIZE &&
+                              (analysisItems.length === 1 || expandedAnalysisTextIds.includes(analysis.analysis_id)) ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 px-3 text-xs"
+                                  onClick={() => collapseAnalysisText(analysis.analysis_id)}
+                                >
+                                  Show less
+                                </Button>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -701,11 +778,7 @@ export function Evidence() {
                 <Button variant="outline" onClick={resetDraft} disabled={saving || analyzing}>
                   Reset
                 </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={analysisItems.length === 0 || saving}
-                  className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
-                >
+                <Button onClick={handleSave} disabled={analysisItems.length === 0 || saving} className={activeHeaderTheme.buttonClass}>
                   {saving ? "Saving..." : draft.id ? "Save Changes" : analysisItems.length > 1 ? "Save All Evidence" : "Save Evidence"}
                 </Button>
               </DialogFooter>
@@ -720,10 +793,7 @@ export function Evidence() {
             <Upload className="mx-auto h-10 w-10 text-[#1E3A8A]" />
             <div className="mt-4 text-lg font-semibold text-slate-900 dark:text-slate-100">No evidence added yet</div>
             <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">Add text or upload files to start building your evidence library.</div>
-            <Button
-              onClick={() => setIsAddOpen(true)}
-              className="mt-6 bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
-            >
+            <Button onClick={() => setIsAddOpen(true)} className={`mt-6 ${activeHeaderTheme.buttonClass}`}>
               <Plus className="mr-2 h-4 w-4" />
               Add Your First Evidence
             </Button>
