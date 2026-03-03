@@ -5,7 +5,7 @@ from app.core.auth import require_user
 from datetime import datetime, timezone
 from app.core.db import get_db
 from app.models.evidence import EvidenceIn, EvidenceOut, EvidencePatch
-from app.utils.ai import extract_skill_candidates
+from app.utils.ai import extract_skill_candidates, embed_texts, cosine_similarity
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 import io
 import os
@@ -96,6 +96,54 @@ def infer_source(url: str | None, filename: str | None) -> str:
     return "manual-entry"
 
 
+def _candidate_tokens(value: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[A-Za-z][A-Za-z0-9+.#-]{1,}", str(value or "").lower())
+        if token not in {"and", "the", "with", "for", "using", "use", "skill", "skills"}
+    }
+
+
+async def _semantic_catalog_match(candidate_name: str, visible_skills: list[dict]) -> tuple[dict | None, str | None]:
+    candidate_tokens = _candidate_tokens(candidate_name)
+    shortlist: list[tuple[dict, str, float]] = []
+    for skill in visible_skills:
+        names = [(skill.get("name") or "").strip()]
+        names.extend(str(alias or "").strip() for alias in (skill.get("aliases") or []))
+        for label in names:
+            if not label:
+                continue
+            label_tokens = _candidate_tokens(label)
+            token_overlap = len(candidate_tokens & label_tokens)
+            overlap_ratio = token_overlap / max(1, len(candidate_tokens | label_tokens))
+            if token_overlap > 0 or candidate_name.lower() in label.lower() or label.lower() in candidate_name.lower():
+                shortlist.append((skill, label, overlap_ratio))
+
+    shortlist.sort(key=lambda item: item[2], reverse=True)
+    shortlist = shortlist[:20]
+    if not shortlist:
+        return None, None
+
+    texts = [candidate_name] + [label for _skill, label, _score in shortlist]
+    vectors, provider = await embed_texts(texts)
+    if len(vectors) != len(texts):
+        return None, None
+
+    candidate_vec = vectors[0]
+    best_skill = None
+    best_score = 0.0
+    for (skill, _label, lexical_score), vec in zip(shortlist, vectors[1:]):
+        semantic_score = cosine_similarity(candidate_vec, vec)
+        combined_score = (semantic_score * 0.8) + (lexical_score * 0.2)
+        if combined_score > best_score:
+            best_score = combined_score
+            best_skill = skill
+
+    if best_skill is None or best_score < 0.42:
+        return None, provider
+    return best_skill, provider
+
+
 async def extract_skill_matches(db, text: str) -> list[dict]:
     lowered = (text or "").lower()
     if not lowered:
@@ -154,6 +202,11 @@ async def extract_skill_matches(db, text: str) -> list[dict]:
             if candidate_key in token or token in candidate_key:
                 matched_skill = skill
                 matched_on = "ai-semantic"
+                break
+        if matched_skill is None:
+            matched_skill, provider = await _semantic_catalog_match(candidate_name, visible_skills)
+            if matched_skill is not None:
+                matched_on = f"ai-transformer:{provider}"
         if matched_skill is not None:
             sid = oid_str(matched_skill.get("_id"))
             if sid not in matches:
