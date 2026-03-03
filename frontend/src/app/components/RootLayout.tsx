@@ -142,10 +142,6 @@ export function RootLayout() {
                   </Avatar>
                 </Link>
               </Button>
-              <Button variant="outline" onClick={handleLogout} className="hidden sm:inline-flex">
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
             </div>
           </div>
         </header>
