@@ -705,7 +705,7 @@ export const api = {
     return request<any>("/tailor/job/ingest", "POST", body);
   },
 
-  matchJob: async (payload: { user_id?: string; job_id: string }) => {
+  matchJob: async (payload: { user_id?: string; job_id: string; ignored_skill_names?: string[]; persist_history?: boolean }) => {
     const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
     return request<any>("/tailor/match", "POST", body);
   },
@@ -769,7 +769,7 @@ export const api = {
   moderateAdminJob: (jobId: string, payload: { moderation_status: string; moderation_reason?: string | null }) =>
     request<AdminJob>(`/admin/jobs/${jobId}/moderation`, "PATCH", payload),
 
-  previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
+  previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; ignored_skill_names?: string[]; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
     const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
     return request<any>("/tailor/preview", "POST", body);
   },

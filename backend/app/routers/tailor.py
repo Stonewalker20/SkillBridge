@@ -368,6 +368,30 @@ def _clamp_score(value: float) -> float:
 def _skill_match_pattern(value: str) -> str:
     return rf"(?<![A-Za-z0-9]){re.escape(normalize_skill_text(value))}(?![A-Za-z0-9])"
 
+
+def _normalize_ignored_skill_names(values: Iterable[str] | None) -> list[str]:
+    return _dedupe_preserve_order(str(value or "").strip() for value in (values or []) if str(value or "").strip())
+
+
+def _is_ignored_skill(
+    skill_id: str,
+    ignored_terms: set[str],
+    skill_docs: dict[str, dict],
+    extracted_name: str = "",
+) -> bool:
+    if not ignored_terms:
+        return False
+    candidates = set()
+    if extracted_name:
+        normalized = normalize_skill_text(extracted_name)
+        if normalized:
+            candidates.add(normalized)
+    display_name = normalize_skill_text(_display_skill_name(skill_docs.get(skill_id), skill_id))
+    if display_name:
+        candidates.add(display_name)
+    candidates.update(_skill_terms(skill_docs.get(skill_id)))
+    return bool(candidates & ignored_terms)
+
 def _classify_job_skill_priority(job_text: str, extracted: list[dict], skill_docs: dict[str, dict]) -> tuple[set[str], set[str]]:
     required_markers = (
         "required", "requirements", "must have", "must-have", "minimum qualifications",
@@ -876,6 +900,9 @@ async def match_job(payload: dict):
         raise HTTPException(status_code=404, detail="Job ingest not found for user_id")
 
     extracted = job_doc.get("extracted_skills") or []
+    ignored_skill_names = _normalize_ignored_skill_names(payload.get("ignored_skill_names"))
+    ignored_terms = {normalize_skill_text(value) for value in ignored_skill_names if normalize_skill_text(value)}
+    persist_history = bool(payload.get("persist_history", True))
     raw_extracted_skill_ids = _dedupe_preserve_order(str(e.get("skill_id")) for e in extracted if e.get("skill_id"))
 
     conf = await _load_profile_confirmation(db, payload["user_id"])
@@ -892,9 +919,21 @@ async def match_job(payload: dict):
         if skill_id is not None
     }
     all_skill_docs = await _load_skills_by_ids(db, set(raw_extracted_skill_ids) | user_skill_ids | item_skill_ids)
-    extracted_skill_ids = [skill_id for skill_id in raw_extracted_skill_ids if skill_id in all_skill_docs]
+    filtered_extracted = [
+        entry
+        for entry in extracted
+        if str(entry.get("skill_id") or "") in all_skill_docs
+        and not _is_ignored_skill(
+            str(entry.get("skill_id") or ""),
+            ignored_terms,
+            all_skill_docs,
+            str(entry.get("skill_name") or ""),
+        )
+    ]
+    filtered_extracted_ids = _dedupe_preserve_order(str(entry.get("skill_id")) for entry in filtered_extracted if entry.get("skill_id"))
+    extracted_skill_ids = [skill_id for skill_id in filtered_extracted_ids if skill_id in all_skill_docs]
     extracted_skill_ids = _dedupe_skill_ids_by_name(extracted_skill_ids, all_skill_docs)
-    priority_extracted = [entry for entry in extracted if str(entry.get("skill_id") or "") in all_skill_docs]
+    priority_extracted = [entry for entry in filtered_extracted if str(entry.get("skill_id") or "") in all_skill_docs]
     required_ids, preferred_ids = _classify_job_skill_priority(job_doc.get("text", ""), priority_extracted, all_skill_docs)
     required_ids = set(_dedupe_skill_ids_by_name(required_ids, all_skill_docs))
     preferred_ids = set(_dedupe_skill_ids_by_name(preferred_ids, all_skill_docs)) - required_ids
@@ -1108,6 +1147,7 @@ async def match_job(payload: dict):
         match_score=overall_score,
         match_confidence_label=confidence_label,
         analysis_summary=analysis_summary,
+        ignored_skill_names=ignored_skill_names,
         matched_skill_ids=matched_ids,
         matched_skills=matched_names,
         missing_skill_ids=missing_ids,
@@ -1132,6 +1172,9 @@ async def match_job(payload: dict):
         semantic_alignment_score=semantic_alignment_score,
         semantic_alignment_explanation=semantic_alignment_explanation,
     )
+
+    if not persist_history:
+        return result
 
     now = now_utc()
     history_doc = {
@@ -1178,6 +1221,16 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
         skills = await _load_skill_catalog(db)
         extracted = _match_skills(job_text, skills)
         keywords = _tokenize_keywords(job_text, extracted)
+
+    ignored_skill_names = _normalize_ignored_skill_names(payload.ignored_skill_names)
+    ignored_terms = {normalize_skill_text(value) for value in ignored_skill_names if normalize_skill_text(value)}
+    extracted_skill_ids_for_lookup = _dedupe_preserve_order(e.skill_id for e in extracted if e.skill_id)
+    skill_docs_for_filter = await _load_skills_by_ids(db, extracted_skill_ids_for_lookup)
+    extracted = [
+        entry
+        for entry in extracted
+        if not _is_ignored_skill(entry.skill_id, ignored_terms, skill_docs_for_filter, entry.skill_name)
+    ]
 
     ordered_job_skill_ids = _dedupe_preserve_order(e.skill_id for e in extracted[:50])
     job_skill_ids = set(ordered_job_skill_ids)

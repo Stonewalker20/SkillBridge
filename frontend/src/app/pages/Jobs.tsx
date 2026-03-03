@@ -8,7 +8,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import type { JobMatchHistoryEntry } from "../services/api";
-import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateCw, Plus } from "lucide-react";
+import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateCw, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 
@@ -17,6 +17,7 @@ type MatchResult = {
   match_score?: number;
   match_confidence_label?: string;
   analysis_summary?: string;
+  ignored_skill_names?: string[];
   matched_skills?: string[];
   missing_skills?: string[];
   matched_skill_count?: number;
@@ -77,6 +78,7 @@ export function Jobs() {
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
   const [reanalyzingHistoryId, setReanalyzingHistoryId] = useState<string | null>(null);
   const [addingMissingSkill, setAddingMissingSkill] = useState<string | null>(null);
+  const [updatingIgnoredSkill, setUpdatingIgnoredSkill] = useState<string | null>(null);
 
   const normalized = useMemo(() => {
     const a = analysis || {};
@@ -88,6 +90,7 @@ export function Jobs() {
       matchScore: Number(a.match_score ?? a.matchScore ?? 0) || 0,
       confidenceLabel: String(a.match_confidence_label ?? a.matchConfidenceLabel ?? "Early"),
       analysisSummary: String(a.analysis_summary ?? a.analysisSummary ?? ""),
+      ignoredSkills: asArray<string>(a.ignored_skill_names ?? a.ignoredSkills),
       matchedSkills: asArray<string>(a.matched_skills ?? a.matchedSkills),
       missingSkills: asArray<string>(a.missing_skills ?? a.missingSkills),
       matchedSkillCount: Number(a.matched_skill_count ?? a.matchedSkillCount ?? asArray<string>(a.matched_skills ?? a.matchedSkills).length) || 0,
@@ -223,7 +226,10 @@ export function Jobs() {
 
     setGenerating(true);
     try {
-      const preview = await api.previewTailoredResume({ job_id: jobId });
+      const preview = await api.previewTailoredResume({
+        job_id: jobId,
+        ignored_skill_names: normalized.ignoredSkills,
+      });
       const previewId = String((preview as any)?.id ?? (preview as any)?.tailored_id ?? (preview as any)?.tailoredId ?? "").trim();
       if (!previewId) {
         throw new Error("Tailored resume was created without an export id");
@@ -255,6 +261,37 @@ export function Jobs() {
       toast.error(error?.message || "Failed to generate tailored resume PDF");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleUpdateIgnoredSkills = async (skillName: string, shouldIgnore: boolean) => {
+    const normalizedName = String(skillName || "").trim();
+    const currentIgnored = normalized.ignoredSkills;
+    if (!jobId || !normalizedName) return;
+
+    const nextIgnored = shouldIgnore
+      ? Array.from(new Set([...currentIgnored, normalizedName]))
+      : currentIgnored.filter((value) => value !== normalizedName);
+
+    setUpdatingIgnoredSkill(normalizedName);
+    try {
+      const match = await api.matchJob({
+        job_id: jobId,
+        ignored_skill_names: nextIgnored,
+        persist_history: false,
+      });
+      setAnalysis((current) => ({
+        ...(current ?? {}),
+        ...(match as MatchResult),
+        history_id: current?.history_id ?? (match as any)?.history_id ?? null,
+        tailored_resume_id: current?.tailored_resume_id ?? (match as any)?.tailored_resume_id ?? null,
+      }));
+      toast.success(shouldIgnore ? `Removed ${normalizedName} from this analysis` : `Added ${normalizedName} back to this analysis`);
+    } catch (error: any) {
+      console.error("Failed to update ignored job skills:", error);
+      toast.error(error?.message || "Failed to update the analysis");
+    } finally {
+      setUpdatingIgnoredSkill(null);
     }
   };
 
@@ -657,9 +694,22 @@ export function Jobs() {
               <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
             ) : (
               normalized.matchedSkills.map((s) => (
-                <Badge key={s} className="border-green-200 bg-green-50 text-green-700 dark:border-emerald-900/70 dark:bg-emerald-950/60 dark:text-emerald-200">
-                  {s}
-                </Badge>
+                <span
+                  key={s}
+                  className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-sm font-medium text-green-700 dark:border-emerald-900/70 dark:bg-emerald-950/60 dark:text-emerald-200"
+                >
+                  <span>{s}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateIgnoredSkills(s, true)}
+                    disabled={updatingIgnoredSkill === s}
+                    className="rounded-full p-0.5 text-current transition hover:bg-black/10 disabled:opacity-50 dark:hover:bg-white/10"
+                    aria-label={`Remove ${s} from this analysis`}
+                    title="Remove from this analysis"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
               ))
             )}
           </div>
@@ -675,16 +725,30 @@ export function Jobs() {
               <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
             ) : (
               normalized.missingSkills.map((s) => (
-                <Button
+                <span
                   key={s}
-                  variant="outline"
-                  onClick={() => handleAddMissingSkill(s)}
-                  disabled={addingMissingSkill === s}
-                  className="h-auto rounded-full border-orange-300 bg-white px-3 py-1 text-sm font-medium text-orange-700 hover:bg-orange-50 dark:border-orange-900/60 dark:bg-slate-900 dark:text-orange-200 dark:hover:bg-orange-950/40"
+                  className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-white px-1.5 py-1 text-sm font-medium text-orange-700 dark:border-orange-900/60 dark:bg-slate-900 dark:text-orange-200"
                 >
-                  <Plus className="mr-1 h-3.5 w-3.5" />
-                  {addingMissingSkill === s ? "Adding..." : s}
-                </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleAddMissingSkill(s)}
+                    disabled={addingMissingSkill === s}
+                    className="h-auto rounded-full px-1.5 py-0 text-sm font-medium text-orange-700 hover:bg-orange-50 dark:text-orange-200 dark:hover:bg-orange-950/40"
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    {addingMissingSkill === s ? "Adding..." : s}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateIgnoredSkills(s, true)}
+                    disabled={updatingIgnoredSkill === s}
+                    className="rounded-full p-0.5 text-current transition hover:bg-black/10 disabled:opacity-50 dark:hover:bg-white/10"
+                    aria-label={`Remove ${s} from this analysis`}
+                    title="Remove from this analysis"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
               ))
             )}
           </div>
@@ -708,6 +772,31 @@ export function Jobs() {
           </div>
         </Card>
       </div>
+
+      {normalized.ignoredSkills.length > 0 ? (
+        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="flex items-center gap-2 mb-4">
+            <Trash2 className="h-5 w-5 text-slate-500" />
+            <h3 className="font-semibold text-gray-900 dark:text-slate-100">Ignored Skills</h3>
+          </div>
+          <p className="mb-4 text-sm text-gray-600 dark:text-slate-300">
+            These extracted skills have been removed from the current job analysis so they do not affect counts, coverage, or score.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {normalized.ignoredSkills.map((skill) => (
+              <Button
+                key={skill}
+                variant="outline"
+                onClick={() => handleUpdateIgnoredSkills(skill, false)}
+                disabled={updatingIgnoredSkill === skill}
+                className="h-auto rounded-full border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                {updatingIgnoredSkill === skill ? "Restoring..." : `Restore ${skill}`}
+              </Button>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex items-center gap-2 mb-4">
