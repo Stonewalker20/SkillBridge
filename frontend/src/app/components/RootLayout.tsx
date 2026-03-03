@@ -133,14 +133,6 @@ export function RootLayout() {
             <p className="px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quick Actions</p>
             <div className="mt-2 space-y-1">
               <Link
-                to="/app/analytics/skills"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
-              >
-                <BarChart3 className="h-5 w-5" />
-                <span className="font-medium">Analytics</span>
-              </Link>
-              <Link
                 to="/app/skills?add=1"
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"

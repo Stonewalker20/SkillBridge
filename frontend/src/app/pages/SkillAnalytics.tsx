@@ -75,6 +75,17 @@ function asSkillCategories(skill: Skill): string[] {
   return categories.map((value) => String(value || "").trim()).filter(Boolean);
 }
 
+function normalizeEvidenceTypeLabel(value: string): string {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "Other";
+  if (normalized === "project") return "Project";
+  if (normalized === "resume") return "Resume";
+  if (normalized === "certification") return "Certification";
+  if (normalized === "course") return "Coursework";
+  if (normalized === "job") return "Work History";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 export function SkillAnalytics() {
   const [state, setState] = useState<AnalyticsState>({
     loading: true,
@@ -89,7 +100,7 @@ export function SkillAnalytics() {
       try {
         const [skills, evidence, confirmation] = await Promise.all([
           loadAllSkills(),
-          api.listEvidence().catch(() => [] as Evidence[]),
+          api.listEvidence({ origin: "user" }).catch(() => [] as Evidence[]),
           api.getProfileConfirmation().catch(() => null as ConfirmationOut | null),
         ]);
         if (!active) return;
@@ -115,7 +126,7 @@ export function SkillAnalytics() {
     const evidenceSkillCounts = new Map<string, number>();
     const evidenceTypeCounts = new Map<string, number>();
     for (const item of state.evidence) {
-      const evidenceType = String(item.type || "other").trim() || "other";
+      const evidenceType = normalizeEvidenceTypeLabel(String(item.type || "other"));
       evidenceTypeCounts.set(evidenceType, (evidenceTypeCounts.get(evidenceType) ?? 0) + 1);
       const uniqueSkillIds = new Set((item.skill_ids ?? []).map((value) => String(value || "").trim()).filter(Boolean));
       for (const skillId of uniqueSkillIds) {
@@ -135,11 +146,15 @@ export function SkillAnalytics() {
       }
     }
 
-    const proficiencyCounts = new Map<string, number>();
+    const proficiencyBuckets = new Map<number, { count: number; skills: string[] }>();
     let evidenceBackedConfirmed = 0;
     for (const entry of confirmedEntries) {
       const proficiency = Number(entry?.proficiency ?? 0) || 0;
-      proficiencyCounts.set(`Level ${proficiency}`, (proficiencyCounts.get(`Level ${proficiency}`) ?? 0) + 1);
+      const skillName = skillsById.get(String(entry?.skill_id ?? "").trim())?.name;
+      const bucket = proficiencyBuckets.get(proficiency) ?? { count: 0, skills: [] };
+      bucket.count += 1;
+      if (skillName) bucket.skills.push(skillName);
+      proficiencyBuckets.set(proficiency, bucket);
       if ((Number(entry?.evidence_count ?? 0) || 0) > 0) {
         evidenceBackedConfirmed += 1;
       }
@@ -154,9 +169,10 @@ export function SkillAnalytics() {
     const topEvidenceSkills = Array.from(evidenceSkillCounts.entries())
       .map(([skillId, count]) => ({
         skillId,
-        name: skillsById.get(skillId)?.name || "Unknown skill",
+        name: skillsById.get(skillId)?.name || "",
         count,
       }))
+      .filter((entry) => entry.name)
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
       .slice(0, 8);
 
@@ -164,9 +180,14 @@ export function SkillAnalytics() {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
 
-    const proficiencyData = Array.from(proficiencyCounts.entries())
-      .map(([level, count]) => ({ level, count }))
-      .sort((a, b) => a.level.localeCompare(b.level));
+    const proficiencyData = Array.from(proficiencyBuckets.entries())
+      .map(([level, value]) => ({
+        level,
+        label: `Level ${level}`,
+        count: value.count,
+        skills: Array.from(new Set(value.skills)).sort((a, b) => a.localeCompare(b)),
+      }))
+      .sort((a, b) => a.level - b.level);
 
     return {
       confirmedCount: confirmedEntries.length,
@@ -348,13 +369,38 @@ export function SkillAnalytics() {
             <ChartContainer config={proficiencyChartConfig} className="h-[280px] w-full">
               <BarChart data={analytics.proficiencyData} margin={{ left: 8, right: 8, top: 12 }}>
                 <CartesianGrid vertical={false} />
-                <XAxis dataKey="level" tickLine={false} axisLine={false} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} />
                 <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
                 <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
                 <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="var(--color-count)" />
               </BarChart>
             </ChartContainer>
           )}
+          {analytics.proficiencyData.length > 0 ? (
+            <div className="mt-5 space-y-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+              {analytics.proficiencyData.map((bucket) => (
+                <div key={bucket.level} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-800/60">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{bucket.label}</span>
+                    <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                      {bucket.count} skill{bucket.count === 1 ? "" : "s"}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {bucket.skills.length ? (
+                      bucket.skills.map((skill) => (
+                        <Badge key={`${bucket.level}:${skill}`} variant="secondary" className="dark:bg-slate-900 dark:text-slate-200">
+                          {skill}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-xs text-slate-500 dark:text-slate-400">No visible skills at this level.</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </Card>
       </div>
     </div>
