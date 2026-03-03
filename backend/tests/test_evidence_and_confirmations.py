@@ -42,6 +42,42 @@ def test_evidence_analysis_and_crud(test_context):
     assert deleted.status_code == 200
 
 
+def test_evidence_multi_file_analysis(test_context, monkeypatch):
+    client = test_context["client"]
+    headers = test_context["headers"]
+
+    monkeypatch.setattr(
+        "app.routers.evidence.extract_text_from_upload",
+        lambda filename, _raw: (
+            "Python ML experience from a PDF report."
+            if str(filename).lower().endswith(".pdf")
+            else "FastAPI analytics experience from a DOCX file."
+        ),
+    )
+
+    response = client.post(
+        "/evidence/analyze",
+        headers=headers,
+        data={"title": "Batch Upload", "type": "project", "text": "Built Python dashboards."},
+        files=[
+            ("files", ("report.pdf", b"%PDF-1.4 fake", "application/pdf")),
+            ("files", ("report.docx", b"fake-docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")),
+        ],
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["user_id"] == test_context["user_id"]
+    assert len(payload["items"]) == 3
+    extracted_names = {
+        skill["skill_name"]
+        for item in payload["items"]
+        for skill in item["extracted_skills"]
+    }
+    assert "Python" in extracted_names
+    assert "ML" in extracted_names or "FastAPI" in extracted_names
+
+
 def test_profile_confirmation_routes(test_context):
     client = test_context["client"]
     headers = test_context["headers"]

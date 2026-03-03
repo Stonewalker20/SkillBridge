@@ -23,7 +23,7 @@ export function PublicThemeToggle() {
         checked={isDark}
         onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
         aria-label="Toggle dark mode"
-        className="h-[18px] w-[34px] data-[state=checked]:bg-slate-900 data-[state=unchecked]:bg-amber-300 dark:data-[state=checked]:bg-teal-500 dark:data-[state=unchecked]:bg-slate-700 [&_[data-slot=switch-thumb]]:size-3 [&_[data-slot=switch-thumb]]:data-[state=checked]:translate-x-[14px]"
+        className="h-[18px] w-[34px] data-[state=checked]:bg-[#1E3A8A] data-[state=unchecked]:bg-amber-300 dark:data-[state=checked]:bg-amber-400 dark:data-[state=unchecked]:bg-slate-700 [&_[data-slot=switch-thumb]]:size-3 [&_[data-slot=switch-thumb]]:data-[state=checked]:translate-x-[14px]"
       />
     </div>
   );

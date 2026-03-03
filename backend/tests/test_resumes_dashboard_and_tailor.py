@@ -39,7 +39,25 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
 
     monkeypatch.setattr("app.routers.resumes.extract_pdf_text", lambda _bytes: "Python ML FastAPI " * 10)
 
-    text_ingest = client.post("/ingest/resume/text", json={"user_id": user_id, "text": "Python ML resume text " * 10})
+    text_ingest = client.post(
+        "/ingest/resume/text",
+        json={
+            "user_id": user_id,
+            "text": "\n".join(
+                [
+                    "Tester Example",
+                    "SUMMARY",
+                    "Python and ML developer.",
+                    "EXPERIENCE",
+                    "Capstone Project",
+                    "- Built Python ML dashboards.",
+                    "- Delivered FastAPI APIs.",
+                    "EDUCATION",
+                    "BS Computer Science",
+                ]
+            ),
+        },
+    )
     assert text_ingest.status_code == 200
     snapshot_id = text_ingest.json()["snapshot_id"]
 
@@ -82,7 +100,7 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     assert match.status_code == 200
     history_id = match.json()["history_id"]
 
-    preview = client.post("/tailor/preview", json={"user_id": user_id, "job_id": job_id})
+    preview = client.post("/tailor/preview", json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id})
     assert preview.status_code == 200
     tailored_id = preview.json()["id"]
 
@@ -121,3 +139,103 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
 
     delete_resume = client.delete(f"/tailor/resumes/{tailored_id}", params={"user_id": user_id})
     assert delete_resume.status_code == 200
+
+
+def test_tailored_resume_uses_user_resume_template_and_ai_preferences(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    user_id = test_context["user_id"]
+    db = test_context["db"]
+
+    resume_text = "\n".join(
+        [
+            "Jane Student",
+            "SUMMARY",
+            "Builder focused on analytics systems and ML delivery.",
+            "SKILLS",
+            "Python, SQL, Communication",
+            "EXPERIENCE",
+            "Capstone Research Assistant",
+            "- Built internal dashboards for faculty.",
+            "EDUCATION",
+            "BS Computer Science",
+        ]
+    )
+    ingest = client.post("/ingest/resume/text", json={"user_id": user_id, "text": resume_text})
+    assert ingest.status_code == 200
+    snapshot_id = ingest.json()["snapshot_id"]
+
+    client.post(
+        "/skills/confirmations/",
+        headers=headers,
+        json={
+            "resume_snapshot_id": None,
+            "confirmed": [
+                {"skill_id": test_context["skill_python"], "proficiency": 4},
+                {"skill_id": test_context["skill_ml"], "proficiency": 3},
+            ],
+            "rejected": [],
+            "edited": [],
+        },
+    )
+    client.post(
+        "/evidence/",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "type": "project",
+            "title": "ML Dashboard",
+            "source": "manual-entry",
+            "text_excerpt": "Built Python ML dashboard APIs and shipped analytics views.",
+            "skill_ids": [test_context["skill_python"], test_context["skill_ml"]],
+            "origin": "user",
+        },
+    )
+
+    ai_settings = client.get("/tailor/settings/preferences", headers=headers)
+    assert ai_settings.status_code == 200
+    assert ai_settings.json()["preferences"]["inference_mode"]
+
+    patched = client.patch(
+        "/tailor/settings/preferences",
+        headers=headers,
+        json={
+          "inference_mode": "local-fallback",
+          "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+          "zero_shot_model": "MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33",
+        },
+    )
+    assert patched.status_code == 200
+    assert patched.json()["preferences"]["inference_mode"] == "local-fallback"
+
+    job = client.post(
+        "/tailor/job/ingest",
+        json={
+            "user_id": user_id,
+            "title": "Analytics Engineer",
+            "company": "SkillBridge",
+            "location": "Remote",
+            "text": "Looking for Python, ML, dashboard, analytics, and API delivery experience for a product analytics role." * 2,
+        },
+    )
+    assert job.status_code == 200
+    job_id = job.json()["id"]
+
+    preview = client.post(
+        "/tailor/preview",
+        json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id},
+    )
+    assert preview.status_code == 200
+    payload = preview.json()
+    assert payload["resume_snapshot_id"] == snapshot_id
+    assert payload["template_source"] == "user_resume"
+    section_titles = [section["title"] for section in payload["sections"]]
+    assert "Summary" in section_titles
+    assert "Education" in section_titles
+    assert any(section["title"] == "Targeted Highlights" for section in payload["sections"])
+    summary_section = next(section for section in payload["sections"] if section["title"] == "Summary")
+    assert any("Analytics Engineer at SkillBridge" in line for line in summary_section["lines"])
+
+    stored_resume = next(doc for doc in db["tailored_resumes"].docs if str(doc["_id"]) == payload["id"])
+    assert str(stored_resume["resume_snapshot_id"]) == snapshot_id
+    assert stored_resume["template_source"] == "user_resume"

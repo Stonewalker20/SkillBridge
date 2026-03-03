@@ -15,6 +15,7 @@ interface DashboardSummary {
   tailoredResumes: number;
   recentActivity: Array<{
     id: number | string;
+    eventKey?: string;
     type: string;
     action: string;
     name: string;
@@ -37,6 +38,52 @@ function safeNum(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function activityTimestamp(value: any): number {
+  if (!value) return 0;
+  const stamp = new Date(value).getTime();
+  return Number.isFinite(stamp) ? stamp : 0;
+}
+
+function normalizedActivityDate(value: any): string {
+  const now = Date.now();
+  const stamp = activityTimestamp(value);
+  if (!stamp) return new Date(0).toISOString();
+  // Protect ordering from bad future-skewed timestamps coming from persisted records.
+  if (stamp > now + 5 * 60 * 1000) {
+    return new Date(now).toISOString();
+  }
+  return new Date(stamp).toISOString();
+}
+
+function normalizeRecentActivityItem(item: any) {
+  const rawDate = item?.date ?? item?.created_at ?? item?.updated_at ?? "";
+  const date = normalizedActivityDate(rawDate);
+  const id = String(item?.id ?? `${item?.type ?? "activity"}:${item?.action ?? "updated"}:${item?.name ?? "item"}:${date}`);
+  const rawDateKey = String(rawDate || date);
+  return {
+    id,
+    eventKey: `${id}:${rawDateKey}`,
+    type: String(item?.type ?? "activity"),
+    action: String(item?.action ?? "updated"),
+    name: String(item?.name ?? "Untitled"),
+    date,
+  };
+}
+
+function mergeRecentActivity(sources: Array<Array<any>>): DashboardSummary["recentActivity"] {
+  const byId = new Map<string, DashboardSummary["recentActivity"][number]>();
+  for (const source of sources) {
+    for (const rawItem of source) {
+      const item = normalizeRecentActivityItem(rawItem);
+      const existing = byId.get(item.id);
+      if (!existing || activityTimestamp(item.date) > activityTimestamp(existing.date)) {
+        byId.set(item.id, item);
+      }
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => activityTimestamp(b.date) - activityTimestamp(a.date));
+}
+
 async function loadAllSkills(): Promise<Skill[]> {
   const pageSize = 200;
   const allSkills: Skill[] = [];
@@ -55,13 +102,31 @@ async function loadAllSkills(): Promise<Skill[]> {
 
 export function Dashboard() {
   const { user } = useAuth();
-  const { activities } = useActivity();
+  const { activities, clearActivities } = useActivity();
   const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
-  const [hiddenRecentActivityIds, setHiddenRecentActivityIds] = useState<string[]>(() => {
+  const [hiddenRecentActivityKeys, setHiddenRecentActivityKeys] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
-      const raw = window.localStorage.getItem("dashboard:hiddenRecentActivityIds");
+      const raw = window.localStorage.getItem("dashboard:hiddenRecentActivityKeys");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [clearedRecentActivityKeys, setClearedRecentActivityKeys] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem("dashboard:clearedRecentActivityKeys");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [clearedRecentActivityIds, setClearedRecentActivityIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem("dashboard:clearedRecentActivityIds");
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
@@ -70,8 +135,18 @@ export function Dashboard() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem("dashboard:hiddenRecentActivityIds", JSON.stringify(hiddenRecentActivityIds));
-  }, [hiddenRecentActivityIds]);
+    window.localStorage.setItem("dashboard:hiddenRecentActivityKeys", JSON.stringify(hiddenRecentActivityKeys));
+  }, [hiddenRecentActivityKeys]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("dashboard:clearedRecentActivityKeys", JSON.stringify(clearedRecentActivityKeys));
+  }, [clearedRecentActivityKeys]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("dashboard:clearedRecentActivityIds", JSON.stringify(clearedRecentActivityIds));
+  }, [clearedRecentActivityIds]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -86,9 +161,9 @@ export function Dashboard() {
           averageMatchScore: safeNum(base?.averageMatchScore ?? base?.average_match_score ?? 0),
           tailoredResumes: safeNum(base?.tailoredResumes ?? base?.tailored_resumes ?? 0),
           recentActivity: Array.isArray(base?.recentActivity)
-            ? base.recentActivity
+            ? base.recentActivity.map(normalizeRecentActivityItem)
             : Array.isArray(base?.recent_activity)
-              ? base.recent_activity
+              ? base.recent_activity.map(normalizeRecentActivityItem)
               : [],
           topSkillCategories: Array.isArray(base?.topSkillCategories)
             ? base.topSkillCategories
@@ -131,13 +206,10 @@ export function Dashboard() {
 
         const userSpecificTotalSkills = confirmedVisibleSkillIds.size;
 
-        const mergedRecentActivity = [
-          ...activities,
-          ...normalizedBase.recentActivity,
-        ]
-          .filter((item) => !!item?.date)
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .filter((item, index, arr) => arr.findIndex((candidate) => candidate.id === item.id) === index);
+        const mergedRecentActivity = mergeRecentActivity([
+          activities,
+          normalizedBase.recentActivity,
+        ]);
 
         setSummary({
           ...normalizedBase,
@@ -193,13 +265,25 @@ export function Dashboard() {
   );
 
   const visibleRecentActivity = useMemo(
-    () => summary.recentActivity.filter((activity) => !hiddenRecentActivityIds.includes(String(activity.id))),
-    [summary.recentActivity, hiddenRecentActivityIds]
+    () =>
+      summary.recentActivity.filter(
+        (activity) =>
+          !clearedRecentActivityIds.includes(String(activity.id)) &&
+          !hiddenRecentActivityKeys.includes(String(activity.eventKey ?? `${activity.id}:${activity.date}`)) &&
+          !clearedRecentActivityKeys.includes(String(activity.eventKey ?? `${activity.id}:${activity.date}`))
+      ),
+    [summary.recentActivity, hiddenRecentActivityKeys, clearedRecentActivityKeys, clearedRecentActivityIds]
   );
 
   const hideRecentActivityItem = (id: string | number) => {
-    const key = String(id);
-    setHiddenRecentActivityIds((current) => (current.includes(key) ? current : [...current, key]));
+    setHiddenRecentActivityKeys((current) => (current.includes(String(id)) ? current : [...current, String(id)]));
+  };
+
+  const handleClearRecentActivity = () => {
+    setClearedRecentActivityKeys(summary.recentActivity.map((activity) => String(activity.eventKey ?? `${activity.id}:${activity.date}`)));
+    setClearedRecentActivityIds(summary.recentActivity.map((activity) => String(activity.id)));
+    setHiddenRecentActivityKeys([]);
+    clearActivities();
   };
 
   if (loading) {
@@ -251,11 +335,16 @@ export function Dashboard() {
         <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Recent Activity</h3>
-            {hiddenRecentActivityIds.length > 0 ? (
-              <Button variant="ghost" size="sm" onClick={() => setHiddenRecentActivityIds([])}>
-                Reset hidden
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={handleClearRecentActivity}>
+                Clear recent
               </Button>
-            ) : null}
+              {hiddenRecentActivityKeys.length > 0 ? (
+                <Button variant="ghost" size="sm" onClick={() => setHiddenRecentActivityKeys([])}>
+                  Reset hidden
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           {visibleRecentActivity.length === 0 ? (
@@ -284,7 +373,7 @@ export function Dashboard() {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 rounded-full text-slate-400 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-900 dark:hover:text-slate-100"
-                      onClick={() => hideRecentActivityItem(activity.id)}
+                      onClick={() => hideRecentActivityItem(activity.eventKey ?? `${activity.id}:${activity.date}`)}
                       aria-label={`Hide activity ${activity.name}`}
                       title="Hide activity"
                     >
@@ -301,7 +390,12 @@ export function Dashboard() {
         <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Top Skill Categories</h3>
-            <Badge variant="secondary">{summary.topSkillCategories.length} total</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{summary.topSkillCategories.length} total</Badge>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/app/analytics/skills">View analytics</Link>
+              </Button>
+            </div>
           </div>
 
           {summary.topSkillCategories.length === 0 ? (

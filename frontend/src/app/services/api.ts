@@ -336,6 +336,19 @@ export type AISettingsStatus = {
   rewrite_model: string;
 };
 
+export type AIPreferences = {
+  inference_mode: string;
+  embedding_model: string;
+  zero_shot_model: string;
+  available_inference_modes: string[];
+  available_embedding_models: string[];
+  available_zero_shot_models: string[];
+};
+
+export type AISettingsDetail = AISettingsStatus & {
+  preferences: AIPreferences;
+};
+
 export type AdminSummary = {
   total_users: number;
   team_members: number;
@@ -692,7 +705,7 @@ export const api = {
     return request<any>("/tailor/job/ingest", "POST", body);
   },
 
-  matchJob: async (payload: { user_id?: string; job_id: string }) => {
+  matchJob: async (payload: { user_id?: string; job_id: string; history_id?: string; ignored_skill_names?: string[]; persist_history?: boolean }) => {
     const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
     return request<any>("/tailor/match", "POST", body);
   },
@@ -741,6 +754,9 @@ export const api = {
   },
 
   getAISettingsStatus: () => request<AISettingsStatus>("/tailor/settings/status", "GET"),
+  getAIPreferences: () => request<AISettingsDetail>("/tailor/settings/preferences", "GET"),
+  updateAIPreferences: (payload: Partial<Pick<AIPreferences, "inference_mode" | "embedding_model" | "zero_shot_model">>) =>
+    request<AISettingsDetail>("/tailor/settings/preferences", "PATCH", payload),
 
   getAdminSummary: () => request<AdminSummary>("/admin/summary", "GET"),
   listAdminUsers: () => request<AdminUserRecord[]>("/admin/users", "GET"),
@@ -753,7 +769,7 @@ export const api = {
   moderateAdminJob: (jobId: string, payload: { moderation_status: string; moderation_reason?: string | null }) =>
     request<AdminJob>(`/admin/jobs/${jobId}/moderation`, "PATCH", payload),
 
-  previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
+  previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; ignored_skill_names?: string[]; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
     const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
     return request<any>("/tailor/preview", "POST", body);
   },

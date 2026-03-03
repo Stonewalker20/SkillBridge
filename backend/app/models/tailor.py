@@ -42,6 +42,7 @@ class JobMatchOut(BaseModel):
     match_score: float
     match_confidence_label: str = "Low"
     analysis_summary: str = ""
+    ignored_skill_names: list[str] = Field(default_factory=list)
     matched_skill_ids: list[str] = Field(default_factory=list)
     matched_skills: list[str] = Field(default_factory=list)
     missing_skill_ids: list[str] = Field(default_factory=list)
@@ -72,6 +73,8 @@ class TailorPreviewIn(BaseModel):
     user_id: str
     job_id: str | None = Field(default=None, description="Job ingest id")
     job_text: str | None = Field(default=None, description="Optional job text if job_id not provided")
+    resume_snapshot_id: str | None = Field(default=None, description="Optional resume snapshot to use as the tailoring template")
+    ignored_skill_names: list[str] = Field(default_factory=list, description="Optional extracted job skills to ignore during tailoring")
     template: str = Field(default="ats_v1", description="Template name")
     max_items: int = Field(default=4, ge=1, le=10)
     max_bullets_per_item: int = Field(default=4, ge=1, le=10)
@@ -86,6 +89,8 @@ class TailoredResumeOut(BaseModel):
     id: str
     user_id: str
     job_id: str | None = None
+    resume_snapshot_id: str | None = None
+    template_source: str | None = None
     template: str
     selected_skill_ids: list[str]
     selected_item_ids: list[str]
@@ -168,3 +173,22 @@ class AISettingsStatusOut(BaseModel):
     rewrite_provider: str
     embedding_model: str
     rewrite_model: str
+
+
+class AIPreferencesOut(BaseModel):
+    inference_mode: str
+    embedding_model: str
+    zero_shot_model: str
+    available_inference_modes: list[str] = Field(default_factory=list)
+    available_embedding_models: list[str] = Field(default_factory=list)
+    available_zero_shot_models: list[str] = Field(default_factory=list)
+
+
+class AISettingsDetailOut(AISettingsStatusOut):
+    preferences: AIPreferencesOut
+
+
+class AIPreferencesPatchIn(BaseModel):
+    inference_mode: str | None = None
+    embedding_model: str | None = None
+    zero_shot_model: str | None = None

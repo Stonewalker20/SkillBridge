@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../components/ui/dialog";
-import LogoSvg from "../../imports/file.svg";
+import LogoImage from "../../imports/skillbridge_logo.png";
 import { PublicThemeToggle } from "../components/PublicThemeToggle";
 
 export function SignUp() {
@@ -70,9 +70,8 @@ export function SignUp() {
         <PublicThemeToggle />
       </div>
       <div className="grid w-full max-w-5xl gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="hidden lg:flex flex-col justify-between rounded-[2rem] border border-slate-200 bg-[linear-gradient(135deg,_rgba(30,58,138,0.98),_rgba(15,118,110,0.95))] p-8 text-white shadow-xl">
+        <div className="hidden lg:flex flex-col justify-between rounded-[2rem] border border-slate-200 bg-[linear-gradient(135deg,_rgba(30,58,138,0.98),_rgba(245,158,11,0.94))] p-8 text-white shadow-xl">
           <div>
-            <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-auto max-w-[220px] object-contain" />
             <h1 className="mt-8 text-4xl font-bold leading-tight">Build a profile that can prove what you know.</h1>
             <p className="mt-4 text-base leading-7 text-blue-100">
               Create your workspace, add evidence, confirm skills, and generate targeted job-match outputs from a single profile.
@@ -88,7 +87,7 @@ export function SignUp() {
         {/* Logo & Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <img src={LogoSvg} alt="SkillBridge Logo" className="h-20 w-auto max-w-[240px] object-contain" />
+            <img src={LogoImage} alt="SkillBridge Logo" className="h-20 w-auto max-w-[240px] scale-[2.6] object-contain" />
           </div>
           <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-slate-50">Create Account</h1>
           <p className="text-gray-600 dark:text-slate-300">Join SkillBridge and transform your job search</p>

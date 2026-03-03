@@ -51,6 +51,7 @@ def test_openapi_includes_expected_route_surface():
         "/tailor/history/{history_id}",
         "/tailor/history/compare",
         "/tailor/settings/status",
+        "/tailor/settings/preferences",
         "/tailor/{tailored_id}/rewrite",
         "/tailor/{tailored_id}/export/docx",
         "/tailor/{tailored_id}/export/pdf",

@@ -21,7 +21,7 @@ from app.routers import tailor as tailor_router
 from .fake_mongo import FakeDatabase, FakeMongoClient
 
 
-def _fake_embed_texts(texts: list[str]):
+def _fake_embed_texts(texts: list[str], preferences: dict | None = None):
     vectors = []
     for text in texts:
         lower = str(text or "").lower()
@@ -35,11 +35,11 @@ def _fake_embed_texts(texts: list[str]):
     return vectors, "test-embed"
 
 
-async def _async_fake_embed_texts(texts: list[str]):
-    return _fake_embed_texts(texts)
+async def _async_fake_embed_texts(texts: list[str], preferences: dict | None = None):
+    return _fake_embed_texts(texts, preferences=preferences)
 
 
-async def _async_fake_extract_skill_candidates(text: str, max_candidates: int = 25):
+async def _async_fake_extract_skill_candidates(text: str, max_candidates: int = 25, preferences: dict | None = None):
     lower = str(text or "").lower()
     candidates = []
     if "python" in lower:
@@ -142,7 +142,7 @@ def test_context(monkeypatch):
     monkeypatch.setattr("app.main.warm_local_models", _noop)
     monkeypatch.setattr(
         "app.main.get_inference_status",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "provider_mode": "test",
             "embeddings_provider": "test",
             "rewrite_provider": "test",
@@ -158,7 +158,7 @@ def test_context(monkeypatch):
     monkeypatch.setattr(
         tailor_router,
         "get_inference_status",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "provider_mode": "test",
             "embeddings_provider": "test",
             "rewrite_provider": "test",
