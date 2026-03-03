@@ -169,6 +169,14 @@ export function Skills() {
     });
   }, [skills, searchTerm, categoryFilter, visibleConfirmedSkillIds, visibleEvidenceSkillIds]);
 
+  const unsupportedConfirmedSkills = useMemo(
+    () =>
+      skills
+        .filter((skill) => visibleConfirmedSkillIds.has(skill.id) && !visibleEvidenceSkillIds.has(skill.id))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [skills, visibleConfirmedSkillIds, visibleEvidenceSkillIds]
+  );
+
   const totalPages = Math.max(1, Math.ceil(filteredSkills.length / SKILLS_PER_PAGE));
   const pagedSkills = useMemo(() => {
     const start = (page - 1) * SKILLS_PER_PAGE;
@@ -559,6 +567,24 @@ export function Skills() {
           </Dialog>
         </div>
       </div>
+
+      {unsupportedConfirmedSkills.length > 0 ? (
+        <Card className="p-6">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Confirmed Skills Without Evidence</h3>
+            <p className="text-sm text-gray-600">
+              These skills are confirmed on your profile, but you do not have any supporting evidence attached yet.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {unsupportedConfirmedSkills.map((skill) => (
+              <Badge key={skill.id} variant="outline" className="border-amber-300 text-amber-700">
+                {skill.name}
+              </Badge>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       {/* Skills Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
