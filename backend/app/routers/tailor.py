@@ -903,6 +903,7 @@ async def match_job(payload: dict):
     ignored_skill_names = _normalize_ignored_skill_names(payload.get("ignored_skill_names"))
     ignored_terms = {normalize_skill_text(value) for value in ignored_skill_names if normalize_skill_text(value)}
     persist_history = bool(payload.get("persist_history", True))
+    history_id = str(payload.get("history_id") or "").strip()
     raw_extracted_skill_ids = _dedupe_preserve_order(str(e.get("skill_id")) for e in extracted if e.get("skill_id"))
 
     conf = await _load_profile_confirmation(db, payload["user_id"])
@@ -1177,6 +1178,35 @@ async def match_job(payload: dict):
         return result
 
     now = now_utc()
+    if history_id:
+        try:
+            history_oid = ObjectId(history_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid history_id")
+
+        existing_history = await db["job_match_runs"].find_one({"_id": history_oid, **ref_query("user_id", payload["user_id"])}, {"job_id": 1})
+        if not existing_history:
+            raise HTTPException(status_code=404, detail="Saved job analysis not found")
+        if oid_str(existing_history.get("job_id")) != oid_str(job_doc.get("_id")):
+            raise HTTPException(status_code=400, detail="history_id does not belong to the provided job_id")
+
+        result.history_id = history_id
+        await db["job_match_runs"].update_one(
+            {"_id": history_oid},
+            {
+                "$set": {
+                    "title": job_doc.get("title"),
+                    "company": job_doc.get("company"),
+                    "location": job_doc.get("location"),
+                    "text_preview": job_doc.get("text", "")[:220],
+                    "analysis": result.model_dump(),
+                    "updated_at": now,
+                },
+                "$unset": {"tailored_resume_id": ""},
+            },
+        )
+        return result
+
     history_doc = {
         "user_id": to_object_id(payload["user_id"]),
         "job_id": job_oid,

@@ -273,20 +273,30 @@ export function Jobs() {
     const nextIgnored = shouldIgnore
       ? Array.from(new Set([...currentIgnored, normalizedName]))
       : currentIgnored.filter((value) => value !== normalizedName);
+    const currentHistoryId = String(normalized.historyId ?? "").trim() || undefined;
 
     setUpdatingIgnoredSkill(normalizedName);
     try {
       const match = await api.matchJob({
         job_id: jobId,
+        history_id: currentHistoryId,
         ignored_skill_names: nextIgnored,
-        persist_history: false,
+        persist_history: Boolean(currentHistoryId),
       });
       setAnalysis((current) => ({
         ...(current ?? {}),
         ...(match as MatchResult),
-        history_id: current?.history_id ?? (match as any)?.history_id ?? null,
-        tailored_resume_id: current?.tailored_resume_id ?? (match as any)?.tailored_resume_id ?? null,
+        history_id: currentHistoryId ?? current?.history_id ?? (match as any)?.history_id ?? null,
+        tailored_resume_id: null,
       }));
+      setLastTailoredId(null);
+      if (currentHistoryId) {
+        try {
+          await refreshHistory();
+        } catch (historyError) {
+          console.error("Failed to refresh job match history:", historyError);
+        }
+      }
       toast.success(shouldIgnore ? `Removed ${normalizedName} from this analysis` : `Added ${normalizedName} back to this analysis`);
     } catch (error: any) {
       console.error("Failed to update ignored job skills:", error);

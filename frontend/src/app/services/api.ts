@@ -705,7 +705,7 @@ export const api = {
     return request<any>("/tailor/job/ingest", "POST", body);
   },
 
-  matchJob: async (payload: { user_id?: string; job_id: string; ignored_skill_names?: string[]; persist_history?: boolean }) => {
+  matchJob: async (payload: { user_id?: string; job_id: string; history_id?: string; ignored_skill_names?: string[]; persist_history?: boolean }) => {
     const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
     return request<any>("/tailor/match", "POST", body);
   },
