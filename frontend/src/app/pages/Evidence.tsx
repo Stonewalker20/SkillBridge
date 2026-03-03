@@ -132,6 +132,19 @@ export function Evidence() {
     setSelectedSkillIdsByAnalysis({});
   };
 
+  const syncEditAnalysisFromDraft = (nextDraft: typeof draft) => {
+    if (!nextDraft.id || analysisItems.length !== 1) return;
+    setAnalysisItems((prev) =>
+      prev.map((item) => ({
+        ...item,
+        title: nextDraft.title,
+        type: nextDraft.type,
+        source: nextDraft.url.trim() || "manual-entry",
+        text_excerpt: nextDraft.text,
+      }))
+    );
+  };
+
   const openEditDialog = (item: Evidence) => {
     const analysisId = `analysis:existing:${item.id}`;
     setDraft({
@@ -446,8 +459,10 @@ export function Evidence() {
                       id="evidence-title"
                       value={draft.title}
                       onChange={(e) => {
-                        setDraft((prev) => ({ ...prev, title: e.target.value }));
-                        setAnalysisItems([]);
+                        const nextDraft = { ...draft, title: e.target.value };
+                        setDraft(nextDraft);
+                        if (draft.id) syncEditAnalysisFromDraft(nextDraft);
+                        else setAnalysisItems([]);
                       }}
                       placeholder="e.g., Research Assistant Project Summary"
                     />
@@ -458,8 +473,10 @@ export function Evidence() {
                     <Select
                       value={draft.type}
                       onValueChange={(value) => {
-                        setDraft((prev) => ({ ...prev, type: value }));
-                        setAnalysisItems([]);
+                        const nextDraft = { ...draft, type: value };
+                        setDraft(nextDraft);
+                        if (draft.id) syncEditAnalysisFromDraft(nextDraft);
+                        else setAnalysisItems([]);
                       }}
                     >
                       <SelectTrigger id="evidence-type">
@@ -482,8 +499,10 @@ export function Evidence() {
                     id="evidence-url"
                     value={draft.url}
                     onChange={(e) => {
-                      setDraft((prev) => ({ ...prev, url: e.target.value }));
-                      setAnalysisItems([]);
+                      const nextDraft = { ...draft, url: e.target.value };
+                      setDraft(nextDraft);
+                      if (draft.id) syncEditAnalysisFromDraft(nextDraft);
+                      else setAnalysisItems([]);
                     }}
                     placeholder="https://..."
                   />
@@ -494,13 +513,15 @@ export function Evidence() {
                     <Label htmlFor="evidence-text">Paste Evidence Text</Label>
                     <Textarea
                       id="evidence-text"
-                      value={draft.text}
-                      onChange={(e) => {
-                        setDraft((prev) => ({ ...prev, text: e.target.value }));
-                        setAnalysisItems([]);
-                      }}
-                      placeholder="Paste a project summary, certificate text, paper abstract, or any other evidence here..."
-                      rows={12}
+                    value={draft.text}
+                    onChange={(e) => {
+                      const nextDraft = { ...draft, text: e.target.value };
+                      setDraft(nextDraft);
+                      if (draft.id) syncEditAnalysisFromDraft(nextDraft);
+                      else setAnalysisItems([]);
+                    }}
+                    placeholder="Paste a project summary, certificate text, paper abstract, or any other evidence here..."
+                    rows={12}
                       className="mt-2"
                     />
                   </div>
