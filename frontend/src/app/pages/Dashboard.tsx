@@ -37,6 +37,22 @@ function safeNum(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+async function loadAllSkills(): Promise<Skill[]> {
+  const pageSize = 200;
+  const allSkills: Skill[] = [];
+  let skip = 0;
+
+  while (true) {
+    const batch = await api.listSkills({ limit: pageSize, skip }).catch(() => [] as Skill[]);
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    allSkills.push(...batch);
+    if (batch.length < pageSize) break;
+    skip += pageSize;
+  }
+
+  return allSkills;
+}
+
 export function Dashboard() {
   const { user } = useAuth();
   const { activities } = useActivity();
@@ -72,7 +88,7 @@ export function Dashboard() {
         //    - total skills = confirmed length
         //    - top categories computed from confirmed skill ids -> global skills list mapping
         const [skillsLib, profileConf] = await Promise.all([
-          api.listSkills().catch(() => [] as Skill[]),
+          loadAllSkills(),
           api.getProfileConfirmation().catch(() => null as ConfirmationOut | null),
         ]);
         const confirmed = Array.isArray(profileConf?.confirmed) ? profileConf!.confirmed : [];
