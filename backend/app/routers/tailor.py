@@ -34,22 +34,105 @@ router = APIRouter()
 def now_utc():
     return datetime.now(timezone.utc)
 
-def _tokenize_keywords(text: str) -> list[str]:
-    # lightweight keywords: alphanum words len>=4 excluding very common
-    stop = {"with","from","that","this","have","will","your","able","work","team","role","must","plus","also","using","used","into","over","such","they","their","them","than","then","only","when","where","what","were","been","being","more","less","some","many","each","make","made"}
-    words = re.findall(r"[A-Za-z][A-Za-z0-9+.#-]{3,}", text.lower())
-    out = []
-    seen = set()
-    for w in words:
-        if w in stop:
+def _job_focus_lines(text: str) -> list[tuple[str, float]]:
+    section_markers = {
+        "required": 3.5,
+        "requirements": 3.5,
+        "minimum qualifications": 3.5,
+        "basic qualifications": 3.5,
+        "must have": 3.5,
+        "must-have": 3.5,
+        "preferred": 2.5,
+        "preferred qualifications": 2.5,
+        "nice to have": 2.5,
+        "nice-to-have": 2.5,
+        "responsibilities": 2.25,
+        "what you'll do": 2.25,
+        "what you will do": 2.25,
+        "in this role": 2.0,
+        "experience with": 2.0,
+    }
+
+    active_weight = 1.0
+    lines: list[tuple[str, float]] = []
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip(" \t-•*")
+        if not line:
             continue
-        if w in seen:
+        lower = line.lower()
+        matched_weight = next((weight for marker, weight in section_markers.items() if marker in lower), None)
+        if matched_weight is not None:
+            active_weight = matched_weight
             continue
-        seen.add(w)
-        out.append(w)
-        if len(out) >= 25:
-            break
-    return out
+        weight = active_weight
+        if raw_line.lstrip().startswith(("-", "•", "*")):
+            weight += 0.5
+        if len(line) >= 18:
+            lines.append((line, weight))
+    return lines
+
+def _normalize_keyword_phrase(value: str) -> str:
+    value = re.sub(r"\s+", " ", str(value or "").strip().lower())
+    return value.strip(" ,;:/")
+
+def _tokenize_keywords(text: str, extracted: Iterable[ExtractedSkill] | None = None) -> list[str]:
+    generic_terms = {
+        "experience", "skills", "skill", "requirements", "requirement", "responsibilities",
+        "responsibility", "qualified", "qualification", "qualifications", "candidate",
+        "candidates", "ability", "abilities", "knowledge", "strong", "excellent", "preferred",
+        "required", "role", "team", "work", "working", "environment", "business", "company",
+        "position", "opportunity", "including", "ability to", "experience in", "experience with",
+    }
+    stop_words = {
+        "and", "the", "for", "with", "from", "that", "this", "have", "will", "your", "able",
+        "must", "plus", "also", "using", "used", "into", "over", "such", "they", "their",
+        "them", "than", "then", "only", "when", "where", "what", "were", "been", "being",
+        "more", "less", "some", "many", "each", "make", "made", "through", "within", "across",
+        "under", "while", "about", "other", "need", "needs", "build", "built",
+    }
+
+    phrase_scores: dict[str, float] = {}
+
+    def add_phrase(raw_value: str, weight: float):
+        phrase = _normalize_keyword_phrase(raw_value)
+        if not phrase or phrase in generic_terms:
+            return
+        tokens = [token for token in phrase.split() if token not in stop_words]
+        if not tokens:
+            return
+        if len(tokens) == 1 and len(tokens[0]) < 4 and "+" not in tokens[0] and "#" not in tokens[0]:
+            return
+        candidate = " ".join(tokens[:4])
+        if candidate in generic_terms:
+            return
+        phrase_scores[candidate] = max(phrase_scores.get(candidate, 0.0), 0.0) + weight
+
+    for skill in extracted or []:
+        add_phrase(skill.skill_name, 7.0)
+
+    for line, weight in _job_focus_lines(text):
+        lower = line.lower()
+        for segment in re.split(r"[;,/]|(?:\s+-\s+)", lower):
+            segment = segment.strip()
+            if not segment:
+                continue
+            add_phrase(segment, weight)
+            words = re.findall(r"[A-Za-z][A-Za-z0-9+.#-]{2,}", segment)
+            filtered = [word for word in words if word not in stop_words and word not in generic_terms]
+            for word in filtered:
+                add_phrase(word, weight * 0.65)
+            for i in range(max(0, len(filtered) - 1)):
+                add_phrase(" ".join(filtered[i : i + 2]), weight * 0.8)
+
+    scored = sorted(phrase_scores.items(), key=lambda item: (-item[1], -len(item[0]), item[0]))
+    return [phrase for phrase, _score in scored[:35]]
+
+def _top_average(scores: Iterable[float], limit: int) -> float:
+    positives = [score for score in scores if score > 0]
+    if not positives:
+        return 0.0
+    ranked = sorted(positives, reverse=True)[:limit]
+    return sum(ranked) / len(ranked)
 
 def _is_hidden_skill_doc(doc: dict) -> bool:
     name = (doc.get("name") or "").strip().lower()
@@ -187,22 +270,44 @@ async def _load_profile_confirmation(db, user_id: str) -> dict | None:
 
 async def _load_skills_by_ids(db, skill_ids: Iterable[str]) -> dict[str, dict]:
     oids: list[ObjectId] = []
+    raw_ids: list[str] = []
     for skill_id in skill_ids:
-        oid = to_object_id(skill_id) if ObjectId.is_valid(str(skill_id)) else None
+        text = str(skill_id or "").strip()
+        if not text:
+            continue
+        raw_ids.append(text)
+        oid = to_object_id(text) if ObjectId.is_valid(text) else None
         if oid is not None:
             oids.append(oid)
-    if not oids:
+    if not raw_ids:
         return {}
+
+    query_values: list[object] = list(oids)
+    query_values.extend(text for text in raw_ids if text not in {str(oid) for oid in oids})
     docs = await db["skills"].find(
-        {"_id": {"$in": oids}},
+        {"_id": {"$in": query_values}},
         {"name": 1, "category": 1, "aliases": 1, "hidden": 1},
-    ).to_list(length=len(oids))
+    ).to_list(length=max(len(query_values), 1))
     out: dict[str, dict] = {}
     for doc in docs:
         if _is_hidden_skill_doc(doc):
             continue
         out[oid_str(doc["_id"])] = doc
     return out
+
+def _skill_terms(doc: dict | None) -> set[str]:
+    if not doc:
+        return set()
+    values = [(doc.get("name") or "").strip()]
+    values.extend(str(alias or "").strip() for alias in (doc.get("aliases") or []))
+    terms: set[str] = set()
+    for value in values:
+        if not value:
+            continue
+        normalized = re.sub(r"\s+", " ", value.strip().lower())
+        if normalized:
+            terms.add(normalized)
+    return terms
 
 def _score_percent(numerator: int, denominator: int) -> float:
     if denominator <= 0:
@@ -228,16 +333,25 @@ def _classify_job_skill_priority(job_text: str, extracted: list[dict], skill_doc
     current_section: str | None = None
     required_ids: set[str] = set()
     preferred_ids: set[str] = set()
+    section_reset_markers = (
+        "responsibilities", "what you'll do", "what you will do", "about the role",
+        "benefits", "compensation", "about us", "why join", "who we are",
+    )
 
     for raw_line in (job_text or "").splitlines():
         line = raw_line.strip()
         if not line:
+            current_section = None
             continue
         lower = line.lower()
         if any(marker in lower for marker in required_markers):
             current_section = "required"
         elif any(marker in lower for marker in preferred_markers):
             current_section = "preferred"
+        elif any(marker in lower for marker in section_reset_markers):
+            current_section = None
+        elif len(lower) < 60 and lower.endswith(":"):
+            current_section = None
 
         for entry in extracted:
             skill_id = str(entry.get("skill_id") or "")
@@ -335,12 +449,12 @@ async def ingest_job(payload: JobIngestIn):
     db = get_db()
     skills = await _load_skill_catalog(db)
     extracted = _match_skills(payload.text, skills)
-    keywords = _tokenize_keywords(payload.text)
+    keywords = _tokenize_keywords(payload.text, extracted)
 
     now = now_utc()
     doc = payload.model_dump()
     doc["user_id"] = to_object_id(payload.user_id)
-    doc["extracted_skills"] = [e.model_dump() for e in extracted[:50]]
+    doc["extracted_skills"] = [e.model_dump() for e in extracted[:200]]
     doc["keywords"] = keywords
     doc["created_at"] = now
     # store full text; keep preview for response
@@ -357,7 +471,7 @@ async def ingest_job(payload: JobIngestIn):
         company=payload.company,
         location=payload.location,
         text_preview=preview,
-        extracted_skills=extracted[:25],
+        extracted_skills=extracted[:75],
         keywords=keywords,
         created_at=now,
     )
@@ -383,8 +497,7 @@ async def match_job(payload: dict):
         raise HTTPException(status_code=404, detail="Job ingest not found for user_id")
 
     extracted = job_doc.get("extracted_skills") or []
-    extracted_skill_ids = [str(e.get("skill_id")) for e in extracted if e.get("skill_id")]
-    extracted_skill_ids = _dedupe_preserve_order(extracted_skill_ids)
+    raw_extracted_skill_ids = _dedupe_preserve_order(str(e.get("skill_id")) for e in extracted if e.get("skill_id"))
 
     conf = await _load_profile_confirmation(db, payload["user_id"])
     user_skill_ids = {
@@ -392,28 +505,52 @@ async def match_job(payload: dict):
         for entry in (conf or {}).get("confirmed", [])
         if entry.get("skill_id") is not None
     }
-    all_skill_docs = await _load_skills_by_ids(db, set(extracted_skill_ids) | user_skill_ids)
-    extracted_skill_ids = [skill_id for skill_id in extracted_skill_ids if skill_id in all_skill_docs]
+    items = await _load_user_items(db, payload["user_id"])
+    item_skill_ids = {
+        str(skill_id)
+        for item in items
+        for skill_id in (item.get("skill_ids") or [])
+        if skill_id is not None
+    }
+    all_skill_docs = await _load_skills_by_ids(db, set(raw_extracted_skill_ids) | user_skill_ids | item_skill_ids)
+    extracted_skill_ids = [skill_id for skill_id in raw_extracted_skill_ids if skill_id in all_skill_docs]
     priority_extracted = [entry for entry in extracted if str(entry.get("skill_id") or "") in all_skill_docs]
     required_ids, preferred_ids = _classify_job_skill_priority(job_doc.get("text", ""), priority_extracted, all_skill_docs)
-    general_ids = [skill_id for skill_id in extracted_skill_ids if skill_id not in required_ids and skill_id not in preferred_ids]
-    matched_ids = [skill_id for skill_id in extracted_skill_ids if skill_id in user_skill_ids]
-    missing_ids = [skill_id for skill_id in extracted_skill_ids if skill_id not in user_skill_ids]
+    confirmed_term_lookup = {
+        term
+        for skill_id in user_skill_ids
+        for term in _skill_terms(all_skill_docs.get(skill_id))
+    }
+    matched_ids = []
+    for skill_id in extracted_skill_ids:
+        if skill_id in user_skill_ids:
+            matched_ids.append(skill_id)
+            continue
+        if _skill_terms(all_skill_docs.get(skill_id)) & confirmed_term_lookup:
+            matched_ids.append(skill_id)
+    matched_skill_id_set = set(matched_ids)
+    missing_ids = [skill_id for skill_id in extracted_skill_ids if skill_id not in matched_skill_id_set]
     matched_required_ids = [skill_id for skill_id in matched_ids if skill_id in required_ids]
     matched_preferred_ids = [skill_id for skill_id in matched_ids if skill_id in preferred_ids]
-
-    items = await _load_user_items(db, payload["user_id"])
-    item_text = " ".join(_normalize_text_blob(item) for item in items)
-    matched_item_hits = [
-        item for item in items
-        if set(str(sid) for sid in (item.get("skill_ids") or [])) & set(matched_ids)
-    ]
-    evidence_backed_ids = {
-        skill_id
-        for item in items
-        for skill_id in set(str(sid) for sid in (item.get("skill_ids") or []))
-        if skill_id in matched_ids
+    matched_term_lookup = {
+        term
+        for skill_id in matched_ids
+        for term in _skill_terms(all_skill_docs.get(skill_id))
     }
+    item_text = " ".join(_normalize_text_blob(item) for item in items)
+    matched_item_hits: list[dict] = []
+    evidence_backed_ids: set[str] = set()
+    for item in items:
+        item_terms = {
+            term
+            for sid in (item.get("skill_ids") or [])
+            for term in _skill_terms(all_skill_docs.get(str(sid)))
+        }
+        if item_terms & matched_term_lookup:
+            matched_item_hits.append(item)
+            for skill_id in matched_ids:
+                if _skill_terms(all_skill_docs.get(skill_id)) & item_terms:
+                    evidence_backed_ids.add(skill_id)
     keywords = [str(keyword or "").strip().lower() for keyword in (job_doc.get("keywords") or []) if str(keyword or "").strip()]
     keyword_overlap_count = sum(1 for keyword in keywords if keyword in item_text)
 
@@ -422,6 +559,7 @@ async def match_job(payload: dict):
     semantic_alignment_score = 0.0
     related_skill_ids: list[str] = []
     if job_doc.get("text"):
+        ordered_user_skill_ids = [skill_id for skill_id in user_skill_ids if skill_id in all_skill_docs]
         skill_texts = [
             " ".join(
                 [
@@ -430,8 +568,7 @@ async def match_job(payload: dict):
                     " ".join(all_skill_docs[skill_id].get("aliases", []) or []),
                 ]
             ).strip()
-            for skill_id in user_skill_ids
-            if skill_id in all_skill_docs
+            for skill_id in ordered_user_skill_ids
         ]
         item_texts = [_normalize_text_blob(item) for item in items]
         vectors, _provider = await embed_texts([job_doc.get("text", "")] + skill_texts + item_texts)
@@ -440,20 +577,49 @@ async def match_job(payload: dict):
             skill_vectors = vectors[1 : 1 + len(skill_texts)]
             item_vectors = vectors[1 + len(skill_texts) :]
             ranked_related: list[tuple[float, str]] = []
-            for skill_id, skill_vec in zip([sid for sid in user_skill_ids if sid in all_skill_docs], skill_vectors):
-                if skill_id in matched_ids:
-                    continue
+            skill_similarity_by_id: dict[str, float] = {}
+            for skill_id, skill_vec in zip(ordered_user_skill_ids, skill_vectors):
                 sim = cosine_similarity(job_vec, skill_vec)
+                skill_similarity_by_id[skill_id] = sim
+                if skill_id in matched_skill_id_set:
+                    continue
                 if sim >= 0.18:
                     ranked_related.append((sim, skill_id))
             ranked_related.sort(key=lambda item: item[0], reverse=True)
             related_skill_ids = [skill_id for _score, skill_id in ranked_related[:5]]
 
             if item_vectors:
-                item_scores = [cosine_similarity(job_vec, vec) for vec in item_vectors]
-                positive = [score for score in item_scores if score > 0]
-                if positive:
-                    semantic_alignment_score = round(sum(sorted(positive, reverse=True)[:4]) / min(4, len(positive)) * 100.0, 2)
+                extracted_skill_id_set = set(extracted_skill_ids)
+                weighted_item_scores: list[float] = []
+                for item, item_vec in zip(items, item_vectors):
+                    sim = cosine_similarity(job_vec, item_vec)
+                    item_skill_id_set = {str(sid) for sid in (item.get("skill_ids") or []) if sid is not None}
+                    overlap_ratio = len(item_skill_id_set & extracted_skill_id_set) / max(1, len(item_skill_id_set | extracted_skill_id_set))
+                    bonus = overlap_ratio * 0.18
+                    item_terms = {
+                        term
+                        for sid in item_skill_id_set
+                        for term in _skill_terms(all_skill_docs.get(sid))
+                    }
+                    if item_terms & matched_term_lookup:
+                        bonus += 0.08
+                    weighted_item_scores.append(sim + bonus)
+                top_item_alignment = _top_average(weighted_item_scores, 5)
+            else:
+                top_item_alignment = 0.0
+
+            matched_skill_alignment = _top_average(
+                (skill_similarity_by_id.get(skill_id, 0.0) for skill_id in ordered_user_skill_ids if _skill_terms(all_skill_docs.get(skill_id)) & matched_term_lookup),
+                5,
+            )
+            overall_skill_alignment = _top_average(skill_similarity_by_id.values(), 6)
+            semantic_alignment_score = _clamp_score(
+                (
+                    (top_item_alignment * 0.50)
+                    + (matched_skill_alignment * 0.35)
+                    + (overall_skill_alignment * 0.15)
+                ) * 100.0
+            )
 
     required_coverage_score = _score_percent(len(matched_required_ids), len(required_ids)) if required_ids else 100.0
     preferred_coverage_score = _score_percent(len(matched_preferred_ids), len(preferred_ids)) if preferred_ids else 100.0
@@ -553,7 +719,7 @@ async def match_job(payload: dict):
         related_skills=related_skill_names,
         score_breakdown=breakdown,
         recommended_next_steps=next_steps[:3],
-        extracted_skill_count=len(extracted_skill_ids),
+        extracted_skill_count=len(raw_extracted_skill_ids),
         confirmed_skill_count=len(user_skill_ids),
         required_skill_count=len(required_ids),
         required_matched_count=len(matched_required_ids),
@@ -610,7 +776,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
             raise HTTPException(status_code=400, detail="Provide job_id or job_text (>=50 chars)")
         skills = await _load_skill_catalog(db)
         extracted = _match_skills(job_text, skills)
-        keywords = _tokenize_keywords(job_text)
+        keywords = _tokenize_keywords(job_text, extracted)
 
     ordered_job_skill_ids = _dedupe_preserve_order(e.skill_id for e in extracted[:50])
     job_skill_ids = set(ordered_job_skill_ids)
