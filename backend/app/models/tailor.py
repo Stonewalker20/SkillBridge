@@ -40,6 +40,8 @@ class MatchScoreBreakdown(BaseModel):
 class JobMatchOut(BaseModel):
     job_id: str
     match_score: float
+    match_confidence_label: str = "Low"
+    analysis_summary: str = ""
     matched_skill_ids: list[str] = Field(default_factory=list)
     matched_skills: list[str] = Field(default_factory=list)
     missing_skill_ids: list[str] = Field(default_factory=list)
@@ -50,9 +52,15 @@ class JobMatchOut(BaseModel):
     recommended_next_steps: list[str] = Field(default_factory=list)
     extracted_skill_count: int = 0
     confirmed_skill_count: int = 0
+    required_skill_count: int = 0
+    required_matched_count: int = 0
+    preferred_skill_count: int = 0
+    preferred_matched_count: int = 0
     evidence_aligned_count: int = 0
+    evidence_gap_count: int = 0
     keyword_overlap_count: int = 0
     semantic_alignment_score: float = 0
+    semantic_alignment_explanation: str = ""
     history_id: str | None = None
 
 
