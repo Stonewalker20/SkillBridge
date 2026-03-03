@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Iterable
 
 from bson import ObjectId
@@ -45,6 +46,7 @@ from app.utils.ai import (
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 
 router = APIRouter()
+DEFAULT_RESUME_TEMPLATE_TEX = Path(__file__).resolve().parents[2] / "data" / "raw" / "default_resume_template.tex"
 
 def now_utc():
     return datetime.now(timezone.utc)
@@ -599,6 +601,48 @@ def _parse_resume_sections(raw_text: str) -> list[ResumeSection]:
     return sections
 
 
+def _build_default_header_lines(user_doc: dict | None) -> list[str]:
+    username = str((user_doc or {}).get("username") or "").strip()
+    email = str((user_doc or {}).get("email") or "").strip()
+    display_name = username or (email.split("@")[0] if email else "SkillBridge User")
+    header_lines = [display_name]
+    if email:
+        header_lines.append(email)
+    return header_lines
+
+
+def _canonical_template_section_title(raw_title: str) -> str:
+    cleaned = _clean_resume_line(raw_title)
+    canonical = _canonical_resume_section_title(cleaned)
+    if canonical:
+        return canonical
+    normalized = normalize_skill_text(cleaned)
+    if "projects" in normalized or "research" in normalized:
+        return "Projects"
+    if "experience" in normalized:
+        return "Experience"
+    if "skills" in normalized:
+        return "Skills"
+    if "education" in normalized:
+        return "Education"
+    if "cert" in normalized:
+        return "Certifications"
+    if "summary" in normalized or "profile" in normalized:
+        return "Summary"
+    return cleaned or "Section"
+
+
+def _load_default_resume_template_sections(user_doc: dict | None) -> list[ResumeSection]:
+    if not DEFAULT_RESUME_TEMPLATE_TEX.exists():
+        return []
+    raw_tex = DEFAULT_RESUME_TEMPLATE_TEX.read_text(encoding="utf-8", errors="ignore")
+    section_titles = re.findall(r"\\section\*\{([^}]+)\}", raw_tex)
+    ordered_titles = _dedupe_preserve_order(_canonical_template_section_title(title) for title in section_titles)
+    sections: list[ResumeSection] = [ResumeSection(title="Header", lines=_build_default_header_lines(user_doc))]
+    sections.extend(ResumeSection(title=title, lines=[]) for title in ordered_titles if title != "Header")
+    return sections
+
+
 def _clean_resume_line(line: str) -> str:
     return re.sub(r"\s+", " ", str(line or "").strip())
 
@@ -728,6 +772,16 @@ def _build_sections_from_resume_template(
             if merged_skill_names:
                 sections.append(ResumeSection(title="Skills", lines=_chunk_skill_lines(merged_skill_names)))
             inserted_skills = True
+            continue
+
+        if (
+            targeted_highlights_lines
+            and not inserted_highlights
+            and section.title in {"Experience", "Projects"}
+            and not [line for line in section.lines if line.strip()]
+        ):
+            sections.append(ResumeSection(title=section.title, lines=targeted_highlights_lines))
+            inserted_highlights = True
             continue
 
         if (
@@ -912,6 +966,7 @@ async def match_job(payload: dict):
     ]
     persist_history = bool(payload.get("persist_history", True))
     history_id = str(payload.get("history_id") or "").strip()
+    requested_resume_snapshot_id = str(payload.get("resume_snapshot_id") or "").strip() or None
     raw_extracted_skill_ids = _dedupe_preserve_order(str(e.get("skill_id")) for e in extracted if e.get("skill_id"))
 
     conf = await _load_profile_confirmation(db, payload["user_id"])
@@ -1156,6 +1211,8 @@ async def match_job(payload: dict):
         match_score=overall_score,
         match_confidence_label=confidence_label,
         analysis_summary=analysis_summary,
+        resume_snapshot_id=requested_resume_snapshot_id,
+        template_source="user_resume" if requested_resume_snapshot_id else "default_template",
         ignored_skill_names=ignored_skill_names,
         added_from_missing_skills=added_from_missing_skills,
         matched_skill_ids=matched_ids,
@@ -1235,6 +1292,7 @@ async def match_job(payload: dict):
 @router.post("/preview", response_model=TailoredResumeOut)
 async def preview_tailored_resume(payload: TailorPreviewIn):
     db = get_db()
+    user_doc = await db["users"].find_one(ref_query("_id", payload.user_id), {"username": 1, "email": 1})
 
     job_text = payload.job_text
     job_id = payload.job_id
@@ -1317,7 +1375,12 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
     target_label = " ".join(part for part in [job_title, f"at {company}" if company else ""] if part).strip() or "this role"
 
     resume_snapshot = await _load_resume_template_snapshot(db, payload.user_id, payload.resume_snapshot_id)
-    template_sections = _parse_resume_sections(str(resume_snapshot.get("raw_text") or "")) if resume_snapshot else []
+    if resume_snapshot:
+        template_sections = _parse_resume_sections(str(resume_snapshot.get("raw_text") or ""))
+        template_source = "user_resume"
+    else:
+        template_sections = _load_default_resume_template_sections(user_doc)
+        template_source = "default_template" if template_sections else "generated_fallback"
 
     if template_sections:
         sections = _build_sections_from_resume_template(
@@ -1327,7 +1390,6 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
             selected_items=selected_items,
             max_bullets_per_item=payload.max_bullets_per_item,
         )
-        template_source = "user_resume"
     else:
         fallback_lines = [f"Tailored for {target_label}."]
         if skill_line:
@@ -1349,7 +1411,6 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
                 ],
             )
         )
-        template_source = "generated_fallback"
 
     # Store tailored resume record
     now = now_utc()
@@ -1377,7 +1438,14 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
         if latest_history:
             await db["job_match_runs"].update_one(
                 {"_id": latest_history["_id"]},
-                {"$set": {"tailored_resume_id": res.inserted_id, "updated_at": now}},
+                {
+                    "$set": {
+                        "tailored_resume_id": res.inserted_id,
+                        "analysis.resume_snapshot_id": oid_str(resume_snapshot.get("_id")) if resume_snapshot else None,
+                        "analysis.template_source": template_source,
+                        "updated_at": now,
+                    }
+                },
             )
 
     return _serialize_tailored_resume({"_id": res.inserted_id, **record})

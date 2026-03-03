@@ -4,7 +4,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from datetime import datetime, timezone
 from bson import ObjectId
 from app.core.db import get_db
-from app.models.resume import ResumeSnapshotIn, ResumeSnapshotOut
+from app.models.resume import ResumeSnapshotIn, ResumeSnapshotOut, ResumeSnapshotListEntryOut
 from app.utils.mongo import oid_str, ref_values, to_object_id
 from pypdf import PdfReader
 import io
@@ -68,6 +68,28 @@ async def ingest_resume_pdf(user_id: str = Form(...), file: UploadFile = File(..
     res = await db["resume_snapshots"].insert_one(doc)
     preview = raw_text[:200] + ("..." if len(raw_text) > 200 else "")
     return {"snapshot_id": str(res.inserted_id), "preview": preview}
+
+
+@router.get("/", response_model=list[ResumeSnapshotListEntryOut])
+async def list_resume_snapshots(user_id: str):
+    db = get_db()
+    docs = await (
+        db["resume_snapshots"]
+        .find({"user_id": {"$in": ref_values(user_id)}})
+        .sort("created_at", -1)
+        .limit(50)
+        .to_list(length=50)
+    )
+    return [
+        ResumeSnapshotListEntryOut(
+            snapshot_id=oid_str(doc.get("_id")),
+            source_type=str(doc.get("source_type") or "unknown"),
+            filename=str((doc.get("metadata") or {}).get("filename") or "").strip() or None,
+            preview=str(doc.get("raw_text") or "")[:200] + ("..." if len(str(doc.get("raw_text") or "")) > 200 else ""),
+            created_at=doc.get("created_at"),
+        )
+        for doc in docs
+    ]
 
 # UC 3.4 – Save confirmed resume-derived skills/projects into dashboard entities
 # Minimal implementation: converts confirmed skills into evidence records (type="resume") tied to user_id,

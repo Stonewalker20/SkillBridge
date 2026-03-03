@@ -47,6 +47,8 @@ class JobMatchOut(BaseModel):
     match_score: float
     match_confidence_label: str = "Low"
     analysis_summary: str = ""
+    resume_snapshot_id: str | None = None
+    template_source: str | None = None
     ignored_skill_names: list[str] = Field(default_factory=list)
     added_from_missing_skills: list[AddedFromMissingSkill] = Field(default_factory=list)
     matched_skill_ids: list[str] = Field(default_factory=list)

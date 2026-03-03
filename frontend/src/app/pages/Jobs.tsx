@@ -7,7 +7,8 @@ import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
-import type { JobMatchHistoryEntry } from "../services/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import type { JobMatchHistoryEntry, ResumeSnapshotListEntry } from "../services/api";
 import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateCw, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
@@ -17,6 +18,8 @@ type MatchResult = {
   match_score?: number;
   match_confidence_label?: string;
   analysis_summary?: string;
+  resume_snapshot_id?: string | null;
+  template_source?: string | null;
   ignored_skill_names?: string[];
   added_from_missing_skills?: Array<{ skill_id: string; skill_name: string }>;
   matched_skill_ids?: string[];
@@ -60,6 +63,23 @@ function downloadBlob(blob: Blob, filename: string) {
   window.URL.revokeObjectURL(url);
 }
 
+function formatResumeTemplateLabel(snapshot: ResumeSnapshotListEntry) {
+  const filename = String(snapshot.filename ?? "").trim();
+  if (filename) return `Updated Resume from Evidence • ${filename}`;
+
+  const sourceType = String(snapshot.source_type ?? "resume").trim().toLowerCase();
+  const sourceLabel =
+    sourceType === "pdf"
+      ? "PDF Resume"
+      : sourceType === "paste"
+        ? "Pasted Resume"
+        : `${sourceType.charAt(0).toUpperCase()}${sourceType.slice(1)} Resume`;
+
+  if (!snapshot.created_at) return `Updated Resume from Evidence • ${sourceLabel}`;
+
+  return `Updated Resume from Evidence • ${sourceLabel} • ${new Date(snapshot.created_at).toLocaleDateString()}`;
+}
+
 export function Jobs() {
   const { recordActivity } = useActivity();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -77,6 +97,8 @@ export function Jobs() {
   const [generating, setGenerating] = useState(false);
   const [history, setHistory] = useState<JobMatchHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [resumeSnapshots, setResumeSnapshots] = useState<ResumeSnapshotListEntry[]>([]);
+  const [selectedResumeTemplate, setSelectedResumeTemplate] = useState<string>("default");
   const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
   const [reanalyzingHistoryId, setReanalyzingHistoryId] = useState<string | null>(null);
@@ -94,6 +116,8 @@ export function Jobs() {
       matchScore: Number(a.match_score ?? a.matchScore ?? 0) || 0,
       confidenceLabel: String(a.match_confidence_label ?? a.matchConfidenceLabel ?? "Early"),
       analysisSummary: String(a.analysis_summary ?? a.analysisSummary ?? ""),
+      resumeSnapshotId: String(a.resume_snapshot_id ?? a.resumeSnapshotId ?? "").trim() || null,
+      templateSource: String(a.template_source ?? a.templateSource ?? "").trim() || null,
       ignoredSkills: asArray<string>(a.ignored_skill_names ?? a.ignoredSkills),
       addedFromMissingSkills: asArray<{ skill_id: string; skill_name: string }>(a.added_from_missing_skills ?? a.addedFromMissingSkills),
       matchedSkillEntries: asArray<string>(a.matched_skills ?? a.matchedSkills).map((name, index) => ({
@@ -139,7 +163,14 @@ export function Jobs() {
     setAnalysis(null);
     setLastTailoredId(null);
     setJobId(null);
+    setSelectedResumeTemplate("default");
   };
+
+  useEffect(() => {
+    if (selectedResumeTemplate === "default") return;
+    if (resumeSnapshots.some((snapshot) => snapshot.snapshot_id === selectedResumeTemplate)) return;
+    setSelectedResumeTemplate("default");
+  }, [resumeSnapshots, selectedResumeTemplate]);
 
   useEffect(() => {
     const resetToken = searchParams.get("new") ?? searchParams.get("_nav");
@@ -167,18 +198,21 @@ export function Jobs() {
 
   useEffect(() => {
     let active = true;
-    const loadHistory = async () => {
+    const loadHistoryAndTemplates = async () => {
       setHistoryLoading(true);
       try {
-        const entries = await api.listJobMatchHistory(8);
-        if (active) setHistory(entries);
+        const [entries, snapshots] = await Promise.all([api.listJobMatchHistory(8), api.listResumeSnapshots()]);
+        if (active) {
+          setHistory(entries);
+          setResumeSnapshots(snapshots);
+        }
       } catch (error) {
         console.error("Failed to load job match history:", error);
       } finally {
         if (active) setHistoryLoading(false);
       }
     };
-    loadHistory();
+    loadHistoryAndTemplates();
     return () => {
       active = false;
     };
@@ -242,6 +276,7 @@ export function Jobs() {
     try {
       const preview = await api.previewTailoredResume({
         job_id: jobId,
+        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
         ignored_skill_names: normalized.ignoredSkills,
       });
       const previewId = String((preview as any)?.id ?? (preview as any)?.tailored_id ?? (preview as any)?.tailoredId ?? "").trim();
@@ -292,6 +327,7 @@ export function Jobs() {
     try {
       const match = await api.matchJob({
         job_id: jobId,
+        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
         history_id: currentHistoryId,
         ignored_skill_names: nextIgnored,
         added_from_missing_skills: normalized.addedFromMissingSkills,
@@ -336,6 +372,7 @@ export function Jobs() {
       setLocation(String(detail.location ?? "").trim());
       setJobDescription(String(detail.job_text ?? detail.text_preview ?? "").trim());
       setLastTailoredId(String(detail.tailored_resume_id ?? "").trim() || null);
+      setSelectedResumeTemplate(String((detail.analysis as any)?.resume_snapshot_id ?? "").trim() || "default");
       toast.success("Restored previous job analysis");
     } catch (error: any) {
       console.error("Failed to restore job match history:", error);
@@ -410,6 +447,7 @@ export function Jobs() {
     try {
       const match = await api.matchJob({
         job_id: currentJobId,
+        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
         history_id: String(normalized.historyId ?? "").trim() || undefined,
         ignored_skill_names: normalized.ignoredSkills,
         added_from_missing_skills: normalized.addedFromMissingSkills,
@@ -466,6 +504,7 @@ export function Jobs() {
       ];
       const match = await api.matchJob({
         job_id: String(jobId ?? "").trim(),
+        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
         history_id: currentHistoryId,
         ignored_skill_names: normalized.ignoredSkills.filter((value) => value !== normalizedName),
         added_from_missing_skills: nextAdded,
@@ -522,6 +561,7 @@ export function Jobs() {
       });
       const match = await api.matchJob({
         job_id: String(jobId ?? "").trim(),
+        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
         history_id: currentHistoryId,
         ignored_skill_names: normalized.ignoredSkills.filter((value) => value !== normalizedName),
         added_from_missing_skills: nextAdded,
@@ -979,17 +1019,36 @@ export function Jobs() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Tailored Resume</h3>
-            <p className="text-sm text-gray-600 dark:text-slate-300">Generate and download a tailored resume PDF without showing the full resume text on the page.</p>
+            <p className="text-sm text-gray-600 dark:text-slate-300">
+              Choose whether to generate from your uploaded updated resume or the default template, then download the tailored PDF.
+            </p>
           </div>
 
-          <Button
-            onClick={handleGenerateResume}
-            disabled={generating || !jobId}
-            className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            {generating ? "Generating PDF..." : "Generate PDF"}
-          </Button>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="min-w-[240px]">
+              <Select value={selectedResumeTemplate} onValueChange={setSelectedResumeTemplate}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Choose resume source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default Template</SelectItem>
+                  {resumeSnapshots.map((snapshot) => (
+                    <SelectItem key={snapshot.snapshot_id} value={snapshot.snapshot_id}>
+                      {formatResumeTemplateLabel(snapshot)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={handleGenerateResume}
+              disabled={generating || !jobId}
+              className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {generating ? "Generating PDF..." : "Generate PDF"}
+            </Button>
+          </div>
         </div>
 
         {lastTailoredId ? (
@@ -997,7 +1056,11 @@ export function Jobs() {
             Tailored resume generated and downloaded. Resume id: <span className="font-mono">{lastTailoredId}</span>
           </div>
         ) : (
-          <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">Generate PDF to create and download your tailored resume.</div>
+          <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">
+            {resumeSnapshots.length > 0
+              ? "Select your updated resume from evidence or use the default template, then generate the PDF."
+              : "Generate PDF to create and download your tailored resume with the default template."}
+          </div>
         )}
       </Card>
 
