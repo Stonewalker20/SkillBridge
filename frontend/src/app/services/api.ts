@@ -191,7 +191,7 @@ export type EditedSkill = {
 export type ConfirmationIn = {
   user_id?: string | null;
   resume_snapshot_id?: string | null;
-  confirmed: Array<{ skill_id: string; proficiency: number }>;
+  confirmed: Array<{ skill_id: string; proficiency: number; manual_proficiency?: number }>;
   rejected?: RejectedSkill[];
   edited?: EditedSkill[];
 };
@@ -424,13 +424,19 @@ export const api = {
 
   confirmSkill: async (resumeSnapshotId: string | null, skillId: string) => {
     const current = resumeSnapshotId == null ? await api.getProfileConfirmation() : await api.getConfirmation(resumeSnapshotId);
-    const confirmed = new Map<string, { skill_id: string; proficiency: number }>();
+    const confirmed = new Map<string, { skill_id: string; proficiency: number; manual_proficiency: number }>();
     for (const entry of current?.confirmed ?? []) {
       const key = String(entry?.skill_id ?? "").trim();
       if (!key) continue;
-      confirmed.set(key, { skill_id: key, proficiency: manualProficiencyOf(entry) });
+      const manual = manualProficiencyOf(entry);
+      confirmed.set(key, { skill_id: key, proficiency: manual, manual_proficiency: manual });
     }
-    confirmed.set(skillId, { skill_id: skillId, proficiency: confirmed.get(skillId)?.proficiency ?? 0 });
+    const existing = confirmed.get(skillId);
+    confirmed.set(skillId, {
+      skill_id: skillId,
+      proficiency: existing?.manual_proficiency ?? existing?.proficiency ?? 0,
+      manual_proficiency: existing?.manual_proficiency ?? existing?.proficiency ?? 0,
+    });
     return api.upsertConfirmation({
       resume_snapshot_id: resumeSnapshotId,
       confirmed: Array.from(confirmed.values()),
@@ -446,6 +452,7 @@ export const api = {
       .map((entry: any) => ({
         skill_id: String(entry.skill_id),
         proficiency: manualProficiencyOf(entry),
+        manual_proficiency: manualProficiencyOf(entry),
       }));
     return api.upsertConfirmation({
       resume_snapshot_id: resumeSnapshotId,
@@ -463,13 +470,15 @@ export const api = {
 
   setSkillProficiency: async (resumeSnapshotId: string | null, skillId: string, proficiency: number) => {
     const current = resumeSnapshotId == null ? await api.getProfileConfirmation() : await api.getConfirmation(resumeSnapshotId);
-    const confirmed = new Map<string, { skill_id: string; proficiency: number }>();
+    const confirmed = new Map<string, { skill_id: string; proficiency: number; manual_proficiency: number }>();
     for (const entry of current?.confirmed ?? []) {
       const key = String(entry?.skill_id ?? "").trim();
       if (!key) continue;
-      confirmed.set(key, { skill_id: key, proficiency: manualProficiencyOf(entry) });
+      const manual = manualProficiencyOf(entry);
+      confirmed.set(key, { skill_id: key, proficiency: manual, manual_proficiency: manual });
     }
-    confirmed.set(skillId, { skill_id: skillId, proficiency: clampProficiency(proficiency) });
+    const nextManual = clampProficiency(proficiency);
+    confirmed.set(skillId, { skill_id: skillId, proficiency: nextManual, manual_proficiency: nextManual });
     return api.upsertConfirmation({
       resume_snapshot_id: resumeSnapshotId,
       confirmed: Array.from(confirmed.values()),
@@ -547,16 +556,19 @@ export const api = {
     if (!uniqueIds.length) return api.getProfileConfirmation();
 
     const current = await api.getProfileConfirmation();
-    const confirmed = new Map<string, { skill_id: string; proficiency: number }>();
+    const confirmed = new Map<string, { skill_id: string; proficiency: number; manual_proficiency: number }>();
     for (const entry of current?.confirmed ?? []) {
       const key = String(entry?.skill_id ?? "").trim();
       if (!key) continue;
-      confirmed.set(key, { skill_id: key, proficiency: manualProficiencyOf(entry) });
+      const manual = manualProficiencyOf(entry);
+      confirmed.set(key, { skill_id: key, proficiency: manual, manual_proficiency: manual });
     }
     for (const skillId of uniqueIds) {
+      const existing = confirmed.get(skillId);
       confirmed.set(skillId, {
         skill_id: skillId,
-        proficiency: confirmed.get(skillId)?.proficiency ?? 0,
+        proficiency: existing?.manual_proficiency ?? existing?.proficiency ?? 0,
+        manual_proficiency: existing?.manual_proficiency ?? existing?.proficiency ?? 0,
       });
     }
 

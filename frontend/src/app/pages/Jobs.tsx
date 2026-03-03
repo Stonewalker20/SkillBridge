@@ -8,24 +8,36 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import type { JobMatchHistoryEntry } from "../services/api";
-import { Download, CheckCircle2, AlertCircle, Sparkles, Wand2, History, Trash2, RotateCw, Plus } from "lucide-react";
+import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateCw, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 
 type MatchResult = {
   job_id?: string;
   match_score?: number;
+  match_confidence_label?: string;
+  analysis_summary?: string;
   matched_skills?: string[];
   missing_skills?: string[];
+  matched_skill_count?: number;
+  missing_skill_count?: number;
   strength_areas?: string[];
   related_skills?: string[];
+  semantic_alignment_examples?: string[];
   score_breakdown?: Array<{ label?: string; score?: number; detail?: string }>;
   recommended_next_steps?: string[];
   extracted_skill_count?: number;
   confirmed_skill_count?: number;
+  required_skill_count?: number;
+  required_matched_count?: number;
+  preferred_skill_count?: number;
+  preferred_matched_count?: number;
   evidence_aligned_count?: number;
+  evidence_gap_count?: number;
   keyword_overlap_count?: number;
+  keyword_overlap_terms?: string[];
   semantic_alignment_score?: number;
+  semantic_alignment_explanation?: string;
   history_id?: string | null;
   [k: string]: any;
 };
@@ -56,10 +68,8 @@ export function Jobs() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<MatchResult | null>(null);
 
-  const [tailored, setTailored] = useState<any>(null);
+  const [lastTailoredId, setLastTailoredId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
-  const [rewriting, setRewriting] = useState(false);
   const [history, setHistory] = useState<JobMatchHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
@@ -69,27 +79,62 @@ export function Jobs() {
 
   const normalized = useMemo(() => {
     const a = analysis || {};
+    const scoreBreakdown = asArray<{ label?: string; score?: number; detail?: string }>(a.score_breakdown ?? a.scoreBreakdown);
+    const keywordOverlapBreakdown = scoreBreakdown.find(
+      (item) => String(item?.label ?? "").toLowerCase() === "keyword overlap"
+    );
     return {
       matchScore: Number(a.match_score ?? a.matchScore ?? 0) || 0,
+      confidenceLabel: String(a.match_confidence_label ?? a.matchConfidenceLabel ?? "Early"),
+      analysisSummary: String(a.analysis_summary ?? a.analysisSummary ?? ""),
       matchedSkills: asArray<string>(a.matched_skills ?? a.matchedSkills),
       missingSkills: asArray<string>(a.missing_skills ?? a.missingSkills),
+      matchedSkillCount: Number(a.matched_skill_count ?? a.matchedSkillCount ?? asArray<string>(a.matched_skills ?? a.matchedSkills).length) || 0,
+      missingSkillCount: Number(a.missing_skill_count ?? a.missingSkillCount ?? asArray<string>(a.missing_skills ?? a.missingSkills).length) || 0,
       strengthAreas: asArray<string>(a.strength_areas ?? a.strengthAreas),
       relatedSkills: asArray<string>(a.related_skills ?? a.relatedSkills),
-      scoreBreakdown: asArray<{ label?: string; score?: number; detail?: string }>(a.score_breakdown ?? a.scoreBreakdown),
+      semanticAlignmentExamples: asArray<string>(a.semantic_alignment_examples ?? a.semanticAlignmentExamples),
+      scoreBreakdown,
       nextSteps: asArray<string>(a.recommended_next_steps ?? a.recommendedNextSteps),
       extractedSkillCount: Number(a.extracted_skill_count ?? a.extractedSkillCount ?? 0) || 0,
       confirmedSkillCount: Number(a.confirmed_skill_count ?? a.confirmedSkillCount ?? 0) || 0,
+      requiredSkillCount: Number(a.required_skill_count ?? a.requiredSkillCount ?? 0) || 0,
+      requiredMatchedCount: Number(a.required_matched_count ?? a.requiredMatchedCount ?? 0) || 0,
+      preferredSkillCount: Number(a.preferred_skill_count ?? a.preferredSkillCount ?? 0) || 0,
+      preferredMatchedCount: Number(a.preferred_matched_count ?? a.preferredMatchedCount ?? 0) || 0,
       evidenceAlignedCount: Number(a.evidence_aligned_count ?? a.evidenceAlignedCount ?? 0) || 0,
+      evidenceGapCount: Number(a.evidence_gap_count ?? a.evidenceGapCount ?? 0) || 0,
       keywordOverlapCount: Number(a.keyword_overlap_count ?? a.keywordOverlapCount ?? 0) || 0,
+      keywordOverlapTerms: asArray<string>(a.keyword_overlap_terms ?? a.keywordOverlapTerms),
+      keywordOverlapScore: Number(keywordOverlapBreakdown?.score ?? 0) || 0,
       semanticAlignmentScore: Number(a.semantic_alignment_score ?? a.semanticAlignmentScore ?? 0) || 0,
+      semanticAlignmentExplanation: String(a.semantic_alignment_explanation ?? a.semanticAlignmentExplanation ?? ""),
       historyId: a.history_id ?? a.historyId ?? null,
     };
   }, [analysis]);
 
-  const tailoredId = useMemo(
-    () => String((tailored as any)?.id ?? (tailored as any)?.tailored_id ?? (tailored as any)?.tailoredId ?? "").trim(),
-    [tailored]
-  );
+  const handleReset = () => {
+    setJobDescription("");
+    setJobTitle("");
+    setCompany("");
+    setLocation("");
+    setAnalysis(null);
+    setLastTailoredId(null);
+    setJobId(null);
+  };
+
+  useEffect(() => {
+    const newToken = searchParams.get("new");
+    if (!newToken) return;
+
+    handleReset();
+    descriptionRef.current?.focus();
+    descriptionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    const next = new URLSearchParams(searchParams);
+    next.delete("new");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (searchParams.get("analyze") === "1" && !analysis) {
@@ -175,9 +220,14 @@ export function Jobs() {
 
     setGenerating(true);
     try {
-      // 3) Preview tailored resume (server stores the result and returns tailored_id)
       const preview = await api.previewTailoredResume({ job_id: jobId });
-      setTailored(preview);
+      const previewId = String((preview as any)?.id ?? (preview as any)?.tailored_id ?? (preview as any)?.tailoredId ?? "").trim();
+      if (!previewId) {
+        throw new Error("Tailored resume was created without an export id");
+      }
+      setLastTailoredId(previewId);
+      const blob = await api.downloadTailoredPdf(previewId);
+      downloadBlob(blob, "tailored_resume.pdf");
       try {
         await refreshHistory();
       } catch (historyError) {
@@ -189,81 +239,18 @@ export function Jobs() {
         action: "generated",
         name: jobTitle || company || "Tailored resume",
       });
-      toast.success("Tailored resume generated");
-    } catch (error: any) {
-      console.error("Failed to generate resume:", error);
-      toast.error(error?.message || "Failed to generate resume");
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleExport = async (kind: "pdf" | "docx") => {
-    const tid = tailoredId;
-    if (!tid) {
-      toast.error("No tailored resume id found");
-      return;
-    }
-
-    setExporting(kind);
-    try {
-      if (kind === "pdf") {
-        const blob = await api.downloadTailoredPdf(String(tid));
-        downloadBlob(blob, "tailored_resume.pdf");
-      } else {
-        const blob = await api.downloadTailoredDocx(String(tid));
-        downloadBlob(blob, "tailored_resume.docx");
-      }
       recordActivity({
-        id: `jobs:export:${kind}:${tid}`,
+        id: `jobs:export:pdf:${previewId}`,
         type: "resume",
         action: "exported",
-        name: `${jobTitle || company || "Tailored resume"} (${kind.toUpperCase()})`,
+        name: `${jobTitle || company || "Tailored resume"} (PDF)`,
       });
-      toast.success("Export ready");
+      toast.success("Tailored resume PDF downloaded");
     } catch (error: any) {
-      console.error("Export failed:", error);
-      toast.error(error?.message || "Export failed");
+      console.error("Failed to generate resume:", error);
+      toast.error(error?.message || "Failed to generate tailored resume PDF");
     } finally {
-      setExporting(null);
-    }
-  };
-
-  const handleReset = () => {
-    setJobDescription("");
-    setJobTitle("");
-    setCompany("");
-    setLocation("");
-    setAnalysis(null);
-      setTailored(null);
-      setJobId(null);
-    };
-
-  const handleRewrite = async (focus: "balanced" | "ats" | "impact" = "balanced") => {
-    if (!tailoredId) {
-      toast.error("Generate a tailored resume first");
-      return;
-    }
-    setRewriting(true);
-    try {
-      const rewritten = await api.rewriteTailoredResume(tailoredId, { focus });
-      setTailored((current: any) => ({
-        ...(current ?? {}),
-        ...rewritten,
-        id: tailoredId,
-      }));
-      recordActivity({
-        id: `jobs:rewrite:${focus}:${tailoredId}`,
-        type: "resume",
-        action: "rewritten",
-        name: `${jobTitle || company || "Tailored resume"} (${focus})`,
-      });
-      toast.success("Resume bullets enhanced");
-    } catch (error: any) {
-      console.error("Failed to rewrite tailored resume:", error);
-      toast.error(error?.message || "Failed to rewrite tailored resume");
-    } finally {
-      setRewriting(false);
+      setGenerating(false);
     }
   };
 
@@ -281,7 +268,7 @@ export function Jobs() {
       setCompany(String(detail.company ?? "").trim());
       setLocation(String(detail.location ?? "").trim());
       setJobDescription(String(detail.job_text ?? detail.text_preview ?? "").trim());
-      setTailored(null);
+      setLastTailoredId(null);
       toast.success("Restored previous job analysis");
     } catch (error: any) {
       console.error("Failed to restore job match history:", error);
@@ -300,7 +287,7 @@ export function Jobs() {
       setHistory((current) => current.filter((item) => item.id !== entry.id));
       if (normalized.historyId === entry.id) {
         setAnalysis(null);
-        setTailored(null);
+        setLastTailoredId(null);
         setJobId(null);
       }
       recordActivity({
@@ -477,8 +464,8 @@ export function Jobs() {
           ) : history.length === 0 ? (
             <p className="text-sm text-gray-500">No prior analyses yet.</p>
           ) : (
-            <div className="space-y-3">
-              {history.slice(0, 5).map((entry) => (
+            <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-2">
+              {history.map((entry) => (
                 <div key={entry.id} className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-semibold text-gray-900">{entry.title || entry.company || "Saved job match"}</p>
@@ -532,13 +519,20 @@ export function Jobs() {
       </div>
 
       <Card className="p-8">
-        <div className="flex flex-col items-center">
-          <span className={`text-5xl font-bold ${getScoreColor(normalized.matchScore)}`}>{normalized.matchScore}%</span>
-          <span className="text-gray-600 text-sm mt-1">Match Score</span>
+        <div className="grid gap-6 lg:grid-cols-[220px_1fr] lg:items-center">
+          <div className="flex flex-col items-center rounded-2xl bg-slate-50 p-6 text-center">
+            <span className={`text-5xl font-bold ${getScoreColor(normalized.matchScore)}`}>{normalized.matchScore}%</span>
+            <span className="mt-1 text-sm text-gray-600">Match Score</span>
+            <Badge className="mt-4 bg-white text-gray-700 border-gray-200">{normalized.confidenceLabel} Fit</Badge>
+          </div>
 
-          <div className="mt-6 text-center">
-            <h2 className="text-xl font-semibold text-gray-900">{jobTitle || "(job)"}</h2>
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-900">{jobTitle || "(job)"}</h2>
             <p className="text-gray-600">{company || ""}</p>
+            {location ? <p className="text-sm text-gray-500 mt-1">{location}</p> : null}
+            <p className="mt-4 text-sm leading-6 text-gray-700">
+              {normalized.analysisSummary || "This score estimates how well your confirmed skills, supporting evidence, and related work align with the posting."}
+            </p>
           </div>
         </div>
       </Card>
@@ -549,23 +543,67 @@ export function Jobs() {
           <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.extractedSkillCount}</p>
         </Card>
         <Card className="p-5">
-          <p className="text-sm text-gray-500">Confirmed Skills</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.confirmedSkillCount}</p>
+          <p className="text-sm text-gray-500">Required Skills Covered</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">
+            {normalized.requiredMatchedCount}/{normalized.requiredSkillCount || normalized.extractedSkillCount || 0}
+          </p>
         </Card>
         <Card className="p-5">
-          <p className="text-sm text-gray-500">Evidence-Backed Matches</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.evidenceAlignedCount}</p>
+          <p className="text-sm text-gray-500">Matched Job Skills</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.matchedSkillCount}</p>
         </Card>
         <Card className="p-5">
-          <p className="text-sm text-gray-500">Keyword Overlap</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.keywordOverlapCount}</p>
+          <p className="text-sm text-gray-500">Missing Job Skills</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.missingSkillCount}</p>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="p-5">
+          <p className="text-sm text-gray-500">Semantic Alignment</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.semanticAlignmentScore}%</p>
+          <p className="mt-2 text-sm text-gray-600">
+            {normalized.semanticAlignmentExplanation || "Semantic alignment looks beyond exact keyword matches and estimates how similar your saved work is to the role's themes and responsibilities."}
+          </p>
+        </Card>
+        <Card className="p-5">
+          <p className="text-sm text-gray-500">Coverage Snapshot</p>
+          <div className="mt-3 space-y-2 text-sm text-gray-700">
+            <p>Matched job skills: {normalized.matchedSkillCount} of {normalized.extractedSkillCount}</p>
+            <p>Missing job skills: {normalized.missingSkillCount} of {normalized.extractedSkillCount}</p>
+            <p>Required skills matched: {normalized.requiredMatchedCount} of {normalized.requiredSkillCount}</p>
+            <p>Preferred skills matched: {normalized.preferredMatchedCount} of {normalized.preferredSkillCount}</p>
+            <p>Evidence-backed matched skills: {normalized.evidenceAlignedCount} of {normalized.matchedSkillCount}</p>
+            <p>Job keywords reflected in your work: {normalized.keywordOverlapScore}%</p>
+          </div>
+          {normalized.keywordOverlapTerms.length > 0 ? (
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-gray-500">Keywords Overlapped</p>
+              <div className="flex flex-wrap gap-2">
+                {normalized.keywordOverlapTerms.map((term) => (
+                  <Badge key={term} className="border-slate-200 bg-slate-100 text-slate-700">
+                    {term}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </Card>
       </div>
 
       <Card className="p-5">
-        <p className="text-sm text-gray-500">Semantic Alignment</p>
-        <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.semanticAlignmentScore}%</p>
-        <p className="mt-1 text-xs text-gray-500">Embedding-based similarity between the job and your saved work.</p>
+        <p className="text-sm text-gray-500">Semantic Alignment Examples</p>
+        {normalized.semanticAlignmentExamples.length === 0 ? (
+          <p className="mt-3 text-sm text-gray-600">No concrete examples yet. Add more evidence or projects tied to your confirmed skills to strengthen semantic matching.</p>
+        ) : (
+          <ul className="mt-3 space-y-2 text-sm text-gray-700">
+            {normalized.semanticAlignmentExamples.map((example) => (
+              <li key={example} className="rounded-md bg-slate-50 px-3 py-2">
+                {example}
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       <Card className="p-6">
@@ -701,57 +739,25 @@ export function Jobs() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Tailored Resume</h3>
-            <p className="text-sm text-gray-600">Generate a preview then export as PDF/DOCX.</p>
+            <p className="text-sm text-gray-600">Generate and download a tailored resume PDF without showing the full resume text on the page.</p>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              onClick={handleGenerateResume}
-              disabled={generating || !jobId}
-              className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
-            >
-              {generating ? "Generating..." : "Generate"}
-            </Button>
-
-            <Button variant="outline" disabled={!tailored || exporting === "pdf"} onClick={() => handleExport("pdf")}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              {exporting === "pdf" ? "Exporting..." : "PDF"}
-            </Button>
-
-            <Button variant="outline" disabled={!tailored || exporting === "docx"} onClick={() => handleExport("docx")}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              {exporting === "docx" ? "Exporting..." : "DOCX"}
-            </Button>
-
-            <Button variant="outline" disabled={!tailored || rewriting} onClick={() => handleRewrite("balanced")}>
-              <Wand2 className="h-4 w-4 mr-2" />
-              {rewriting ? "Enhancing..." : "Enhance Bullets"}
-            </Button>
-          </div>
+          <Button
+            onClick={handleGenerateResume}
+            disabled={generating || !jobId}
+            className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {generating ? "Generating PDF..." : "Generate PDF"}
+          </Button>
         </div>
 
-        {tailored ? (
-          <div className="mt-4 space-y-4">
-            <div className="text-sm text-gray-600">
-              Preview generated. Tailored id: <span className="font-mono">{String((tailored as any).id ?? (tailored as any).tailored_id ?? "")}</span>
-            </div>
-            <div className="space-y-4">
-              {asArray<any>((tailored as any)?.sections).map((section) => (
-                <div key={String(section?.title ?? "")} className="rounded-lg border border-gray-200 p-4">
-                  <h4 className="font-semibold text-gray-900">{String(section?.title ?? "")}</h4>
-                  <div className="mt-2 space-y-2 text-sm text-gray-700">
-                    {asArray<string>(section?.lines).map((line) => (
-                      <p key={line}>{line}</p>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+        {lastTailoredId ? (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            Tailored resume generated and downloaded. Resume id: <span className="font-mono">{lastTailoredId}</span>
           </div>
         ) : (
-          <div className="mt-4 text-sm text-gray-500">Generate to create a tailored resume preview.</div>
+          <div className="mt-4 text-sm text-gray-500">Generate PDF to create and download your tailored resume.</div>
         )}
       </Card>
 
@@ -776,7 +782,16 @@ export function Jobs() {
               return (
                 <div
                   key={entry.id}
-                  className="rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:bg-gray-50"
+                  className="cursor-pointer rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:bg-gray-50"
+                  onClick={() => handleRestoreHistory(entry.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleRestoreHistory(entry.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>

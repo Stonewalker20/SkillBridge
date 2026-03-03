@@ -12,6 +12,7 @@ import {
 import LogoSvg from "../../imports/file.svg";
 
 export function Landing() {
+  const currentYear = new Date().getFullYear();
   const features = [
     {
       icon: Target,
@@ -45,15 +46,14 @@ export function Landing() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
+    <div className="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_42%,_#ffffff)]">
       {/* Navigation */}
-      <nav className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+      <nav className="sticky top-0 z-50 border-b border-white/70 bg-white/75 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <img src={LogoSvg} alt="SkillBridge Logo" className="h-8 w-8" />
-              <span className="text-2xl font-bold text-[#1E3A8A]">SkillBridge</span>
-            </div>
+            <Link to="/" className="flex items-center rounded-2xl px-1 py-1 transition-opacity hover:opacity-90">
+              <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-auto max-w-[280px] object-contain" />
+            </Link>
             <div className="flex items-center gap-4">
               <Button variant="ghost" asChild className="hidden sm:inline-flex">
                 <Link to="/login">Login</Link>
@@ -68,41 +68,72 @@ export function Landing() {
 
       {/* Hero Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-20 pb-16 sm:pb-24">
-        <div className="text-center">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-            AI-Powered Resume
-            <span className="text-[#1E3A8A]"> Intelligence</span>
-          </h1>
-          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto px-4">
-            Transform your job search with intelligent skill matching, automated resume tailoring, 
-            and data-driven career insights.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Button size="lg" asChild className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90 w-full sm:w-auto">
-              <Link to="/signup">
-                Create Free Account
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
-            <Button size="lg" variant="outline" asChild className="w-full sm:w-auto">
-              <Link to="/login">Login</Link>
-            </Button>
+        <div className="grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+          <div>
+            <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+              Career Intelligence Platform
+            </div>
+            <h1 className="mt-6 text-4xl font-bold leading-tight text-gray-900 sm:text-5xl md:text-6xl">
+              Turn your experience into
+              <span className="text-[#1E3A8A]"> proof, alignment, and momentum.</span>
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-gray-600">
+              SkillBridge helps you organize skills, connect evidence, analyze job fit, and generate tailored resume outputs with backend-local intelligence.
+            </p>
+            <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+              <Button size="lg" asChild className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90 w-full sm:w-auto">
+                <Link to="/signup">
+                  Create Free Account
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+              <Button size="lg" variant="outline" asChild className="w-full sm:w-auto bg-white/80">
+                <Link to="/login">Login</Link>
+              </Button>
+            </div>
           </div>
-        </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mt-16 sm:mt-20">
+          <Card className="overflow-hidden border-slate-200 bg-[linear-gradient(135deg,_rgba(30,58,138,0.98),_rgba(15,118,110,0.95))] p-0 text-white shadow-xl">
+            <div className="space-y-6 px-7 py-8">
+              <div>
+                <div className="text-xs uppercase tracking-[0.2em] text-blue-100">Live Product Value</div>
+                <h2 className="mt-3 text-2xl font-semibold leading-tight">A tighter job-search loop from skill proof to resume delivery.</h2>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-white/10 p-4">
+                  <div className="text-3xl font-bold">87%</div>
+                  <div className="mt-2 text-sm text-blue-100">Average Match Score</div>
+                </div>
+                <div className="rounded-2xl bg-white/10 p-4">
+                  <div className="text-3xl font-bold">2.5x</div>
+                  <div className="mt-2 text-sm text-blue-100">Faster Applications</div>
+                </div>
+                <div className="rounded-2xl bg-white/10 p-4">
+                  <div className="text-3xl font-bold">10k+</div>
+                  <div className="mt-2 text-sm text-blue-100">Resumes Generated</div>
+                </div>
+              </div>
+              <div className="rounded-2xl bg-white/10 p-4 text-sm leading-6 text-blue-50">
+                Build an evidence-backed profile, understand your job fit, and close the gap with targeted next steps instead of guesswork.
+              </div>
+            </div>
+          </Card>
+        </div>
+      </section>
+
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
           <div className="text-center">
             <div className="text-4xl font-bold text-[#1E3A8A]">87%</div>
-            <div className="text-gray-600 mt-2">Average Match Score</div>
+            <div className="mt-2 text-gray-600">Average Match Score</div>
           </div>
           <div className="text-center">
             <div className="text-4xl font-bold text-[#0D9488]">2.5x</div>
-            <div className="text-gray-600 mt-2">Faster Applications</div>
+            <div className="mt-2 text-gray-600">Faster Applications</div>
           </div>
           <div className="text-center">
             <div className="text-4xl font-bold text-[#1E3A8A]">10k+</div>
-            <div className="text-gray-600 mt-2">Resumes Generated</div>
+            <div className="mt-2 text-gray-600">Resumes Generated</div>
           </div>
         </div>
       </section>
@@ -121,7 +152,7 @@ export function Landing() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {features.map((feature, index) => (
-              <Card key={index} className="p-8 hover:shadow-lg transition-shadow">
+              <Card key={index} className="border-slate-200 p-8 transition-all hover:-translate-y-0.5 hover:shadow-lg">
                 <div className="flex items-start gap-4">
                   <div className="p-3 bg-blue-50 rounded-xl">
                     <feature.icon className="h-6 w-6 text-[#1E3A8A]" />
@@ -162,7 +193,7 @@ export function Landing() {
             </div>
 
             <div className="relative">
-              <Card className="p-8 bg-gradient-to-br from-[#1E3A8A] to-[#0D9488] text-white">
+              <Card className="border-none bg-gradient-to-br from-[#1E3A8A] to-[#0D9488] p-8 text-white shadow-xl">
                 <h3 className="text-2xl font-bold mb-4">Ready to Get Started?</h3>
                 <p className="mb-6 text-blue-100">
                   Join thousands of professionals who have transformed their job search 
@@ -181,7 +212,7 @@ export function Landing() {
       </section>
 
       {/* CTA Section */}
-      <section className="bg-white border-t py-16 sm:py-20">
+      <section className="border-t border-slate-200 bg-white py-16 sm:py-20">
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
             Start Your Journey Today
@@ -199,16 +230,30 @@ export function Landing() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t bg-gray-50 py-8">
+      <footer className="border-t border-slate-200 bg-slate-50/80 py-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <img src={LogoSvg} alt="SkillBridge Logo" className="h-8 w-8" />
-              <span className="text-lg font-bold text-[#1E3A8A]">SkillBridge</span>
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-md">
+              <img src={LogoSvg} alt="SkillBridge Logo" className="h-12 w-auto max-w-[220px] object-contain" />
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                SkillBridge helps professionals organize evidence, validate skills, and understand job fit with local intelligence.
+              </p>
             </div>
-            <p className="text-gray-600 text-sm text-center sm:text-left">
-              © 2026 SkillBridge. All rights reserved.
-            </p>
+            <div className="flex flex-col gap-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:gap-6">
+              <Link to="/login" className="transition-colors hover:text-slate-900">
+                Login
+              </Link>
+              <Link to="/signup" className="transition-colors hover:text-slate-900">
+                Get Started
+              </Link>
+              <a href="mailto:support@skillbridge.app" className="transition-colors hover:text-slate-900">
+                Contact
+              </a>
+            </div>
+          </div>
+          <div className="mt-6 flex flex-col gap-2 border-t border-slate-200 pt-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <p>© {currentYear} SkillBridge. All rights reserved.</p>
+            <p>Built for deployment-ready skill verification, evidence management, and job-match analysis.</p>
           </div>
         </div>
       </footer>

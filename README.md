@@ -129,6 +129,32 @@ Frontend:
 npm run dev
 ```
 
+## Local Transformer Inference
+
+SkillBridge can run Job Match semantic scoring and evidence skill extraction with local transformer models in the backend.
+
+Install backend dependencies:
+
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+Optional backend environment variables:
+
+```bash
+LOCAL_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+LOCAL_ZERO_SHOT_MODEL=MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33
+LOCAL_MODEL_DEVICE=-1
+LOCAL_MODEL_PREWARM=true
+```
+
+Behavior:
+
+* if local transformer models are available, the backend uses them
+* if not, the backend falls back automatically to the lighter local rule/hash implementation
+* the active mode is visible from `GET /tailor/settings/status`
+
 ---
 
 # Data Architecture

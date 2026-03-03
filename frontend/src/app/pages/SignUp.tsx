@@ -64,12 +64,27 @@ export function SignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-8">
+    <div className="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#ffffff)] flex items-center justify-center p-4">
+      <div className="grid w-full max-w-5xl gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="hidden lg:flex flex-col justify-between rounded-[2rem] border border-slate-200 bg-[linear-gradient(135deg,_rgba(30,58,138,0.98),_rgba(15,118,110,0.95))] p-8 text-white shadow-xl">
+          <div>
+            <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-auto max-w-[220px] object-contain" />
+            <h1 className="mt-8 text-4xl font-bold leading-tight">Build a profile that can prove what you know.</h1>
+            <p className="mt-4 text-base leading-7 text-blue-100">
+              Create your workspace, add evidence, confirm skills, and generate targeted job-match outputs from a single profile.
+            </p>
+          </div>
+          <div className="space-y-3 text-sm text-blue-50">
+            <div className="rounded-2xl bg-white/10 px-4 py-3">Organize skills across projects, resumes, and uploaded evidence.</div>
+            <div className="rounded-2xl bg-white/10 px-4 py-3">See coverage gaps before you apply and tailor faster.</div>
+          </div>
+        </div>
+
+      <Card className="w-full max-w-md border-slate-200 p-8 shadow-xl lg:max-w-none">
         {/* Logo & Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-16" />
+            <img src={LogoSvg} alt="SkillBridge Logo" className="h-20 w-auto max-w-[240px] object-contain" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
           <p className="text-gray-600">Join SkillBridge and transform your job search</p>
@@ -205,6 +220,7 @@ export function SignUp() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

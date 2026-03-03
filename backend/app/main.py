@@ -13,6 +13,8 @@ from app.routers.taxonomy import router as taxonomy_router
 from app.routers.tailor import router as tailor_router
 from app.routers.portfolio import router as portfolio_router
 from app.routers.auth import router as auth_router
+from app.core.config import settings
+from app.utils.ai import get_inference_status, warm_local_models
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import os
@@ -41,6 +43,14 @@ app.add_middleware(
 async def on_startup():
     await connect_to_mongo()
     await ensure_indexes()
+    if settings.local_model_prewarm:
+        await warm_local_models()
+    status = get_inference_status()
+    print(
+        "SkillBridge AI mode:",
+        status["provider_mode"],
+        f"(embeddings={status['embeddings_provider']}, model={status['embedding_model']})",
+    )
 
 @app.on_event("shutdown")
 async def on_shutdown():

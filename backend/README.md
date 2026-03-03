@@ -1,35 +1,50 @@
-# SkillBridge Backend (FastAPI + MongoDB)
+# Backend
 
-API server for SkillBridge.
+## Local Transformer Mode
 
-## Requirements
-- Python 3.11+
-- MongoDB (local or container)
+SkillBridge can run its AI features fully in the backend with local transformer models while keeping the existing fallback path.
 
-## Configure
-Create `backend/.env` (or use Docker) with at least:
-- `MONGO_URI=mongodb://localhost:27017`
-- `MONGO_DB=skillbridge`
+Current local models:
 
-## Run locally
+- Embeddings: `sentence-transformers/all-MiniLM-L6-v2`
+- Zero-shot skill filtering: `MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33`
+
+If those models are unavailable, the backend automatically falls back to the lighter local hash/rule logic.
+
+## Install
+
 ```bash
 cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## Seed demo users
+## Optional Environment Variables
+
 ```bash
-cd backend
-python scripts/seed_mongo.py
+LOCAL_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+LOCAL_ZERO_SHOT_MODEL=MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33
+LOCAL_MODEL_DEVICE=-1
+LOCAL_MODEL_PREWARM=true
 ```
 
-If your seed script supports it, use the demo credentials it prints (or adjust the script to your needs).
+Notes:
 
-## Indexes
-On startup the app ensures:
-- `users.email` unique
-- `sessions.token` unique
-- `sessions.expires_at` TTL
+- `LOCAL_MODEL_DEVICE=-1` keeps inference on CPU.
+- Set `LOCAL_MODEL_DEVICE=0` if you have a CUDA GPU available to the backend.
+- `LOCAL_MODEL_PREWARM=true` loads the transformer models on backend startup instead of waiting for the first Job Match or Evidence request.
+
+## Run
+
+```bash
+uvicorn app.main:app --reload
+```
+
+On startup, the backend prints which AI mode is active.
+
+You can also confirm the current mode from the API:
+
+```bash
+curl http://localhost:8000/tailor/settings/status
+```
