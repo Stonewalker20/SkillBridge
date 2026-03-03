@@ -12,6 +12,7 @@ import { Account } from "./pages/Account";
 import { NotFound } from "./pages/NotFound";
 import { TailoredResumes } from "./pages/TailoredResumes";
 import { Admin } from "./pages/Admin";
+import { SkillAnalytics } from "./pages/SkillAnalytics";
 
 export const router = createBrowserRouter([
   {
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: "evidence", element: <Evidence /> },
       { path: "jobs", element: <Jobs /> },
       { path: "resumes", element: <TailoredResumes /> },
+      { path: "analytics/skills", element: <SkillAnalytics /> },
       { path: "account", element: <Account /> },
       {
         path: "admin",

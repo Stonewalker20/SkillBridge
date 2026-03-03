@@ -15,6 +15,7 @@ interface DashboardSummary {
   tailoredResumes: number;
   recentActivity: Array<{
     id: number | string;
+    eventKey?: string;
     type: string;
     action: string;
     name: string;
@@ -57,8 +58,11 @@ function normalizedActivityDate(value: any): string {
 function normalizeRecentActivityItem(item: any) {
   const rawDate = item?.date ?? item?.created_at ?? item?.updated_at ?? "";
   const date = normalizedActivityDate(rawDate);
+  const id = String(item?.id ?? `${item?.type ?? "activity"}:${item?.action ?? "updated"}:${item?.name ?? "item"}:${date}`);
+  const rawDateKey = String(rawDate || date);
   return {
-    id: String(item?.id ?? `${item?.type ?? "activity"}:${item?.action ?? "updated"}:${item?.name ?? "item"}:${date}`),
+    id,
+    eventKey: `${id}:${rawDateKey}`,
     type: String(item?.type ?? "activity"),
     action: String(item?.action ?? "updated"),
     name: String(item?.name ?? "Untitled"),
@@ -98,13 +102,31 @@ async function loadAllSkills(): Promise<Skill[]> {
 
 export function Dashboard() {
   const { user } = useAuth();
-  const { activities } = useActivity();
+  const { activities, clearActivities } = useActivity();
   const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
-  const [hiddenRecentActivityIds, setHiddenRecentActivityIds] = useState<string[]>(() => {
+  const [hiddenRecentActivityKeys, setHiddenRecentActivityKeys] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
-      const raw = window.localStorage.getItem("dashboard:hiddenRecentActivityIds");
+      const raw = window.localStorage.getItem("dashboard:hiddenRecentActivityKeys");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [clearedRecentActivityKeys, setClearedRecentActivityKeys] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem("dashboard:clearedRecentActivityKeys");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [clearedRecentActivityIds, setClearedRecentActivityIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem("dashboard:clearedRecentActivityIds");
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
@@ -113,8 +135,18 @@ export function Dashboard() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem("dashboard:hiddenRecentActivityIds", JSON.stringify(hiddenRecentActivityIds));
-  }, [hiddenRecentActivityIds]);
+    window.localStorage.setItem("dashboard:hiddenRecentActivityKeys", JSON.stringify(hiddenRecentActivityKeys));
+  }, [hiddenRecentActivityKeys]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("dashboard:clearedRecentActivityKeys", JSON.stringify(clearedRecentActivityKeys));
+  }, [clearedRecentActivityKeys]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("dashboard:clearedRecentActivityIds", JSON.stringify(clearedRecentActivityIds));
+  }, [clearedRecentActivityIds]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -233,13 +265,25 @@ export function Dashboard() {
   );
 
   const visibleRecentActivity = useMemo(
-    () => summary.recentActivity.filter((activity) => !hiddenRecentActivityIds.includes(String(activity.id))),
-    [summary.recentActivity, hiddenRecentActivityIds]
+    () =>
+      summary.recentActivity.filter(
+        (activity) =>
+          !clearedRecentActivityIds.includes(String(activity.id)) &&
+          !hiddenRecentActivityKeys.includes(String(activity.eventKey ?? `${activity.id}:${activity.date}`)) &&
+          !clearedRecentActivityKeys.includes(String(activity.eventKey ?? `${activity.id}:${activity.date}`))
+      ),
+    [summary.recentActivity, hiddenRecentActivityKeys, clearedRecentActivityKeys, clearedRecentActivityIds]
   );
 
   const hideRecentActivityItem = (id: string | number) => {
-    const key = String(id);
-    setHiddenRecentActivityIds((current) => (current.includes(key) ? current : [...current, key]));
+    setHiddenRecentActivityKeys((current) => (current.includes(String(id)) ? current : [...current, String(id)]));
+  };
+
+  const handleClearRecentActivity = () => {
+    setClearedRecentActivityKeys(summary.recentActivity.map((activity) => String(activity.eventKey ?? `${activity.id}:${activity.date}`)));
+    setClearedRecentActivityIds(summary.recentActivity.map((activity) => String(activity.id)));
+    setHiddenRecentActivityKeys([]);
+    clearActivities();
   };
 
   if (loading) {
@@ -291,11 +335,16 @@ export function Dashboard() {
         <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Recent Activity</h3>
-            {hiddenRecentActivityIds.length > 0 ? (
-              <Button variant="ghost" size="sm" onClick={() => setHiddenRecentActivityIds([])}>
-                Reset hidden
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={handleClearRecentActivity}>
+                Clear recent
               </Button>
-            ) : null}
+              {hiddenRecentActivityKeys.length > 0 ? (
+                <Button variant="ghost" size="sm" onClick={() => setHiddenRecentActivityKeys([])}>
+                  Reset hidden
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           {visibleRecentActivity.length === 0 ? (
@@ -324,7 +373,7 @@ export function Dashboard() {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 rounded-full text-slate-400 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-900 dark:hover:text-slate-100"
-                      onClick={() => hideRecentActivityItem(activity.id)}
+                      onClick={() => hideRecentActivityItem(activity.eventKey ?? `${activity.id}:${activity.date}`)}
                       aria-label={`Hide activity ${activity.name}`}
                       title="Hide activity"
                     >
@@ -341,7 +390,12 @@ export function Dashboard() {
         <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Top Skill Categories</h3>
-            <Badge variant="secondary">{summary.topSkillCategories.length} total</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{summary.topSkillCategories.length} total</Badge>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/app/analytics/skills">View analytics</Link>
+              </Button>
+            </div>
           </div>
 
           {summary.topSkillCategories.length === 0 ? (

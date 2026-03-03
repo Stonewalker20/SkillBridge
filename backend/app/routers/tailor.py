@@ -1491,9 +1491,16 @@ async def rewrite_tailored_resume_bullets(tailored_id: str, payload: RewriteBull
         raise HTTPException(status_code=404, detail="Tailored resume not found")
 
     sections = [ResumeSection(**section) for section in doc.get("sections", [])]
-    relevant_index = next((index for index, section in enumerate(sections) if section.title.lower() == "relevant work"), None)
+    relevant_index = next(
+        (
+            index
+            for index, section in enumerate(sections)
+            if section.title.lower() in {"relevant work", "targeted highlights"}
+        ),
+        None,
+    )
     if relevant_index is None:
-        raise HTTPException(status_code=400, detail="Tailored resume has no relevant work section to rewrite")
+        raise HTTPException(status_code=400, detail="Tailored resume has no rewriteable work section")
 
     work_lines = sections[relevant_index].lines
     bullet_indices = [index for index, line in enumerate(work_lines) if str(line).startswith("- ")]

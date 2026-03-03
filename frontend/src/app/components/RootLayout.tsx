@@ -5,6 +5,7 @@ import {
   FolderOpen, 
   FileText,
   Target,
+  BarChart3,
   Shield,
   Menu,
   X,
@@ -24,6 +25,7 @@ import { useTheme } from "next-themes";
 const baseNavigation = [
   { name: "Dashboard", href: "/app", icon: LayoutDashboard },
   { name: "Skills", href: "/app/skills", icon: Target },
+  { name: "Analytics", href: "/app/analytics/skills", icon: BarChart3 },
   { name: "Evidence", href: "/app/evidence", icon: FolderOpen },
   { name: "Job Match", href: "/app/jobs", icon: Briefcase },
 ];
@@ -67,6 +69,8 @@ export function RootLayout() {
   const currentPageTitle =
     location.pathname === "/app/account"
       ? "Account"
+      : location.pathname === "/app/analytics/skills"
+        ? "Skill Analytics"
       : navigation.find((item) => item.href === location.pathname)?.name || "Page";
 
   return (
@@ -129,15 +133,12 @@ export function RootLayout() {
             <p className="px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quick Actions</p>
             <div className="mt-2 space-y-1">
               <Link
-                to="/app/jobs?analyze=1"
-                onClick={(event) => {
-                  event.preventDefault();
-                  handleOpenNewJobAnalysis();
-                }}
+                to="/app/analytics/skills"
+                onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
-                <Briefcase className="h-5 w-5" />
-                <span className="font-medium">Analyze New Job</span>
+                <BarChart3 className="h-5 w-5" />
+                <span className="font-medium">Analytics</span>
               </Link>
               <Link
                 to="/app/skills?add=1"
@@ -154,6 +155,17 @@ export function RootLayout() {
               >
                 <FolderOpen className="h-5 w-5" />
                 <span className="font-medium">Upload Evidence</span>
+              </Link>
+              <Link
+                to="/app/jobs?analyze=1"
+                onClick={(event) => {
+                  event.preventDefault();
+                  handleOpenNewJobAnalysis();
+                }}
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
+              >
+                <Briefcase className="h-5 w-5" />
+                <span className="font-medium">Analyze New Job</span>
               </Link>
               <Link
                 to="/app/resumes"
