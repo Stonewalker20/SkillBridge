@@ -6,6 +6,7 @@ import hashlib
 import math
 import os
 import re
+from collections import OrderedDict
 from typing import Iterable
 
 from app.core.config import settings
@@ -52,6 +53,25 @@ SKILL_CATEGORY_BY_LABEL = {
 _SENTENCE_MODEL = None
 _ZERO_SHOT_PIPELINE = None
 _TORCH_RUNTIME_CONFIGURED = False
+_EMBED_CACHE: "OrderedDict[str, list[float]]" = OrderedDict()
+_CLASSIFY_CACHE: "OrderedDict[str, tuple[bool, str]]" = OrderedDict()
+_CACHE_LIMIT = 2048
+
+
+def _cache_get(cache: OrderedDict, key: str):
+    if key not in cache:
+        return None
+    value = cache.pop(key)
+    cache[key] = value
+    return value
+
+
+def _cache_put(cache: OrderedDict, key: str, value) -> None:
+    if key in cache:
+        cache.pop(key)
+    cache[key] = value
+    while len(cache) > _CACHE_LIMIT:
+        cache.popitem(last=False)
 
 
 def _tokenize(text: str) -> list[str]:
@@ -132,7 +152,7 @@ def _configure_torch_runtime() -> None:
 
 
 def release_local_models() -> None:
-    global _SENTENCE_MODEL, _ZERO_SHOT_PIPELINE
+    global _SENTENCE_MODEL, _ZERO_SHOT_PIPELINE, _EMBED_CACHE, _CLASSIFY_CACHE
 
     for obj in (_SENTENCE_MODEL, _ZERO_SHOT_PIPELINE):
         if obj is None:
@@ -146,6 +166,8 @@ def release_local_models() -> None:
 
     _SENTENCE_MODEL = None
     _ZERO_SHOT_PIPELINE = None
+    _EMBED_CACHE.clear()
+    _CLASSIFY_CACHE.clear()
     gc.collect()
 
 
@@ -182,8 +204,25 @@ async def embed_texts(texts: Iterable[str]) -> tuple[list[list[float]], str]:
     model = _load_sentence_transformer()
     if model is not None:
         try:
-            vectors = model.encode(cleaned, normalize_embeddings=True)
-            return [list(map(float, row)) for row in vectors], "local-transformer"
+            results: list[list[float] | None] = [None] * len(cleaned)
+            missing_indices: list[int] = []
+            missing_texts: list[str] = []
+            for index, text in enumerate(cleaned):
+                cached = _cache_get(_EMBED_CACHE, text)
+                if cached is not None:
+                    results[index] = cached
+                else:
+                    missing_indices.append(index)
+                    missing_texts.append(text)
+
+            if missing_texts:
+                vectors = model.encode(missing_texts, normalize_embeddings=True, batch_size=min(32, len(missing_texts)))
+                for index, row in zip(missing_indices, vectors):
+                    vector = list(map(float, row))
+                    results[index] = vector
+                    _cache_put(_EMBED_CACHE, cleaned[index], vector)
+
+            return [list(row or hashed_embedding(cleaned[index])) for index, row in enumerate(results)], "local-transformer"
         except Exception:
             pass
 
@@ -294,7 +333,7 @@ async def extract_skill_candidates(text: str, max_candidates: int = 25) -> tuple
     if not cleaned:
         return [], "local-rule"
 
-    local_candidates = _extract_candidates_locally(cleaned, max_candidates=max_candidates * 3)
+    local_candidates = _extract_candidates_locally(cleaned, max_candidates=max_candidates * 2)
     classifier = _load_zero_shot_pipeline()
     if classifier is None:
         filtered: list[dict] = []
@@ -308,35 +347,49 @@ async def extract_skill_candidates(text: str, max_candidates: int = 25) -> tuple
         return filtered, "local-rule"
 
     filtered: list[dict] = []
+    uncached_names: list[str] = []
     for candidate in local_candidates:
         name = str(candidate.get("name") or "").strip()
         if not name:
             continue
-        try:
-            result = classifier(name, SKILL_LABELS, multi_label=False)
-        except Exception:
-            ok, category = _classify_candidate_locally(name)
+        cached = _cache_get(_CLASSIFY_CACHE, name.casefold())
+        if cached is not None:
+            ok, category = cached
             if ok:
                 filtered.append({"name": name, "category": category})
             if len(filtered) >= max_candidates:
                 break
             continue
+        uncached_names.append(name)
 
-        labels = result.get("labels") or []
-        scores = result.get("scores") or []
-        if not labels or not scores:
-            continue
-        top_label = str(labels[0])
-        top_score = float(scores[0])
-        if top_label == "not a skill" and top_score >= 0.45:
-            continue
-        if top_label != "not a skill" and top_score >= 0.25:
-            filtered.append(
-                {
-                    "name": name,
-                    "category": SKILL_CATEGORY_BY_LABEL.get(top_label, "General"),
-                }
-            )
+    for start in range(0, len(uncached_names), 16):
+        batch = uncached_names[start : start + 16]
+        try:
+            batch_result = classifier(batch, SKILL_LABELS, multi_label=False, batch_size=min(8, len(batch)))
+            if isinstance(batch_result, dict):
+                batch_result = [batch_result]
+        except Exception:
+            batch_result = [None] * len(batch)
+
+        for name, result in zip(batch, batch_result):
+            ok = False
+            category = ""
+            if isinstance(result, dict):
+                labels = result.get("labels") or []
+                scores = result.get("scores") or []
+                if labels and scores:
+                    top_label = str(labels[0])
+                    top_score = float(scores[0])
+                    if top_label != "not a skill" and top_score >= 0.25:
+                        ok = True
+                        category = SKILL_CATEGORY_BY_LABEL.get(top_label, "General")
+            if not ok:
+                ok, category = _classify_candidate_locally(name)
+            _cache_put(_CLASSIFY_CACHE, name.casefold(), (ok, category))
+            if ok:
+                filtered.append({"name": name, "category": category})
+            if len(filtered) >= max_candidates:
+                break
         if len(filtered) >= max_candidates:
             break
 

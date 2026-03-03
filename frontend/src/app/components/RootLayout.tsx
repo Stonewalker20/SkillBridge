@@ -14,6 +14,7 @@ import {
 import { cn } from "./ui/utils";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
+import { Switch } from "./ui/switch";
 import LogoSvg from "../../imports/file.svg";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
@@ -162,14 +163,18 @@ export function RootLayout() {
         </nav>
 
         <div className="border-t border-slate-200/80 p-4 dark:border-slate-800/80">
-          <Button
-            variant="outline"
-            className="mb-3 w-full justify-start border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
-            onClick={() => setTheme(isDark ? "light" : "dark")}
-          >
-            {isDark ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-            {isDark ? "Light Mode" : "Dark Mode"}
-          </Button>
+          <div className="mb-3 flex items-center justify-between rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
+            <div className="flex items-center gap-2">
+              {isDark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              <span className="text-sm font-medium">{isDark ? "Dark Mode" : "Light Mode"}</span>
+            </div>
+            <Switch
+              checked={isDark}
+              onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+              aria-label="Toggle dark mode"
+              className="h-6 w-11 data-[state=checked]:bg-slate-900 data-[state=unchecked]:bg-amber-300 dark:data-[state=checked]:bg-teal-500 dark:data-[state=unchecked]:bg-slate-700"
+            />
+          </div>
           <Button
             variant="outline"
             className="w-full justify-start border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"

@@ -3,7 +3,7 @@ import re
 from fastapi import APIRouter, Query, HTTPException, Depends
 from app.core.db import get_db
 from app.models.skill import SkillIn, SkillOut, SkillUpdate
-from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
+from app.utils.skill_catalog import expand_alias_variants, merge_skill_docs, normalize_skill_text
 from app.utils.mongo import oid_str, ref_values
 from app.core.auth import require_user
 from bson import ObjectId
@@ -139,7 +139,7 @@ async def create_skill(payload: SkillIn, user=Depends(require_user)):
     if not category:
         raise HTTPException(status_code=400, detail="Skill category is required")
 
-    norm_aliases = normalize_str_list(aliases)
+    norm_aliases = expand_alias_variants(normalize_str_list(aliases), base_name=name)
     norm_tags = normalize_str_list(payload.tags)
 
     existing = await db["skills"].find_one({"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 1})
@@ -230,7 +230,11 @@ async def update_skill(skill_id: str, payload: SkillUpdate):
         if not updates["category"]:
             raise HTTPException(status_code=400, detail="Skill category is required")
     if "aliases" in updates:
-        updates["aliases"] = normalize_str_list(updates["aliases"])
+        base_name = updates.get("name")
+        if base_name is None:
+            existing = await db["skills"].find_one({"_id": oid}, {"name": 1})
+            base_name = (existing or {}).get("name", "")
+        updates["aliases"] = expand_alias_variants(normalize_str_list(updates["aliases"]), base_name=base_name)
     if "tags" in updates:
         updates["tags"] = normalize_str_list(updates["tags"])
 

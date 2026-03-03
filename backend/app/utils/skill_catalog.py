@@ -12,6 +12,51 @@ def normalize_skill_text(value: str | None) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
 
 
+def _pluralize_token(token: str) -> str | None:
+    text = str(token or "").strip()
+    if not text or len(text) <= 2:
+        return None
+    low = text.casefold()
+    if low.endswith(("ss", "us")):
+        return None
+    if low.endswith("y") and len(low) > 2 and low[-2] not in "aeiou":
+        return text[:-1] + "ies"
+    if low.endswith(("s", "x", "z", "ch", "sh")):
+        return text + "es"
+    return text + "s"
+
+
+def _singularize_token(token: str) -> str | None:
+    text = str(token or "").strip()
+    if not text or len(text) <= 3:
+        return None
+    low = text.casefold()
+    if low.endswith("ies") and len(text) > 3:
+        return text[:-3] + "y"
+    if low.endswith("es") and low[:-2].endswith(("s", "x", "z", "ch", "sh")):
+        return text[:-2]
+    if low.endswith("s") and not low.endswith("ss"):
+        return text[:-1]
+    return None
+
+
+def _inflected_variants(value: str) -> list[str]:
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    if not text:
+        return []
+
+    variants = [text]
+    tokens = text.split(" ")
+    last = tokens[-1]
+    plural = _pluralize_token(last)
+    singular = _singularize_token(last)
+    if plural:
+        variants.append(" ".join(tokens[:-1] + [plural]))
+    if singular:
+        variants.append(" ".join(tokens[:-1] + [singular]))
+    return unique_casefolded(variants)
+
+
 def unique_casefolded(values: Iterable[str]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
@@ -25,6 +70,17 @@ def unique_casefolded(values: Iterable[str]) -> list[str]:
         seen.add(key)
         out.append(text)
     return out
+
+
+def expand_alias_variants(values: Iterable[str], base_name: str | None = None) -> list[str]:
+    expanded: list[str] = []
+    for value in values:
+        expanded.extend(_inflected_variants(str(value or "")))
+    deduped = unique_casefolded(expanded)
+    if base_name:
+        name_key = normalize_skill_text(base_name)
+        deduped = [value for value in deduped if normalize_skill_text(value) != name_key]
+    return deduped
 
 
 def merge_skill_docs(docs: Iterable[dict], current_user_oid: ObjectId | None = None) -> list[dict]:
@@ -89,7 +145,7 @@ def merge_skill_docs(docs: Iterable[dict], current_user_oid: ObjectId | None = N
     for group in grouped.values():
         merged_ids = unique_casefolded(group.pop("merged_ids", []))
         categories = unique_casefolded(group.pop("categories", []))
-        aliases = unique_casefolded(group.pop("aliases", []))
+        aliases = expand_alias_variants(group.pop("aliases", []), base_name=group.get("name"))
         tags = unique_casefolded(group.pop("tags", []))
         name = str(group.get("name") or "").strip()
         name_key = normalize_skill_text(name)
