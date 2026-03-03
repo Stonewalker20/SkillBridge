@@ -14,6 +14,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "../components/ui/chart";
+import { useHeaderTheme } from "../lib/headerTheme";
 
 type AnalyticsState = {
   loading: boolean;
@@ -87,6 +88,7 @@ function normalizeEvidenceTypeLabel(value: string): string {
 }
 
 export function SkillAnalytics() {
+  const { activeHeaderTheme } = useHeaderTheme();
   const [state, setState] = useState<AnalyticsState>({
     loading: true,
     skills: [],
@@ -207,7 +209,7 @@ export function SkillAnalytics() {
 
   return (
     <div className="space-y-8">
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.18),_transparent_36%),linear-gradient(135deg,_#ffffff,_#f8fafc)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.14),_transparent_34%),linear-gradient(135deg,_#0f1b2d,_#08111f)]">
+      <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
         <div className="px-6 py-7 md:px-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">

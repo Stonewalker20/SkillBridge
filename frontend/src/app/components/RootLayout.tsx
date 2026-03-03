@@ -21,6 +21,7 @@ import LogoImage from "../../imports/skillbridge_logo.png";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
+import { useHeaderTheme } from "../lib/headerTheme";
 
 const baseNavigation = [
   { name: "Dashboard", href: "/app", icon: LayoutDashboard },
@@ -34,6 +35,7 @@ export function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { activeHeaderTheme } = useHeaderTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -88,7 +90,7 @@ export function RootLayout() {
 
       {/* Sidebar */}
       <div className={cn(
-        "fixed lg:static inset-y-0 left-0 z-50 w-64 border-r border-slate-200/70 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(241,245,249,0.96))] backdrop-blur-xl flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.96))]",
+        "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200/70 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.96)_52%,_rgba(241,245,249,0.98))] backdrop-blur-xl transition-transform duration-300 ease-in-out dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.96))] lg:static lg:translate-x-0",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Close button for mobile */}
@@ -101,8 +103,11 @@ export function RootLayout() {
           <X className="h-6 w-6" />
         </Button>
 
-        <div className="border-b border-slate-200/80 px-6 py-6 dark:border-slate-800/80">
-          <Link to="/app" className="flex items-center justify-center rounded-2xl px-1 py-2 transition-opacity hover:opacity-90">
+        <div className="border-b border-slate-200/80 bg-white/55 px-6 py-6 dark:border-slate-800/80 dark:bg-slate-950/35">
+          <Link
+            to="/app"
+            className="flex items-center justify-center rounded-2xl bg-white/90 px-1 py-2 shadow-sm ring-1 ring-slate-200/80 transition-opacity hover:opacity-90 dark:bg-slate-950/80 dark:ring-slate-800/80"
+          >
             <img
               src={LogoImage}
               alt="SkillBridge Logo"
@@ -125,7 +130,7 @@ export function RootLayout() {
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-4 py-3 transition-all",
                   isActive
-                    ? "bg-[linear-gradient(135deg,_#1E3A8A,_#FBBF24)] text-white shadow-sm"
+                    ? activeHeaderTheme.sidebarActiveClass
                     : "text-slate-700 hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
                 )}
               >
@@ -237,7 +242,7 @@ export function RootLayout() {
               <Button asChild variant="ghost" className="relative h-11 w-11 rounded-full border border-slate-200/80 bg-white/80 p-0 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
                 <Link to="/app/account" aria-label="Open account settings" title="Account Settings">
                   <Avatar>
-                    <AvatarFallback className="bg-[linear-gradient(135deg,_#1E3A8A,_#FBBF24)] text-white">
+                    <AvatarFallback className={`${activeHeaderTheme.avatarClass} text-white`}>
                       {initials}
                     </AvatarFallback>
                   </Avatar>

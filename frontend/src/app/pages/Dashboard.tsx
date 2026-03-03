@@ -7,6 +7,7 @@ import { Target, FolderOpen, TrendingUp, FileText, X } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
+import { useHeaderTheme } from "../lib/headerTheme";
 
 interface DashboardSummary {
   totalSkills: number;
@@ -103,6 +104,7 @@ async function loadAllSkills(): Promise<Skill[]> {
 export function Dashboard() {
   const { user } = useAuth();
   const { activities, clearActivities } = useActivity();
+  const { activeHeaderTheme } = useHeaderTheme();
   const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [hiddenRecentActivityKeys, setHiddenRecentActivityKeys] = useState<string[]>(() => {
@@ -296,7 +298,7 @@ export function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.18),_transparent_36%),linear-gradient(135deg,_#ffffff,_#f8fafc)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.14),_transparent_34%),linear-gradient(135deg,_#0f1b2d,_#08111f)]">
+      <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
         <div className="px-6 py-7 md:px-8">
           <div className="max-w-2xl">
             <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
@@ -413,7 +415,7 @@ export function Dashboard() {
                       <span className="text-sm text-gray-600 dark:text-slate-300">{category.count} skills</span>
                     </div>
                     <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800">
-                      <div className="h-2.5 rounded-full bg-[linear-gradient(90deg,_#1E3A8A,_#0F766E)] transition-all" style={{ width: `${pct}%` }} />
+                      <div className={`h-2.5 rounded-full transition-all ${activeHeaderTheme.barClass}`} style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
