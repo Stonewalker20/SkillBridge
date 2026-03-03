@@ -902,6 +902,14 @@ async def match_job(payload: dict):
     extracted = job_doc.get("extracted_skills") or []
     ignored_skill_names = _normalize_ignored_skill_names(payload.get("ignored_skill_names"))
     ignored_terms = {normalize_skill_text(value) for value in ignored_skill_names if normalize_skill_text(value)}
+    added_from_missing_skills = [
+        {
+            "skill_id": str(entry.get("skill_id") or "").strip(),
+            "skill_name": str(entry.get("skill_name") or "").strip(),
+        }
+        for entry in (payload.get("added_from_missing_skills") or [])
+        if str(entry.get("skill_id") or "").strip() and str(entry.get("skill_name") or "").strip()
+    ]
     persist_history = bool(payload.get("persist_history", True))
     history_id = str(payload.get("history_id") or "").strip()
     raw_extracted_skill_ids = _dedupe_preserve_order(str(e.get("skill_id")) for e in extracted if e.get("skill_id"))
@@ -1149,6 +1157,7 @@ async def match_job(payload: dict):
         match_confidence_label=confidence_label,
         analysis_summary=analysis_summary,
         ignored_skill_names=ignored_skill_names,
+        added_from_missing_skills=added_from_missing_skills,
         matched_skill_ids=matched_ids,
         matched_skills=matched_names,
         missing_skill_ids=missing_ids,

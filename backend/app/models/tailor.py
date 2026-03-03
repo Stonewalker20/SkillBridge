@@ -37,12 +37,18 @@ class MatchScoreBreakdown(BaseModel):
     detail: str
 
 
+class AddedFromMissingSkill(BaseModel):
+    skill_id: str
+    skill_name: str
+
+
 class JobMatchOut(BaseModel):
     job_id: str
     match_score: float
     match_confidence_label: str = "Low"
     analysis_summary: str = ""
     ignored_skill_names: list[str] = Field(default_factory=list)
+    added_from_missing_skills: list[AddedFromMissingSkill] = Field(default_factory=list)
     matched_skill_ids: list[str] = Field(default_factory=list)
     matched_skills: list[str] = Field(default_factory=list)
     missing_skill_ids: list[str] = Field(default_factory=list)
