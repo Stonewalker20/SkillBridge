@@ -97,6 +97,36 @@ export function RootLayout() {
               </Link>
             );
           })}
+
+          <div className="mt-6 border-t border-gray-200 pt-4">
+            <p className="px-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Quick Actions</p>
+            <div className="mt-2 space-y-1">
+              <Link
+                to="/app/jobs?analyze=1"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-lg px-4 py-3 text-gray-700 transition-colors hover:bg-gray-100"
+              >
+                <Briefcase className="h-5 w-5" />
+                <span className="font-medium">Analyze New Job</span>
+              </Link>
+              <Link
+                to="/app/skills?add=1"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-lg px-4 py-3 text-gray-700 transition-colors hover:bg-gray-100"
+              >
+                <Target className="h-5 w-5" />
+                <span className="font-medium">Add Skill</span>
+              </Link>
+              <Link
+                to="/app/evidence?add=1"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-lg px-4 py-3 text-gray-700 transition-colors hover:bg-gray-100"
+              >
+                <FolderOpen className="h-5 w-5" />
+                <span className="font-medium">Upload Evidence</span>
+              </Link>
+            </div>
+          </div>
         </nav>
 
         <div className="p-4 border-t border-gray-200">
