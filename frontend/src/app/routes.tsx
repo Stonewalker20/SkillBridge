@@ -10,6 +10,7 @@ import { Evidence } from "./pages/Evidence";
 import { Jobs } from "./pages/Jobs";
 import { Account } from "./pages/Account";
 import { NotFound } from "./pages/NotFound";
+import { TailoredResumes } from "./pages/TailoredResumes";
 
 export const router = createBrowserRouter([
   {
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
       { path: "skills", element: <Skills /> },
       { path: "evidence", element: <Evidence /> },
       { path: "jobs", element: <Jobs /> },
+      { path: "resumes", element: <TailoredResumes /> },
       { path: "account", element: <Account /> },
     ],
   },

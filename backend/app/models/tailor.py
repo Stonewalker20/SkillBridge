@@ -94,6 +94,27 @@ class TailoredResumeOut(BaseModel):
     created_at: datetime | None = None
 
 
+class TailoredResumeListEntryOut(BaseModel):
+    id: str
+    user_id: str
+    job_id: str | None = None
+    job_title: str | None = None
+    company: str | None = None
+    location: str | None = None
+    template: str
+    selected_skill_count: int = 0
+    selected_item_count: int = 0
+    created_at: datetime | None = None
+
+
+class TailoredResumeDetailOut(TailoredResumeOut):
+    job_title: str | None = None
+    company: str | None = None
+    location: str | None = None
+    selected_skill_count: int = 0
+    selected_item_count: int = 0
+
+
 class RewriteBulletsIn(BaseModel):
     focus: str = Field(default="balanced", description="impact|ats|balanced")
 

@@ -11,20 +11,22 @@ from fastapi.responses import FileResponse
 
 from app.core.db import get_db
 from app.models.tailor import (
+    AISettingsStatusOut,
+    ExtractedSkill,
     JobIngestIn,
     JobIngestOut,
+    JobMatchCompareOut,
     JobMatchHistoryDetailOut,
     JobMatchHistoryEntryOut,
     JobMatchOut,
-    JobMatchCompareOut,
     MatchScoreBreakdown,
-    AISettingsStatusOut,
+    ResumeSection,
     RewriteBulletsIn,
     RewriteBulletsOut,
-    ExtractedSkill,
-    TailorPreviewIn,
+    TailoredResumeDetailOut,
+    TailoredResumeListEntryOut,
     TailoredResumeOut,
-    ResumeSection,
+    TailorPreviewIn,
 )
 from app.utils.ai import cosine_similarity, embed_texts, get_inference_status, rewrite_resume_bullets
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
@@ -482,6 +484,36 @@ def _serialize_tailored_resume(doc: dict) -> TailoredResumeOut:
         sections=[ResumeSection(**section) for section in (doc.get("sections") or [])],
         plain_text=str(doc.get("plain_text") or ""),
         created_at=doc.get("created_at"),
+    )
+
+
+def _serialize_tailored_resume_list_entry(doc: dict, job_doc: dict | None = None) -> TailoredResumeListEntryOut:
+    job_doc = job_doc or {}
+    raw_job_id = doc.get("job_id")
+    return TailoredResumeListEntryOut(
+        id=oid_str(doc.get("_id")),
+        user_id=oid_str(doc.get("user_id")),
+        job_id=oid_str(raw_job_id) if raw_job_id is not None else None,
+        job_title=str(job_doc.get("title") or "").strip() or None,
+        company=str(job_doc.get("company") or "").strip() or None,
+        location=str(job_doc.get("location") or "").strip() or None,
+        template=str(doc.get("template") or "ats_v1"),
+        selected_skill_count=len(doc.get("selected_skill_ids") or []),
+        selected_item_count=len(doc.get("selected_item_ids") or []),
+        created_at=doc.get("created_at"),
+    )
+
+
+def _serialize_tailored_resume_detail(doc: dict, job_doc: dict | None = None) -> TailoredResumeDetailOut:
+    base = _serialize_tailored_resume(doc)
+    job_doc = job_doc or {}
+    return TailoredResumeDetailOut(
+        **base.model_dump(),
+        job_title=str(job_doc.get("title") or "").strip() or None,
+        company=str(job_doc.get("company") or "").strip() or None,
+        location=str(job_doc.get("location") or "").strip() or None,
+        selected_skill_count=len(doc.get("selected_skill_ids") or []),
+        selected_item_count=len(doc.get("selected_item_ids") or []),
     )
 
 def _render_plain_text(sections: list[ResumeSection]) -> str:
@@ -1001,6 +1033,80 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
             )
 
     return _serialize_tailored_resume({"_id": res.inserted_id, **record})
+
+
+@router.get("/resumes", response_model=list[TailoredResumeListEntryOut])
+async def list_tailored_resumes(user_id: str, limit: int = 100):
+    db = get_db()
+    capped_limit = max(1, min(limit, 200))
+    docs = await (
+        db["tailored_resumes"]
+        .find(ref_query("user_id", user_id))
+        .sort("created_at", -1)
+        .limit(capped_limit)
+        .to_list(length=capped_limit)
+    )
+
+    job_ids: list[ObjectId] = []
+    for doc in docs:
+        raw_job_id = doc.get("job_id")
+        if isinstance(raw_job_id, ObjectId):
+            job_ids.append(raw_job_id)
+        elif isinstance(raw_job_id, str) and ObjectId.is_valid(raw_job_id):
+            job_ids.append(ObjectId(raw_job_id))
+
+    job_docs = await db["job_ingests"].find(
+        {"_id": {"$in": job_ids}},
+        {"title": 1, "company": 1, "location": 1},
+    ).to_list(length=len(job_ids) or 1)
+    jobs_by_id = {oid_str(job.get("_id")): job for job in job_docs}
+
+    return [
+        _serialize_tailored_resume_list_entry(doc, jobs_by_id.get(oid_str(doc.get("job_id"))))
+        for doc in docs
+    ]
+
+
+@router.delete("/resumes/{tailored_id}")
+async def delete_tailored_resume(tailored_id: str, user_id: str):
+    db = get_db()
+    try:
+        oid = ObjectId(tailored_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid tailored_id")
+
+    doc = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", user_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Tailored resume not found")
+
+    await db["tailored_resumes"].delete_one({"_id": oid})
+    await db["job_match_runs"].update_many(
+        {"user_id": {"$in": ref_values(user_id)}, "tailored_resume_id": oid},
+        {"$unset": {"tailored_resume_id": ""}, "$set": {"updated_at": now_utc()}},
+    )
+    return {"ok": True, "id": tailored_id}
+
+
+@router.get("/resumes/{tailored_id}", response_model=TailoredResumeDetailOut)
+async def get_tailored_resume_detail(tailored_id: str, user_id: str):
+    db = get_db()
+    try:
+        oid = ObjectId(tailored_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid tailored_id")
+
+    doc = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", user_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Tailored resume not found")
+
+    raw_job_id = doc.get("job_id")
+    job_doc = None
+    if isinstance(raw_job_id, ObjectId):
+        job_doc = await db["job_ingests"].find_one({"_id": raw_job_id}, {"title": 1, "company": 1, "location": 1})
+    elif isinstance(raw_job_id, str) and ObjectId.is_valid(raw_job_id):
+        job_doc = await db["job_ingests"].find_one({"_id": ObjectId(raw_job_id)}, {"title": 1, "company": 1, "location": 1})
+
+    return _serialize_tailored_resume_detail(doc, job_doc)
 
 @router.get("/history", response_model=list[JobMatchHistoryEntryOut])
 async def list_job_match_history(user_id: str, limit: int = 12):

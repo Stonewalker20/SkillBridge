@@ -306,6 +306,26 @@ export type JobMatchHistoryDetail = JobMatchHistoryEntry & {
   analysis: Record<string, any>;
 };
 
+export type TailoredResumeListEntry = {
+  id: string;
+  user_id: string;
+  job_id?: string | null;
+  job_title?: string | null;
+  company?: string | null;
+  location?: string | null;
+  template: string;
+  selected_skill_count: number;
+  selected_item_count: number;
+  created_at?: string;
+};
+
+export type TailoredResumeDetail = TailoredResumeListEntry & {
+  selected_skill_ids: string[];
+  selected_item_ids: string[];
+  sections: Array<{ title: string; lines: string[] }>;
+  plain_text: string;
+};
+
 export type AISettingsStatus = {
   provider_mode: string;
   embeddings_provider: string;
@@ -597,20 +617,20 @@ export const api = {
       averageMatchScore: Number(raw?.average_match_score ?? 0) || 0,
       tailoredResumes: Number(raw?.tailored_resumes ?? 0) || 0,
       recentActivity: Array.isArray(raw?.recent_activity)
-        ? raw.recent_activity.slice(0, 6)
+        ? raw.recent_activity
         : asArray(raw?.recent_projects).map((project: any) => ({
             id: project?.id,
             type: "project",
             action: "created",
             name: project?.title ?? "",
             date: project?.created_at ?? "",
-          })).slice(0, 6),
+          })),
       topSkillCategories: asArray(raw?.top_skills_by_evidence)
         .map((skill: any) => ({
           category: skill?.category || "Uncategorized",
           count: Number(skill?.evidence_count ?? 0) || 0,
         }))
-        .slice(0, 8),
+        .filter((skill) => skill.count > 0),
     };
   },
 
@@ -641,6 +661,20 @@ export const api = {
     const userId = await getUserIdOrThrow();
     const suffix = limit != null ? `?user_id=${encodeURIComponent(userId)}&limit=${encodeURIComponent(String(limit))}` : `?user_id=${encodeURIComponent(userId)}`;
     return request<JobMatchHistoryEntry[]>("/tailor/history" + suffix, "GET");
+  },
+
+  listTailoredResumes: async (limit?: number) => {
+    const userId = await getUserIdOrThrow();
+    const suffix = limit != null ? `?user_id=${encodeURIComponent(userId)}&limit=${encodeURIComponent(String(limit))}` : `?user_id=${encodeURIComponent(userId)}`;
+    return request<TailoredResumeListEntry[]>("/tailor/resumes" + suffix, "GET");
+  },
+  getTailoredResumeDetail: async (tailoredId: string) => {
+    const userId = await getUserIdOrThrow();
+    return request<TailoredResumeDetail>(`/tailor/resumes/${tailoredId}?user_id=${encodeURIComponent(userId)}`, "GET");
+  },
+  deleteTailoredResume: async (tailoredId: string) => {
+    const userId = await getUserIdOrThrow();
+    return request<{ ok: boolean; id: string }>(`/tailor/resumes/${tailoredId}?user_id=${encodeURIComponent(userId)}`, "DELETE");
   },
 
   compareJobMatchHistory: async (leftId: string, rightId: string) => {

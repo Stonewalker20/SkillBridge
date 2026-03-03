@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import atexit
+import gc
 import hashlib
 import math
 import os
 import re
-from functools import lru_cache
 from typing import Iterable
 
 from app.core.config import settings
@@ -13,6 +14,11 @@ from app.core.config import settings
 # Avoid tokenizer/process helper fan-out on macOS/Python 3.12, which can
 # leave semaphore warnings behind during interpreter shutdown.
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("HF_ENABLE_PARALLEL_LOADING", "false")
 
 
 STOPWORDS = {
@@ -42,6 +48,10 @@ SKILL_CATEGORY_BY_LABEL = {
     "soft skill": "Professional",
     "not a skill": "",
 }
+
+_SENTENCE_MODEL = None
+_ZERO_SHOT_PIPELINE = None
+_TORCH_RUNTIME_CONFIGURED = False
 
 
 def _tokenize(text: str) -> list[str]:
@@ -73,28 +83,73 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     return round(sum(a * b for a, b in zip(left, right)), 4)
 
 
-@lru_cache(maxsize=1)
 def _load_sentence_transformer():
+    global _SENTENCE_MODEL
+    if _SENTENCE_MODEL is not None:
+        return _SENTENCE_MODEL
     try:
         from sentence_transformers import SentenceTransformer
 
-        return SentenceTransformer(settings.local_embedding_model)
+        _configure_torch_runtime()
+        _SENTENCE_MODEL = SentenceTransformer(settings.local_embedding_model)
+        return _SENTENCE_MODEL
     except Exception:
         return None
 
 
-@lru_cache(maxsize=1)
 def _load_zero_shot_pipeline():
+    global _ZERO_SHOT_PIPELINE
+    if _ZERO_SHOT_PIPELINE is not None:
+        return _ZERO_SHOT_PIPELINE
     try:
         from transformers import pipeline
 
-        return pipeline(
+        _configure_torch_runtime()
+        _ZERO_SHOT_PIPELINE = pipeline(
             "zero-shot-classification",
             model=settings.local_zero_shot_model,
             device=settings.local_model_device,
+            framework="pt",
         )
+        return _ZERO_SHOT_PIPELINE
     except Exception:
         return None
+
+
+def _configure_torch_runtime() -> None:
+    global _TORCH_RUNTIME_CONFIGURED
+    if _TORCH_RUNTIME_CONFIGURED:
+        return
+    try:
+        import torch
+
+        torch.set_num_threads(1)
+        if hasattr(torch, "set_num_interop_threads"):
+            torch.set_num_interop_threads(1)
+    except Exception:
+        pass
+    _TORCH_RUNTIME_CONFIGURED = True
+
+
+def release_local_models() -> None:
+    global _SENTENCE_MODEL, _ZERO_SHOT_PIPELINE
+
+    for obj in (_SENTENCE_MODEL, _ZERO_SHOT_PIPELINE):
+        if obj is None:
+            continue
+        model = getattr(obj, "model", obj)
+        try:
+            if hasattr(model, "cpu"):
+                model.cpu()
+        except Exception:
+            pass
+
+    _SENTENCE_MODEL = None
+    _ZERO_SHOT_PIPELINE = None
+    gc.collect()
+
+
+atexit.register(release_local_models)
 
 
 def get_inference_status() -> dict[str, str]:

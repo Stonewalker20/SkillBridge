@@ -3,6 +3,7 @@ import {
   LayoutDashboard, 
   Briefcase, 
   FolderOpen, 
+  FileText,
   Target,
   Menu,
   X,
@@ -136,6 +137,14 @@ export function RootLayout() {
               >
                 <FolderOpen className="h-5 w-5" />
                 <span className="font-medium">Upload Evidence</span>
+              </Link>
+              <Link
+                to="/app/resumes"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900"
+              >
+                <FileText className="h-5 w-5" />
+                <span className="font-medium">View Tailored Resumes</span>
               </Link>
             </div>
           </div>

@@ -3,8 +3,10 @@ import { api, type Skill, type ConfirmationOut } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
 import { Card } from "../components/ui/card";
-import { Target, FolderOpen, TrendingUp, FileText } from "lucide-react";
+import { Target, FolderOpen, TrendingUp, FileText, X } from "lucide-react";
 import { Badge } from "../components/ui/badge";
+import { Link } from "react-router";
+import { Button } from "../components/ui/button";
 
 interface DashboardSummary {
   totalSkills: number;
@@ -56,6 +58,20 @@ export function Dashboard() {
   const { activities } = useActivity();
   const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
+  const [hiddenRecentActivityIds, setHiddenRecentActivityIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem("dashboard:hiddenRecentActivityIds");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("dashboard:hiddenRecentActivityIds", JSON.stringify(hiddenRecentActivityIds));
+  }, [hiddenRecentActivityIds]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -111,8 +127,7 @@ export function Dashboard() {
 
         const topSkillCategories = Array.from(categoryCounts.entries())
           .map(([category, count]) => ({ category, count }))
-          .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category))
-          .slice(0, 8);
+          .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
 
         const userSpecificTotalSkills = confirmedVisibleSkillIds.size;
 
@@ -122,8 +137,7 @@ export function Dashboard() {
         ]
           .filter((item) => !!item?.date)
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .filter((item, index, arr) => arr.findIndex((candidate) => candidate.id === item.id) === index)
-          .slice(0, 6);
+          .filter((item, index, arr) => arr.findIndex((candidate) => candidate.id === item.id) === index);
 
         setSummary({
           ...normalizedBase,
@@ -172,10 +186,21 @@ export function Dashboard() {
         icon: FileText,
         color: "text-[#0D9488]",
         bgColor: "bg-teal-50",
+        href: "/app/resumes",
       },
     ],
     [summary]
   );
+
+  const visibleRecentActivity = useMemo(
+    () => summary.recentActivity.filter((activity) => !hiddenRecentActivityIds.includes(String(activity.id))),
+    [summary.recentActivity, hiddenRecentActivityIds]
+  );
+
+  const hideRecentActivityItem = (id: string | number) => {
+    const key = String(id);
+    setHiddenRecentActivityIds((current) => (current.includes(key) ? current : [...current, key]));
+  };
 
   if (loading) {
     return (
@@ -205,16 +230,18 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => (
-          <Card key={stat.name} className="border-slate-200 p-6 transition-all hover:-translate-y-0.5 hover:shadow-md">
-            <div className="flex items-center gap-4">
-              <div className={`rounded-2xl p-3 ${stat.bgColor}`}>
-                <stat.icon className={`h-6 w-6 ${stat.color}`} />
+          <Card key={stat.name} className="border-slate-200 p-0 transition-all hover:-translate-y-0.5 hover:shadow-md">
+            <Link to={stat.href ?? "/app"} className="block p-6">
+              <div className="flex items-center gap-4">
+                <div className={`rounded-2xl p-3 ${stat.bgColor}`}>
+                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">{stat.name}</p>
+                  <p className="mt-1 text-2xl font-bold text-gray-900">{stat.value}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-                <p className="mt-1 text-2xl font-bold text-gray-900">{stat.value}</p>
-              </div>
-            </div>
+            </Link>
           </Card>
         ))}
       </div>
@@ -224,17 +251,21 @@ export function Dashboard() {
         <Card className="border-slate-200 p-6">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
-            <Badge variant="secondary">{summary.recentActivity.length} latest</Badge>
+            {hiddenRecentActivityIds.length > 0 ? (
+              <Button variant="ghost" size="sm" onClick={() => setHiddenRecentActivityIds([])}>
+                Reset hidden
+              </Button>
+            ) : null}
           </div>
 
-          {summary.recentActivity.length === 0 ? (
+          {visibleRecentActivity.length === 0 ? (
             <div className="text-sm text-gray-500">No recent activity yet.</div>
           ) : (
-            <div className="space-y-3">
-              {summary.recentActivity.map((activity) => (
+            <div className="max-h-[26rem] space-y-3 overflow-y-auto pr-1">
+              {visibleRecentActivity.map((activity) => (
                 <div
                   key={activity.id}
-                  className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3 last:border-slate-100"
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3 last:border-slate-100"
                 >
                   <div className="flex items-center gap-3">
                     <Badge variant="outline" className="capitalize bg-white">
@@ -245,9 +276,21 @@ export function Dashboard() {
                       <p className="text-xs text-gray-500 capitalize">{activity.action}</p>
                     </div>
                   </div>
-                  <span className="text-xs text-gray-500">
-                    {activity.date ? new Date(activity.date).toLocaleDateString() : ""}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">
+                      {activity.date ? new Date(activity.date).toLocaleDateString() : ""}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-full text-slate-400 hover:bg-white hover:text-slate-700"
+                      onClick={() => hideRecentActivityItem(activity.id)}
+                      aria-label={`Hide activity ${activity.name}`}
+                      title="Hide activity"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -258,13 +301,13 @@ export function Dashboard() {
         <Card className="border-slate-200 p-6">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">Top Skill Categories</h3>
-            <Badge variant="secondary">{summary.topSkillCategories.length} shown</Badge>
+            <Badge variant="secondary">{summary.topSkillCategories.length} total</Badge>
           </div>
 
           {summary.topSkillCategories.length === 0 ? (
             <div className="text-sm text-gray-500">No categories yet. Confirm skills to populate this chart.</div>
           ) : (
-            <div className="space-y-4">
+            <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
               {summary.topSkillCategories.map((category) => {
                 const denom = summary.topSkillCategories.reduce((acc, c) => acc + (c.count || 0), 0) || 1;
                 const pct = Math.min(100, Math.max(0, (category.count / denom) * 100));

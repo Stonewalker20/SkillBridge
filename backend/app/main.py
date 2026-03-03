@@ -14,7 +14,7 @@ from app.routers.tailor import router as tailor_router
 from app.routers.portfolio import router as portfolio_router
 from app.routers.auth import router as auth_router
 from app.core.config import settings
-from app.utils.ai import get_inference_status, warm_local_models
+from app.utils.ai import get_inference_status, release_local_models, warm_local_models
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import os
@@ -54,6 +54,7 @@ async def on_startup():
 
 @app.on_event("shutdown")
 async def on_shutdown():
+    release_local_models()
     await close_mongo_connection()
 
 app.include_router(health_router, prefix="/health", tags=["health"])
