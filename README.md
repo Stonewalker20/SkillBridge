@@ -41,27 +41,43 @@ SkillBridge is a full-stack career intelligence platform for collecting evidence
 
 ```text
 skillbridge/
+├── assets/                     # shared brand and project assets
 ├── backend/
 │   ├── app/
 │   │   ├── core/
 │   │   ├── models/
 │   │   ├── routers/
 │   │   └── utils/
-│   ├── ml_sandbox/
-│   ├── scripts/
-│   ├── tests/
+│   ├── data/                   # raw, processed, and taxonomy-backed data assets
+│   ├── ml_sandbox/             # notebook-based model tuning workspace
+│   ├── scripts/                # one-off migrations, seeding, and cleanup utilities
+│   ├── tests/                  # backend contract and route tests
 │   ├── requirements.txt
-│   └── requirements-dev.txt
+│   ├── requirements-dev.txt
+│   ├── Dockerfile
+│   └── README.md
+├── data/                       # project-level reference datasets
+├── docs/                       # supporting documentation and writeups
 ├── frontend/
-│   ├── src/app/
-│   │   ├── components/
-│   │   ├── context/
-│   │   ├── pages/
-│   │   ├── routes.tsx
-│   │   └── services/
-│   └── package.json
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── components/
+│   │   │   ├── context/
+│   │   │   ├── pages/
+│   │   │   ├── services/
+│   │   │   ├── App.tsx
+│   │   │   └── routes.tsx
+│   │   ├── imports/            # shared SVGs and imported design assets
+│   │   ├── styles/
+│   │   └── main.tsx
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── Dockerfile
+│   └── README.md
 ├── infra/
-│   └── docker-compose.yml
+│   └── docker-compose.yml      # local MongoDB container setup
+├── tests/                      # top-level integration or legacy project tests
+├── .env.example
 └── README.md
 ```
 
