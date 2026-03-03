@@ -8,7 +8,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import type { JobMatchHistoryEntry } from "../services/api";
-import { Download, CheckCircle2, AlertCircle, Sparkles, Wand2, History, Trash2, RotateCw, Plus } from "lucide-react";
+import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateCw, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 
@@ -66,8 +66,6 @@ export function Jobs() {
 
   const [tailored, setTailored] = useState<any>(null);
   const [generating, setGenerating] = useState(false);
-  const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
-  const [rewriting, setRewriting] = useState(false);
   const [history, setHistory] = useState<JobMatchHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
@@ -106,11 +104,6 @@ export function Jobs() {
       historyId: a.history_id ?? a.historyId ?? null,
     };
   }, [analysis]);
-
-  const tailoredId = useMemo(
-    () => String((tailored as any)?.id ?? (tailored as any)?.tailored_id ?? (tailored as any)?.tailoredId ?? "").trim(),
-    [tailored]
-  );
 
   useEffect(() => {
     if (searchParams.get("analyze") === "1" && !analysis) {
@@ -196,9 +189,14 @@ export function Jobs() {
 
     setGenerating(true);
     try {
-      // 3) Preview tailored resume (server stores the result and returns tailored_id)
       const preview = await api.previewTailoredResume({ job_id: jobId });
       setTailored(preview);
+      const previewId = String((preview as any)?.id ?? (preview as any)?.tailored_id ?? (preview as any)?.tailoredId ?? "").trim();
+      if (!previewId) {
+        throw new Error("Tailored resume was created without an export id");
+      }
+      const blob = await api.downloadTailoredPdf(previewId);
+      downloadBlob(blob, "tailored_resume.pdf");
       try {
         await refreshHistory();
       } catch (historyError) {
@@ -210,43 +208,18 @@ export function Jobs() {
         action: "generated",
         name: jobTitle || company || "Tailored resume",
       });
-      toast.success("Tailored resume generated");
-    } catch (error: any) {
-      console.error("Failed to generate resume:", error);
-      toast.error(error?.message || "Failed to generate resume");
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleExport = async (kind: "pdf" | "docx") => {
-    const tid = tailoredId;
-    if (!tid) {
-      toast.error("No tailored resume id found");
-      return;
-    }
-
-    setExporting(kind);
-    try {
-      if (kind === "pdf") {
-        const blob = await api.downloadTailoredPdf(String(tid));
-        downloadBlob(blob, "tailored_resume.pdf");
-      } else {
-        const blob = await api.downloadTailoredDocx(String(tid));
-        downloadBlob(blob, "tailored_resume.docx");
-      }
       recordActivity({
-        id: `jobs:export:${kind}:${tid}`,
+        id: `jobs:export:pdf:${previewId}`,
         type: "resume",
         action: "exported",
-        name: `${jobTitle || company || "Tailored resume"} (${kind.toUpperCase()})`,
+        name: `${jobTitle || company || "Tailored resume"} (PDF)`,
       });
-      toast.success("Export ready");
+      toast.success("Tailored resume PDF downloaded");
     } catch (error: any) {
-      console.error("Export failed:", error);
-      toast.error(error?.message || "Export failed");
+      console.error("Failed to generate resume:", error);
+      toast.error(error?.message || "Failed to generate tailored resume PDF");
     } finally {
-      setExporting(null);
+      setGenerating(false);
     }
   };
 
@@ -259,34 +232,6 @@ export function Jobs() {
       setTailored(null);
       setJobId(null);
     };
-
-  const handleRewrite = async (focus: "balanced" | "ats" | "impact" = "balanced") => {
-    if (!tailoredId) {
-      toast.error("Generate a tailored resume first");
-      return;
-    }
-    setRewriting(true);
-    try {
-      const rewritten = await api.rewriteTailoredResume(tailoredId, { focus });
-      setTailored((current: any) => ({
-        ...(current ?? {}),
-        ...rewritten,
-        id: tailoredId,
-      }));
-      recordActivity({
-        id: `jobs:rewrite:${focus}:${tailoredId}`,
-        type: "resume",
-        action: "rewritten",
-        name: `${jobTitle || company || "Tailored resume"} (${focus})`,
-      });
-      toast.success("Resume bullets enhanced");
-    } catch (error: any) {
-      console.error("Failed to rewrite tailored resume:", error);
-      toast.error(error?.message || "Failed to rewrite tailored resume");
-    } finally {
-      setRewriting(false);
-    }
-  };
 
   const handleRestoreHistory = async (historyId: string) => {
     setRestoringHistoryId(historyId);
@@ -744,35 +689,17 @@ export function Jobs() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Tailored Resume</h3>
-            <p className="text-sm text-gray-600">Generate a preview then export as PDF/DOCX.</p>
+            <p className="text-sm text-gray-600">Generate a tailored resume preview and download the PDF.</p>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              onClick={handleGenerateResume}
-              disabled={generating || !jobId}
-              className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
-            >
-              {generating ? "Generating..." : "Generate"}
-            </Button>
-
-            <Button variant="outline" disabled={!tailored || exporting === "pdf"} onClick={() => handleExport("pdf")}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              {exporting === "pdf" ? "Exporting..." : "PDF"}
-            </Button>
-
-            <Button variant="outline" disabled={!tailored || exporting === "docx"} onClick={() => handleExport("docx")}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              {exporting === "docx" ? "Exporting..." : "DOCX"}
-            </Button>
-
-            <Button variant="outline" disabled={!tailored || rewriting} onClick={() => handleRewrite("balanced")}>
-              <Wand2 className="h-4 w-4 mr-2" />
-              {rewriting ? "Enhancing..." : "Enhance Bullets"}
-            </Button>
-          </div>
+          <Button
+            onClick={handleGenerateResume}
+            disabled={generating || !jobId}
+            className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {generating ? "Generating PDF..." : "Generate PDF"}
+          </Button>
         </div>
 
         {tailored ? (
