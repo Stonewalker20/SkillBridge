@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 import hashlib
@@ -10,6 +10,7 @@ from app.core.db import get_db
 from bson import ObjectId
 
 TOKEN_TTL_DAYS = 30
+ADMIN_ROLES = {"owner", "admin", "team"}
 
 
 def now_utc() -> datetime:
@@ -100,6 +101,13 @@ async def require_user(authorization: Optional[str] = Header(default=None)) -> D
         await db["sessions"].delete_one({"_id": sess["_id"]})
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    return user
+
+
+async def require_admin_user(user=Depends(require_user)) -> Dict[str, Any]:
+    role = str(user.get("role") or "user").strip().lower()
+    if role not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
 

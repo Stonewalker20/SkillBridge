@@ -13,8 +13,9 @@ from app.routers.taxonomy import router as taxonomy_router
 from app.routers.tailor import router as tailor_router
 from app.routers.portfolio import router as portfolio_router
 from app.routers.auth import router as auth_router
+from app.routers.admin import router as admin_router
 from app.core.config import settings
-from app.utils.ai import get_inference_status, warm_local_models
+from app.utils.ai import get_inference_status, release_local_models, warm_local_models
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import os
@@ -27,7 +28,7 @@ async def ensure_indexes():
     await db["job_match_runs"].create_index([("user_id", 1), ("created_at", -1)])
     await db["tailored_resumes"].create_index([("user_id", 1), ("created_at", -1)])
 
-app = FastAPI(title="SkillBridge API", version="0.4.0")
+app = FastAPI(title="SkillBridge API", version="0.5.0")
 
 origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 
@@ -54,6 +55,7 @@ async def on_startup():
 
 @app.on_event("shutdown")
 async def on_shutdown():
+    release_local_models()
     await close_mongo_connection()
 
 app.include_router(health_router, prefix="/health", tags=["health"])
@@ -69,3 +71,4 @@ app.include_router(taxonomy_router, prefix="/taxonomy", tags=["taxonomy"])
 app.include_router(tailor_router, prefix="/tailor", tags=["tailor"])
 app.include_router(portfolio_router, prefix="/portfolio", tags=["portfolio"])
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
+app.include_router(admin_router, prefix="/admin", tags=["admin"])

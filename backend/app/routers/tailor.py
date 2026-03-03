@@ -11,21 +11,24 @@ from fastapi.responses import FileResponse
 
 from app.core.db import get_db
 from app.models.tailor import (
+    AISettingsStatusOut,
+    ExtractedSkill,
     JobIngestIn,
     JobIngestOut,
+    JobMatchCompareOut,
     JobMatchHistoryDetailOut,
     JobMatchHistoryEntryOut,
     JobMatchOut,
-    JobMatchCompareOut,
     MatchScoreBreakdown,
-    AISettingsStatusOut,
+    ResumeSection,
     RewriteBulletsIn,
     RewriteBulletsOut,
-    ExtractedSkill,
-    TailorPreviewIn,
+    TailoredResumeDetailOut,
+    TailoredResumeListEntryOut,
     TailoredResumeOut,
-    ResumeSection,
+    TailorPreviewIn,
 )
+from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
 from app.utils.ai import cosine_similarity, embed_texts, get_inference_status, rewrite_resume_bullets
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 
@@ -59,7 +62,7 @@ def _job_focus_lines(text: str) -> list[tuple[str, float]]:
         line = raw_line.strip(" \t-•*")
         if not line:
             continue
-        lower = line.lower()
+        lower = normalize_skill_text(line)
         matched_weight = next((weight for marker, weight in section_markers.items() if marker in lower), None)
         if matched_weight is not None:
             active_weight = matched_weight
@@ -72,7 +75,7 @@ def _job_focus_lines(text: str) -> list[tuple[str, float]]:
     return lines
 
 def _normalize_keyword_phrase(value: str) -> str:
-    value = re.sub(r"\s+", " ", str(value or "").strip().lower())
+    value = normalize_skill_text(value)
     return value.strip(" ,;:/")
 
 def _tokenize_keywords(text: str, extracted: Iterable[ExtractedSkill] | None = None) -> list[str]:
@@ -146,10 +149,10 @@ def _is_hidden_skill_doc(doc: dict) -> bool:
 async def _load_skill_catalog(db) -> list[dict]:
     cursor = db["skills"].find({}, {"name": 1, "aliases": 1, "category": 1, "hidden": 1})
     docs = await cursor.to_list(length=5000)
-    return [doc for doc in docs if not _is_hidden_skill_doc(doc)]
+    return merge_skill_docs([doc for doc in docs if not _is_hidden_skill_doc(doc)])
 
 def _match_skills(job_text: str, skills: Iterable[dict]) -> list[ExtractedSkill]:
-    text = job_text.lower()
+    text = normalize_skill_text(job_text)
     matches: dict[str, ExtractedSkill] = {}
 
     def bump(sid: str, name: str, matched_on: str):
@@ -166,7 +169,7 @@ def _match_skills(job_text: str, skills: Iterable[dict]) -> list[ExtractedSkill]
             continue
 
         # word-boundary match for names; allow special tokens like C++ / C# via loose matching
-        n = name.lower()
+        n = normalize_skill_text(name)
         if len(n) >= 2:
             if re.search(rf"(?<![A-Za-z0-9]){re.escape(n)}(?![A-Za-z0-9])", text):
                 bump(sid, name, "name")
@@ -175,7 +178,7 @@ def _match_skills(job_text: str, skills: Iterable[dict]) -> list[ExtractedSkill]
             a = (a or "").strip()
             if not a:
                 continue
-            al = a.lower()
+            al = normalize_skill_text(a)
             if re.search(rf"(?<![A-Za-z0-9]){re.escape(al)}(?![A-Za-z0-9])", text):
                 bump(sid, name, "alias")
 
@@ -229,9 +232,9 @@ def _score_item(item: dict, job_skill_ids: set[str], keywords: set[str]) -> floa
     pri = float(item.get("priority", 0) or 0)
 
     # keyword overlap from title + summary + bullets
-    txt = " ".join(
+    txt = normalize_skill_text(" ".join(
         [item.get("title",""), item.get("summary","")] + (item.get("bullets", []) or [])
-    ).lower()
+    ))
     kw_hit = sum(1 for k in keywords if k in txt)
 
     return overlap * 5.0 + kw_hit * 1.0 + pri * 0.25
@@ -254,7 +257,7 @@ def _normalize_text_blob(item: dict) -> str:
     parts = [item.get("title", ""), item.get("summary", ""), item.get("org", "")]
     parts.extend(item.get("bullets", []) or [])
     parts.extend(item.get("links", []) or [])
-    return " ".join(str(part or "") for part in parts).lower()
+    return normalize_skill_text(" ".join(str(part or "") for part in parts))
 
 async def _load_profile_confirmation(db, user_id: str) -> dict | None:
     confirmation = await db["resume_skill_confirmations"].find_one(
@@ -288,11 +291,17 @@ async def _load_skills_by_ids(db, skill_ids: Iterable[str]) -> dict[str, dict]:
         {"_id": {"$in": query_values}},
         {"name": 1, "category": 1, "aliases": 1, "hidden": 1},
     ).to_list(length=max(len(query_values), 1))
+    visible_docs = [doc for doc in docs if not _is_hidden_skill_doc(doc)]
+    merged_docs = merge_skill_docs(visible_docs)
     out: dict[str, dict] = {}
-    for doc in docs:
-        if _is_hidden_skill_doc(doc):
-            continue
-        out[oid_str(doc["_id"])] = doc
+    for doc in merged_docs:
+        merged_ids = list(doc.get("merged_ids") or [])
+        if not merged_ids and doc.get("_id") is not None:
+            merged_ids = [oid_str(doc.get("_id"))]
+        for merged_id in merged_ids:
+            text = str(merged_id or "").strip()
+            if text:
+                out[text] = doc
     return out
 
 def _skill_terms(doc: dict | None) -> set[str]:
@@ -304,7 +313,7 @@ def _skill_terms(doc: dict | None) -> set[str]:
     for value in values:
         if not value:
             continue
-        normalized = re.sub(r"\s+", " ", value.strip().lower())
+        normalized = normalize_skill_text(value)
         if normalized:
             terms.add(normalized)
     return terms
@@ -318,7 +327,7 @@ def _clamp_score(value: float) -> float:
     return round(max(0.0, min(100.0, value)), 2)
 
 def _skill_match_pattern(value: str) -> str:
-    return rf"(?<![A-Za-z0-9]){re.escape((value or '').lower())}(?![A-Za-z0-9])"
+    return rf"(?<![A-Za-z0-9]){re.escape(normalize_skill_text(value))}(?![A-Za-z0-9])"
 
 def _classify_job_skill_priority(job_text: str, extracted: list[dict], skill_docs: dict[str, dict]) -> tuple[set[str], set[str]]:
     required_markers = (
@@ -353,7 +362,7 @@ def _classify_job_skill_priority(job_text: str, extracted: list[dict], skill_doc
         if not line:
             current_section = None
             continue
-        lower = line.lower()
+        lower = normalize_skill_text(line)
         if any(marker in lower for marker in required_markers):
             current_section = "required"
         elif any(marker in lower for marker in preferred_markers):
@@ -384,12 +393,12 @@ def _classify_job_skill_priority(job_text: str, extracted: list[dict], skill_doc
 
     if not required_ids:
         strong_required_blob = "\n".join(
-            raw_line.strip().lower()
+            normalize_skill_text(raw_line.strip())
             for raw_line in (job_text or "").splitlines()
             if raw_line.strip()
             and (
-                any(marker in raw_line.lower() for marker in required_markers)
-                or re.search(r"\b(must|required|minimum)\b", raw_line.lower())
+                any(marker in normalize_skill_text(raw_line) for marker in required_markers)
+                or re.search(r"\b(must|required|minimum)\b", normalize_skill_text(raw_line))
             )
         )
         if strong_required_blob:
@@ -445,7 +454,7 @@ def _dedupe_skill_ids_by_name(skill_ids: Iterable[str], skill_docs: dict[str, di
     ordered: list[str] = []
     seen: set[str] = set()
     for skill_id in skill_ids:
-        name = _display_skill_name(skill_docs.get(skill_id), skill_id).lower()
+        name = normalize_skill_text(_display_skill_name(skill_docs.get(skill_id), skill_id))
         if not name or name in seen:
             continue
         seen.add(name)
@@ -482,6 +491,36 @@ def _serialize_tailored_resume(doc: dict) -> TailoredResumeOut:
         sections=[ResumeSection(**section) for section in (doc.get("sections") or [])],
         plain_text=str(doc.get("plain_text") or ""),
         created_at=doc.get("created_at"),
+    )
+
+
+def _serialize_tailored_resume_list_entry(doc: dict, job_doc: dict | None = None) -> TailoredResumeListEntryOut:
+    job_doc = job_doc or {}
+    raw_job_id = doc.get("job_id")
+    return TailoredResumeListEntryOut(
+        id=oid_str(doc.get("_id")),
+        user_id=oid_str(doc.get("user_id")),
+        job_id=oid_str(raw_job_id) if raw_job_id is not None else None,
+        job_title=str(job_doc.get("title") or "").strip() or None,
+        company=str(job_doc.get("company") or "").strip() or None,
+        location=str(job_doc.get("location") or "").strip() or None,
+        template=str(doc.get("template") or "ats_v1"),
+        selected_skill_count=len(doc.get("selected_skill_ids") or []),
+        selected_item_count=len(doc.get("selected_item_ids") or []),
+        created_at=doc.get("created_at"),
+    )
+
+
+def _serialize_tailored_resume_detail(doc: dict, job_doc: dict | None = None) -> TailoredResumeDetailOut:
+    base = _serialize_tailored_resume(doc)
+    job_doc = job_doc or {}
+    return TailoredResumeDetailOut(
+        **base.model_dump(),
+        job_title=str(job_doc.get("title") or "").strip() or None,
+        company=str(job_doc.get("company") or "").strip() or None,
+        location=str(job_doc.get("location") or "").strip() or None,
+        selected_skill_count=len(doc.get("selected_skill_ids") or []),
+        selected_item_count=len(doc.get("selected_item_ids") or []),
     )
 
 def _render_plain_text(sections: list[ResumeSection]) -> str:
@@ -1002,6 +1041,80 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
 
     return _serialize_tailored_resume({"_id": res.inserted_id, **record})
 
+
+@router.get("/resumes", response_model=list[TailoredResumeListEntryOut])
+async def list_tailored_resumes(user_id: str, limit: int = 100):
+    db = get_db()
+    capped_limit = max(1, min(limit, 200))
+    docs = await (
+        db["tailored_resumes"]
+        .find(ref_query("user_id", user_id))
+        .sort("created_at", -1)
+        .limit(capped_limit)
+        .to_list(length=capped_limit)
+    )
+
+    job_ids: list[ObjectId] = []
+    for doc in docs:
+        raw_job_id = doc.get("job_id")
+        if isinstance(raw_job_id, ObjectId):
+            job_ids.append(raw_job_id)
+        elif isinstance(raw_job_id, str) and ObjectId.is_valid(raw_job_id):
+            job_ids.append(ObjectId(raw_job_id))
+
+    job_docs = await db["job_ingests"].find(
+        {"_id": {"$in": job_ids}},
+        {"title": 1, "company": 1, "location": 1},
+    ).to_list(length=len(job_ids) or 1)
+    jobs_by_id = {oid_str(job.get("_id")): job for job in job_docs}
+
+    return [
+        _serialize_tailored_resume_list_entry(doc, jobs_by_id.get(oid_str(doc.get("job_id"))))
+        for doc in docs
+    ]
+
+
+@router.delete("/resumes/{tailored_id}")
+async def delete_tailored_resume(tailored_id: str, user_id: str):
+    db = get_db()
+    try:
+        oid = ObjectId(tailored_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid tailored_id")
+
+    doc = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", user_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Tailored resume not found")
+
+    await db["tailored_resumes"].delete_one({"_id": oid})
+    await db["job_match_runs"].update_many(
+        {"user_id": {"$in": ref_values(user_id)}, "tailored_resume_id": oid},
+        {"$unset": {"tailored_resume_id": ""}, "$set": {"updated_at": now_utc()}},
+    )
+    return {"ok": True, "id": tailored_id}
+
+
+@router.get("/resumes/{tailored_id}", response_model=TailoredResumeDetailOut)
+async def get_tailored_resume_detail(tailored_id: str, user_id: str):
+    db = get_db()
+    try:
+        oid = ObjectId(tailored_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid tailored_id")
+
+    doc = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", user_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Tailored resume not found")
+
+    raw_job_id = doc.get("job_id")
+    job_doc = None
+    if isinstance(raw_job_id, ObjectId):
+        job_doc = await db["job_ingests"].find_one({"_id": raw_job_id}, {"title": 1, "company": 1, "location": 1})
+    elif isinstance(raw_job_id, str) and ObjectId.is_valid(raw_job_id):
+        job_doc = await db["job_ingests"].find_one({"_id": ObjectId(raw_job_id)}, {"title": 1, "company": 1, "location": 1})
+
+    return _serialize_tailored_resume_detail(doc, job_doc)
+
 @router.get("/history", response_model=list[JobMatchHistoryEntryOut])
 async def list_job_match_history(user_id: str, limit: int = 12):
     db = get_db()
@@ -1009,9 +1122,13 @@ async def list_job_match_history(user_id: str, limit: int = 12):
     docs = await cursor.to_list(length=max(1, min(limit, 30)))
     return [_serialize_history(doc) for doc in docs]
 
-@router.get("/history/{history_id}", response_model=JobMatchHistoryDetailOut)
-async def get_job_match_history_detail(history_id: str, user_id: str):
+@router.get("/history/{history_id}", response_model=JobMatchHistoryDetailOut | JobMatchCompareOut)
+async def get_job_match_history_detail(history_id: str, user_id: str, left_id: str | None = None, right_id: str | None = None):
     db = get_db()
+    if history_id == "compare":
+        if not left_id or not right_id:
+            raise HTTPException(status_code=400, detail="left_id and right_id are required")
+        return await compare_job_match_history(user_id=user_id, left_id=left_id, right_id=right_id)
     try:
         oid = ObjectId(history_id)
     except Exception:

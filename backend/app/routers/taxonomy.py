@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from app.core.db import get_db
 from app.utils.mongo import oid_str
+from app.utils.skill_catalog import expand_alias_variants, unique_casefolded, normalize_skill_text
 from app.models.taxonomy import SkillAliasesUpdate, SkillRelationIn, SkillRelationOut
 
 router = APIRouter()
@@ -21,7 +22,18 @@ async def set_skill_aliases(skill_id: str, payload: SkillAliasesUpdate):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid skill_id")
 
-    res = await db["skills"].update_one({"_id": oid}, {"$set": {"aliases": payload.aliases, "updated_at": now_utc()}})
+    skill = await db["skills"].find_one({"_id": oid}, {"name": 1})
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    name_key = normalize_skill_text(skill.get("name", ""))
+    aliases = [
+        alias
+        for alias in expand_alias_variants(unique_casefolded(payload.aliases), base_name=skill.get("name", ""))
+        if normalize_skill_text(alias) != name_key
+    ]
+
+    res = await db["skills"].update_one({"_id": oid}, {"$set": {"aliases": aliases, "updated_at": now_utc()}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Skill not found")
 

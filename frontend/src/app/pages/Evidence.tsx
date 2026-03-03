@@ -464,8 +464,8 @@ export function Evidence() {
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden border-slate-200 p-0 sm:max-w-3xl">
-              <DialogHeader className="border-b bg-slate-50 px-6 py-5">
+            <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden border-slate-200 p-0 sm:max-w-3xl dark:border-slate-800 dark:bg-slate-950">
+              <DialogHeader className="border-b bg-slate-50 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/80">
                 <DialogTitle>{draft.id ? "Edit Evidence" : "Add Evidence"}</DialogTitle>
                 <DialogDescription>
                   Paste text or upload one or more files. SkillBridge will extract likely skills, including AI-inferred new skill candidates, then you decide what to save.
@@ -529,30 +529,13 @@ export function Evidence() {
                   />
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <Label htmlFor="evidence-text">Paste Evidence Text</Label>
-                    <Textarea
-                      id="evidence-text"
-                      value={draft.text}
-                    onChange={(e) => {
-                      const nextDraft = { ...draft, text: e.target.value };
-                      setDraft(nextDraft);
-                      if (draft.id) syncEditAnalysisFromDraft(nextDraft);
-                      else setAnalysisItems([]);
-                    }}
-                    placeholder="Paste a project summary, certificate text, paper abstract, or any other evidence here..."
-                      rows={14}
-                      className="mt-2"
-                    />
-                  </div>
-
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
-                    <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-slate-100">
                       <Upload className="h-4 w-4 text-[#1E3A8A]" />
                       Upload PDF / DOCX / TXT / MD
                     </div>
-                    <p className="mt-2 text-xs leading-5 text-slate-600">
+                    <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">
                       Batch upload multiple files at once. Each file will be analyzed separately so you can review skills before saving.
                     </p>
                     <Input
@@ -560,15 +543,15 @@ export function Evidence() {
                       type="file"
                       accept=".pdf,.docx,.txt,.md"
                       multiple
-                      className="mt-4 bg-white"
+                      className="mt-4 bg-white dark:bg-slate-900"
                       onChange={(e) => {
                         setFiles(Array.from(e.target.files || []));
                         setAnalysisItems([]);
                       }}
                     />
                     {files.length ? (
-                      <div className="mt-4 rounded-xl bg-white p-3 text-xs text-slate-600 shadow-sm">
-                        <div className="font-medium text-slate-800">
+                      <div className="mt-4 rounded-xl bg-white p-3 text-xs text-slate-600 shadow-sm dark:bg-slate-950 dark:text-slate-300">
+                        <div className="font-medium text-slate-800 dark:text-slate-100">
                           {files.length} file{files.length === 1 ? "" : "s"} selected
                         </div>
                         <div className="mt-2 max-h-28 space-y-1 overflow-y-auto">
@@ -580,6 +563,23 @@ export function Evidence() {
                         </div>
                       </div>
                     ) : null}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/70">
+                    <Label htmlFor="evidence-text">Paste Evidence Text</Label>
+                    <Textarea
+                      id="evidence-text"
+                      value={draft.text}
+                      onChange={(e) => {
+                        const nextDraft = { ...draft, text: e.target.value };
+                        setDraft(nextDraft);
+                        if (draft.id) syncEditAnalysisFromDraft(nextDraft);
+                        else setAnalysisItems([]);
+                      }}
+                      placeholder="Paste a project summary, certificate text, paper abstract, or any other evidence here..."
+                      rows={14}
+                      className="mt-2"
+                    />
                   </div>
                 </div>
 
@@ -599,13 +599,13 @@ export function Evidence() {
                 {analysisItems.length ? (
                   <div className="space-y-4">
                     {analysisItems.map((analysis) => (
-                      <Card key={analysis.analysis_id} className="overflow-hidden border-slate-200 p-0">
+                      <Card key={analysis.analysis_id} className="overflow-hidden border-slate-200 p-0 dark:border-slate-800 dark:bg-slate-950">
                         <div className="space-y-4">
-                          <div className="border-b bg-slate-50 px-4 py-3">
+                          <div className="border-b bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/80">
                             <div className="flex items-center justify-between gap-3">
                               <div>
-                                <div className="text-sm font-medium text-gray-900">Ready to save</div>
-                                <div className="mt-1 text-xs text-slate-600">{analysis.source}</div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-slate-100">Ready to save</div>
+                                <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">{analysis.source}</div>
                               </div>
                               <Badge variant="secondary">{analysis.extracted_skills.length} detected</Badge>
                             </div>
@@ -642,18 +642,18 @@ export function Evidence() {
                           </div>
 
                           <div>
-                            <div className="mb-2 px-4 text-sm font-medium text-gray-900">Extracted skills</div>
+                            <div className="mb-2 px-4 text-sm font-medium text-gray-900 dark:text-slate-100">Extracted skills</div>
                             {analysis.extracted_skills.length === 0 ? (
-                              <div className="px-4 text-sm text-gray-500">No likely skills detected. You can still save the evidence without adding skills.</div>
+                              <div className="px-4 text-sm text-gray-500 dark:text-slate-400">No likely skills detected. You can still save the evidence without adding skills.</div>
                             ) : (
                               <div className="space-y-3 px-4">
                                 {analysis.extracted_skills.map((skill) => {
                                   const checked = (selectedSkillIdsByAnalysis[analysis.analysis_id] || []).includes(skill.skill_id);
                                   return (
-                                    <label key={`${analysis.analysis_id}:${skill.skill_id}`} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50">
+                                    <label key={`${analysis.analysis_id}:${skill.skill_id}`} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/80 dark:hover:bg-slate-900">
                                       <Checkbox checked={checked} onCheckedChange={(value) => toggleSkill(analysis.analysis_id, skill.skill_id, value === true)} />
                                       <div className="min-w-0">
-                                        <div className="font-medium text-gray-900">{skill.skill_name}</div>
+                                        <div className="font-medium text-gray-900 dark:text-slate-100">{skill.skill_name}</div>
                                         <div className="mt-1 flex flex-wrap gap-2">
                                           {skill.category ? <Badge variant="outline">{skill.category}</Badge> : null}
                                           {skill.matched_on ? <Badge variant="secondary">Matched by {skill.matched_on}</Badge> : null}
@@ -669,7 +669,7 @@ export function Evidence() {
 
                           <div>
                             <div className="mb-2 flex items-center justify-between gap-3 px-4">
-                              <div className="text-sm font-medium text-gray-900">
+                              <div className="text-sm font-medium text-gray-900 dark:text-slate-100">
                                 {analysisItems.length > 1 ? "Evidence text preview" : "Full evidence text"}
                               </div>
                               {analysisItems.length > 1 ? (
@@ -684,7 +684,7 @@ export function Evidence() {
                                 </Button>
                               ) : null}
                             </div>
-                            <div className="mx-4 whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3 text-sm leading-6 text-gray-700">
+                            <div className="mx-4 whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3 text-sm leading-6 text-gray-700 dark:bg-slate-900/80 dark:text-slate-200">
                               {analysisItems.length > 1 && !expandedAnalysisTextIds.includes(analysis.analysis_id)
                                 ? summarizeEvidenceText(analysis.text_excerpt, 360)
                                 : analysis.text_excerpt}
@@ -697,7 +697,7 @@ export function Evidence() {
                 ) : null}
               </div>
 
-              <DialogFooter className="border-t px-6 py-4">
+              <DialogFooter className="border-t px-6 py-4 dark:border-slate-800">
                 <Button variant="outline" onClick={resetDraft} disabled={saving || analyzing}>
                   Reset
                 </Button>
@@ -715,11 +715,11 @@ export function Evidence() {
       </div>
 
       {filteredItems.length === 0 ? (
-        <Card className="overflow-hidden border-slate-200 p-0 text-center">
-          <div className="bg-[linear-gradient(135deg,_rgba(30,58,138,0.08),_rgba(15,23,42,0.03))] px-6 py-12">
+        <Card className="overflow-hidden border-slate-200 p-0 text-center dark:border-slate-800 dark:bg-slate-950">
+          <div className="bg-[linear-gradient(135deg,_rgba(30,58,138,0.08),_rgba(15,23,42,0.03))] px-6 py-12 dark:bg-[linear-gradient(135deg,_rgba(45,212,191,0.08),_rgba(15,23,42,0.18))]">
             <Upload className="mx-auto h-10 w-10 text-[#1E3A8A]" />
-            <div className="mt-4 text-lg font-semibold text-slate-900">No evidence added yet</div>
-            <div className="mt-2 text-sm text-slate-600">Add text or upload files to start building your evidence library.</div>
+            <div className="mt-4 text-lg font-semibold text-slate-900 dark:text-slate-100">No evidence added yet</div>
+            <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">Add text or upload files to start building your evidence library.</div>
             <Button
               onClick={() => setIsAddOpen(true)}
               className="mt-6 bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"

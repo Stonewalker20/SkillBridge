@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, Query, HTTPException, Depends
 from app.core.db import get_db
 from app.models.skill import SkillIn, SkillOut, SkillUpdate
+from app.utils.skill_catalog import expand_alias_variants, merge_skill_docs, normalize_skill_text
 from app.utils.mongo import oid_str, ref_values
 from app.core.auth import require_user
 from bson import ObjectId
@@ -61,13 +62,15 @@ def serialize_skill(doc: dict, current_user_oid: ObjectId | None = None) -> dict
         "id": oid_str(doc["_id"]),
         "name": doc.get("name", ""),
         "category": doc.get("category", ""),
+        "categories": doc.get("categories", []) or ([doc.get("category", "")] if doc.get("category") else []),
         "aliases": doc.get("aliases", []),
         "tags": doc.get("tags", []),
         "proficiency": doc.get("proficiency"),
         "last_used_at": doc.get("last_used_at"),
         "origin": origin,
         "created_by_user_id": oid_str(created_by) if created_by is not None else None,
-        "can_delete": bool(current_user_oid and created_by and oid_str(created_by) == oid_str(current_user_oid)),
+        "can_delete": bool(doc.get("can_delete")) if "can_delete" in doc else bool(current_user_oid and created_by and oid_str(created_by) == oid_str(current_user_oid)),
+        "merged_ids": doc.get("merged_ids", [oid_str(doc["_id"])]),
     }
 
 @router.get("/", response_model=list[SkillOut])
@@ -79,19 +82,10 @@ async def list_skills(
     user=Depends(require_user),
 ):
     db = get_db()
-
-    filt = {}
-
-    if q:
-        filt["name"] = {"$regex": q, "$options": "i"}
-
-    if category:
-        filt["category"] = category
-
-    cursor = (
+    docs = await (
         db["skills"]
         .find(
-            filt,
+            {},
             {
                 "name": 1,
                 "category": 1,
@@ -104,15 +98,33 @@ async def list_skills(
                 "hidden": 1,
             },
         )
-        .sort("name", 1)
-        .skip(skip)
-        .limit(limit)
+        .sort([("name", 1), ("category", 1), ("_id", 1)])
+        .to_list(length=20000)
     )
 
-    docs = await cursor.to_list(length=limit)
-
     visible_docs = [d for d in docs if not is_hidden_skill(d)]
-    return [serialize_skill(d, user.get("_id")) for d in visible_docs]
+    merged_docs = merge_skill_docs(visible_docs, user.get("_id"))
+
+    if q:
+        term = normalize_skill_text(q)
+        merged_docs = [
+            doc
+            for doc in merged_docs
+            if term in normalize_skill_text(doc.get("name"))
+            or any(term in normalize_skill_text(alias) for alias in (doc.get("aliases") or []))
+            or any(term in normalize_skill_text(cat) for cat in (doc.get("categories") or []))
+        ]
+
+    if category:
+        category_key = normalize_skill_text(category)
+        merged_docs = [
+            doc
+            for doc in merged_docs
+            if category_key in {normalize_skill_text(cat) for cat in (doc.get("categories") or [doc.get("category", "")])}
+        ]
+
+    paged_docs = merged_docs[skip : skip + limit]
+    return [serialize_skill(d, user.get("_id")) for d in paged_docs]
 
 @router.post("/", response_model=SkillOut)
 async def create_skill(payload: SkillIn, user=Depends(require_user)):
@@ -127,24 +139,17 @@ async def create_skill(payload: SkillIn, user=Depends(require_user)):
     if not category:
         raise HTTPException(status_code=400, detail="Skill category is required")
 
-    norm_aliases = normalize_str_list(aliases)
+    norm_aliases = expand_alias_variants(normalize_str_list(aliases), base_name=name)
     norm_tags = normalize_str_list(payload.tags)
 
-    existing = await db["skills"].find_one(
-        {
-            "name": {"$regex": f"^{name}$", "$options": "i"},
-            "category": {"$regex": f"^{category}$", "$options": "i"},
-        },
-        {"_id": 1},
-    )
+    existing = await db["skills"].find_one({"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 1})
     if existing:
         raise HTTPException(status_code=409, detail="Skill already exists")
 
     if norm_aliases:
         alias_name_hit = await db["skills"].find_one(
             {
-                "category": {"$regex": f"^{category}$", "$options": "i"},
-                "name": {"$in": norm_aliases},
+                "name": {"$in": [re.compile(f"^{re.escape(alias)}$", re.IGNORECASE) for alias in norm_aliases]},
             },
             {"_id": 1},
         )
@@ -214,12 +219,22 @@ async def update_skill(skill_id: str, payload: SkillUpdate):
         updates["name"] = updates["name"].strip()
         if not updates["name"]:
             raise HTTPException(status_code=400, detail="Skill name is required")
+        existing = await db["skills"].find_one(
+            {"_id": {"$ne": oid}, "name": {"$regex": f"^{re.escape(updates['name'])}$", "$options": "i"}},
+            {"_id": 1},
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail="Skill already exists")
     if "category" in updates:
         updates["category"] = updates["category"].strip()
         if not updates["category"]:
             raise HTTPException(status_code=400, detail="Skill category is required")
     if "aliases" in updates:
-        updates["aliases"] = normalize_str_list(updates["aliases"])
+        base_name = updates.get("name")
+        if base_name is None:
+            existing = await db["skills"].find_one({"_id": oid}, {"name": 1})
+            base_name = (existing or {}).get("name", "")
+        updates["aliases"] = expand_alias_variants(normalize_str_list(updates["aliases"]), base_name=base_name)
     if "tags" in updates:
         updates["tags"] = normalize_str_list(updates["tags"])
 

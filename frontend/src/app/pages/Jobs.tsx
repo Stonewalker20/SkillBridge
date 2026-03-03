@@ -39,6 +39,7 @@ type MatchResult = {
   semantic_alignment_score?: number;
   semantic_alignment_explanation?: string;
   history_id?: string | null;
+  tailored_resume_id?: string | null;
   [k: string]: any;
 };
 
@@ -110,6 +111,7 @@ export function Jobs() {
       semanticAlignmentScore: Number(a.semantic_alignment_score ?? a.semanticAlignmentScore ?? 0) || 0,
       semanticAlignmentExplanation: String(a.semantic_alignment_explanation ?? a.semanticAlignmentExplanation ?? ""),
       historyId: a.history_id ?? a.historyId ?? null,
+      tailoredResumeId: a.tailored_resume_id ?? a.tailoredResumeId ?? null,
     };
   }, [analysis]);
 
@@ -195,6 +197,7 @@ export function Jobs() {
       // 2) Match job
       const match = await api.matchJob({ job_id: String(jid) });
       setAnalysis(match as any);
+      setLastTailoredId(String((match as any)?.tailored_resume_id ?? (match as any)?.tailoredResumeId ?? "").trim() || null);
       try {
         await refreshHistory();
       } catch (historyError) {
@@ -226,6 +229,7 @@ export function Jobs() {
         throw new Error("Tailored resume was created without an export id");
       }
       setLastTailoredId(previewId);
+      setAnalysis((current) => (current ? { ...current, tailored_resume_id: previewId } : current));
       const blob = await api.downloadTailoredPdf(previewId);
       downloadBlob(blob, "tailored_resume.pdf");
       try {
@@ -261,6 +265,7 @@ export function Jobs() {
       const restoredAnalysis = {
         ...(detail.analysis ?? {}),
         history_id: detail.id,
+        tailored_resume_id: detail.tailored_resume_id ?? null,
       };
       setAnalysis(restoredAnalysis as MatchResult);
       setJobId(String(detail.job_id ?? restoredAnalysis.job_id ?? "").trim() || null);
@@ -268,7 +273,7 @@ export function Jobs() {
       setCompany(String(detail.company ?? "").trim());
       setLocation(String(detail.location ?? "").trim());
       setJobDescription(String(detail.job_text ?? detail.text_preview ?? "").trim());
-      setLastTailoredId(null);
+      setLastTailoredId(String(detail.tailored_resume_id ?? "").trim() || null);
       toast.success("Restored previous job analysis");
     } catch (error: any) {
       console.error("Failed to restore job match history:", error);
@@ -389,11 +394,11 @@ export function Jobs() {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Job Match</h1>
-          <p className="text-gray-600">Paste a job description to get a detailed job match breakdown and generate a tailored resume</p>
+          <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-slate-100">Job Match</h1>
+          <p className="text-gray-600 dark:text-slate-300">Paste a job description to get a detailed job match breakdown and generate a tailored resume</p>
         </div>
 
-        <Card className="p-8">
+        <Card className="p-8 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -431,7 +436,7 @@ export function Jobs() {
                 rows={12}
                 className="font-mono text-sm"
               />
-              <p className="text-xs text-gray-500 mt-2">Include requirements, qualifications, and responsibilities for best results.</p>
+              <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">Include requirements, qualifications, and responsibilities for best results.</p>
             </div>
 
             <Button
@@ -454,28 +459,33 @@ export function Jobs() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
             <History className="h-5 w-5 text-[#1E3A8A]" />
-            <h3 className="text-lg font-semibold text-gray-900">Last Analyzed Jobs</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Last Analyzed Jobs</h3>
           </div>
           {historyLoading ? (
-            <p className="text-sm text-gray-500">Loading previous analyses...</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">Loading previous analyses...</p>
           ) : history.length === 0 ? (
-            <p className="text-sm text-gray-500">No prior analyses yet.</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">No prior analyses yet.</p>
           ) : (
             <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-2">
               {history.map((entry) => (
-                <div key={entry.id} className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 md:flex-row md:items-center md:justify-between">
+                <div key={entry.id} className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 md:flex-row md:items-center md:justify-between dark:border-slate-800 dark:bg-slate-950/60">
                   <div>
-                    <p className="font-semibold text-gray-900">{entry.title || entry.company || "Saved job match"}</p>
-                    <p className="text-sm text-gray-600">{[entry.company, entry.location].filter(Boolean).join(" • ")}</p>
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="font-semibold text-gray-900 dark:text-slate-100">{entry.title || entry.company || "Saved job match"}</p>
+                    <p className="text-sm text-gray-600 dark:text-slate-300">{[entry.company, entry.location].filter(Boolean).join(" • ")}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
                       Match {Number(entry.match_score ?? 0)}% • {entry.created_at ? new Date(entry.created_at).toLocaleString() : "Saved"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className={`text-sm font-semibold ${getScoreColor(Number(entry.match_score ?? 0))}`}>{Number(entry.match_score ?? 0)}%</div>
+                    {entry.tailored_resume_id ? (
+                      <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                        Resume ready
+                      </Badge>
+                    ) : null}
                     <Button variant="outline" onClick={() => handleRestoreHistory(entry.id)} disabled={restoringHistoryId === entry.id}>
                       {restoringHistoryId === entry.id ? "Opening..." : "Open"}
                     </Button>
@@ -510,27 +520,27 @@ export function Jobs() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Job Match</h1>
-          <p className="text-gray-600">Detailed score, skill gaps, and tailored resume generation</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Job Match</h1>
+          <p className="text-gray-600 dark:text-slate-300">Detailed score, skill gaps, and tailored resume generation</p>
         </div>
         <Button variant="outline" onClick={handleReset}>
           New Analysis
         </Button>
       </div>
 
-      <Card className="p-8">
+      <Card className="p-8 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="grid gap-6 lg:grid-cols-[220px_1fr] lg:items-center">
-          <div className="flex flex-col items-center rounded-2xl bg-slate-50 p-6 text-center">
+          <div className="flex flex-col items-center rounded-2xl bg-slate-50 p-6 text-center dark:bg-slate-950/70">
             <span className={`text-5xl font-bold ${getScoreColor(normalized.matchScore)}`}>{normalized.matchScore}%</span>
-            <span className="mt-1 text-sm text-gray-600">Match Score</span>
-            <Badge className="mt-4 bg-white text-gray-700 border-gray-200">{normalized.confidenceLabel} Fit</Badge>
+            <span className="mt-1 text-sm text-gray-600 dark:text-slate-300">Match Score</span>
+            <Badge className="mt-4 border-gray-200 bg-white text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">{normalized.confidenceLabel} Fit</Badge>
           </div>
 
           <div>
-            <h2 className="text-2xl font-semibold text-gray-900">{jobTitle || "(job)"}</h2>
-            <p className="text-gray-600">{company || ""}</p>
-            {location ? <p className="text-sm text-gray-500 mt-1">{location}</p> : null}
-            <p className="mt-4 text-sm leading-6 text-gray-700">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-slate-100">{jobTitle || "(job)"}</h2>
+            <p className="text-gray-600 dark:text-slate-300">{company || ""}</p>
+            {location ? <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{location}</p> : null}
+            <p className="mt-4 text-sm leading-6 text-gray-700 dark:text-slate-200">
               {normalized.analysisSummary || "This score estimates how well your confirmed skills, supporting evidence, and related work align with the posting."}
             </p>
           </div>
@@ -538,37 +548,37 @@ export function Jobs() {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-5">
-          <p className="text-sm text-gray-500">Extracted Job Skills</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.extractedSkillCount}</p>
+        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-sm text-gray-500 dark:text-slate-400">Extracted Job Skills</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.extractedSkillCount}</p>
         </Card>
-        <Card className="p-5">
-          <p className="text-sm text-gray-500">Required Skills Covered</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">
+        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-sm text-gray-500 dark:text-slate-400">Required Skills Covered</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">
             {normalized.requiredMatchedCount}/{normalized.requiredSkillCount || normalized.extractedSkillCount || 0}
           </p>
         </Card>
-        <Card className="p-5">
-          <p className="text-sm text-gray-500">Matched Job Skills</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.matchedSkillCount}</p>
+        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-sm text-gray-500 dark:text-slate-400">Matched Job Skills</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.matchedSkillCount}</p>
         </Card>
-        <Card className="p-5">
-          <p className="text-sm text-gray-500">Missing Job Skills</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.missingSkillCount}</p>
+        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-sm text-gray-500 dark:text-slate-400">Missing Job Skills</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.missingSkillCount}</p>
         </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="p-5">
-          <p className="text-sm text-gray-500">Semantic Alignment</p>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{normalized.semanticAlignmentScore}%</p>
-          <p className="mt-2 text-sm text-gray-600">
+        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-sm text-gray-500 dark:text-slate-400">Semantic Alignment</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.semanticAlignmentScore}%</p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
             {normalized.semanticAlignmentExplanation || "Semantic alignment looks beyond exact keyword matches and estimates how similar your saved work is to the role's themes and responsibilities."}
           </p>
         </Card>
-        <Card className="p-5">
-          <p className="text-sm text-gray-500">Coverage Snapshot</p>
-          <div className="mt-3 space-y-2 text-sm text-gray-700">
+        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-sm text-gray-500 dark:text-slate-400">Coverage Snapshot</p>
+          <div className="mt-3 space-y-2 text-sm text-gray-700 dark:text-slate-200">
             <p>Matched job skills: {normalized.matchedSkillCount} of {normalized.extractedSkillCount}</p>
             <p>Missing job skills: {normalized.missingSkillCount} of {normalized.extractedSkillCount}</p>
             <p>Required skills matched: {normalized.requiredMatchedCount} of {normalized.requiredSkillCount}</p>
@@ -578,10 +588,10 @@ export function Jobs() {
           </div>
           {normalized.keywordOverlapTerms.length > 0 ? (
             <div className="mt-4">
-              <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-gray-500">Keywords Overlapped</p>
+              <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-gray-500 dark:text-slate-400">Keywords Overlapped</p>
               <div className="flex flex-wrap gap-2">
                 {normalized.keywordOverlapTerms.map((term) => (
-                  <Badge key={term} className="border-slate-200 bg-slate-100 text-slate-700">
+                  <Badge key={term} className="border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                     {term}
                   </Badge>
                 ))}
@@ -591,14 +601,14 @@ export function Jobs() {
         </Card>
       </div>
 
-      <Card className="p-5">
-        <p className="text-sm text-gray-500">Semantic Alignment Examples</p>
+      <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <p className="text-sm text-gray-500 dark:text-slate-400">Semantic Alignment Examples</p>
         {normalized.semanticAlignmentExamples.length === 0 ? (
-          <p className="mt-3 text-sm text-gray-600">No concrete examples yet. Add more evidence or projects tied to your confirmed skills to strengthen semantic matching.</p>
+          <p className="mt-3 text-sm text-gray-600 dark:text-slate-300">No concrete examples yet. Add more evidence or projects tied to your confirmed skills to strengthen semantic matching.</p>
         ) : (
-          <ul className="mt-3 space-y-2 text-sm text-gray-700">
+          <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-slate-200">
             {normalized.semanticAlignmentExamples.map((example) => (
-              <li key={example} className="rounded-md bg-slate-50 px-3 py-2">
+              <li key={example} className="rounded-md bg-slate-50 px-3 py-2 dark:bg-slate-950/70">
                 {example}
               </li>
             ))}
@@ -606,14 +616,14 @@ export function Jobs() {
         )}
       </Card>
 
-      <Card className="p-6">
+      <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Score Breakdown</h3>
-          <p className="text-sm text-gray-600">The overall score weighs coverage of required skills, supporting evidence, and overlap with job language.</p>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Score Breakdown</h3>
+          <p className="text-sm text-gray-600 dark:text-slate-300">The overall score weighs coverage of required skills, supporting evidence, and overlap with job language.</p>
         </div>
         <div className="space-y-4">
           {normalized.scoreBreakdown.length === 0 ? (
-            <p className="text-sm text-gray-500">No breakdown available.</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">No breakdown available.</p>
           ) : (
             normalized.scoreBreakdown.map((item) => {
               const score = Number(item?.score ?? 0) || 0;
@@ -621,12 +631,12 @@ export function Jobs() {
                 <div key={item?.label || score} className="space-y-2">
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="font-medium text-gray-900">{item?.label || "Metric"}</p>
-                      <p className="text-sm text-gray-600">{item?.detail || ""}</p>
+                      <p className="font-medium text-gray-900 dark:text-slate-100">{item?.label || "Metric"}</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-300">{item?.detail || ""}</p>
                     </div>
                     <span className={`text-sm font-semibold ${getScoreColor(score)}`}>{score}%</span>
                   </div>
-                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
                     <div className="h-full rounded-full bg-[#1E3A8A]" style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
                   </div>
                 </div>
@@ -637,17 +647,17 @@ export function Jobs() {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6">
+        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <h3 className="font-semibold text-gray-900">Matched Skills</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-slate-100">Matched Skills</h3>
           </div>
           <div className="flex flex-wrap gap-2">
             {normalized.matchedSkills.length === 0 ? (
-              <span className="text-sm text-gray-500">None returned</span>
+              <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
             ) : (
               normalized.matchedSkills.map((s) => (
-                <Badge key={s} className="bg-green-50 text-green-700 border-green-200">
+                <Badge key={s} className="border-green-200 bg-green-50 text-green-700 dark:border-emerald-900/70 dark:bg-emerald-950/60 dark:text-emerald-200">
                   {s}
                 </Badge>
               ))
@@ -655,14 +665,14 @@ export function Jobs() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
             <AlertCircle className="h-5 w-5 text-orange-600" />
-            <h3 className="font-semibold text-gray-900">Missing Skills</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-slate-100">Missing Skills</h3>
           </div>
           <div className="flex flex-wrap gap-2">
             {normalized.missingSkills.length === 0 ? (
-              <span className="text-sm text-gray-500">None returned</span>
+              <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
             ) : (
               normalized.missingSkills.map((s) => (
                 <Button
@@ -670,7 +680,7 @@ export function Jobs() {
                   variant="outline"
                   onClick={() => handleAddMissingSkill(s)}
                   disabled={addingMissingSkill === s}
-                  className="h-auto rounded-full border-orange-300 bg-white px-3 py-1 text-sm font-medium text-orange-700 hover:bg-orange-50"
+                  className="h-auto rounded-full border-orange-300 bg-white px-3 py-1 text-sm font-medium text-orange-700 hover:bg-orange-50 dark:border-orange-900/60 dark:bg-slate-900 dark:text-orange-200 dark:hover:bg-orange-950/40"
                 >
                   <Plus className="mr-1 h-3.5 w-3.5" />
                   {addingMissingSkill === s ? "Adding..." : s}
@@ -680,17 +690,17 @@ export function Jobs() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="h-5 w-5 text-[#1E3A8A]" />
-            <h3 className="font-semibold text-gray-900">Strength Areas</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-slate-100">Strength Areas</h3>
           </div>
           <div className="flex flex-wrap gap-2">
             {normalized.strengthAreas.length === 0 ? (
-              <span className="text-sm text-gray-500">None returned</span>
+              <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
             ) : (
               normalized.strengthAreas.map((s) => (
-                <Badge key={s} className="bg-blue-50 text-[#1E3A8A] border-blue-200">
+                <Badge key={s} className="border-blue-200 bg-blue-50 text-[#1E3A8A] dark:border-sky-900/60 dark:bg-sky-950/50 dark:text-sky-200">
                   {s}
                 </Badge>
               ))
@@ -699,17 +709,17 @@ export function Jobs() {
         </Card>
       </div>
 
-      <Card className="p-6">
+      <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex items-center gap-2 mb-4">
           <Sparkles className="h-5 w-5 text-[#1E3A8A]" />
-          <h3 className="font-semibold text-gray-900">Related Skills</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-slate-100">Related Skills</h3>
         </div>
         <div className="flex flex-wrap gap-2">
           {normalized.relatedSkills.length === 0 ? (
-            <span className="text-sm text-gray-500">No semantic skill matches returned.</span>
+            <span className="text-sm text-gray-500 dark:text-slate-400">No semantic skill matches returned.</span>
           ) : (
             normalized.relatedSkills.map((skill) => (
-              <Badge key={skill} className="bg-slate-100 text-slate-700 border-slate-200">
+              <Badge key={skill} className="border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                 {skill}
               </Badge>
             ))
@@ -717,17 +727,17 @@ export function Jobs() {
         </div>
       </Card>
 
-      <Card className="p-6">
+      <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex items-center gap-2 mb-4">
           <AlertCircle className="h-5 w-5 text-[#1E3A8A]" />
-          <h3 className="font-semibold text-gray-900">Recommended Next Steps</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-slate-100">Recommended Next Steps</h3>
         </div>
         {normalized.nextSteps.length === 0 ? (
-          <p className="text-sm text-gray-500">No immediate next steps. Your saved profile data is already aligned well with this job.</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400">No immediate next steps. Your saved profile data is already aligned well with this job.</p>
         ) : (
-          <ul className="space-y-2 text-sm text-gray-700">
+          <ul className="space-y-2 text-sm text-gray-700 dark:text-slate-200">
             {normalized.nextSteps.map((step) => (
-              <li key={step} className="rounded-md bg-slate-50 px-3 py-2">
+              <li key={step} className="rounded-md bg-slate-50 px-3 py-2 dark:bg-slate-950/70">
                 {step}
               </li>
             ))}
@@ -735,11 +745,11 @@ export function Jobs() {
         )}
       </Card>
 
-      <Card className="p-6">
+      <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Tailored Resume</h3>
-            <p className="text-sm text-gray-600">Generate and download a tailored resume PDF without showing the full resume text on the page.</p>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Tailored Resume</h3>
+            <p className="text-sm text-gray-600 dark:text-slate-300">Generate and download a tailored resume PDF without showing the full resume text on the page.</p>
           </div>
 
           <Button
@@ -753,36 +763,36 @@ export function Jobs() {
         </div>
 
         {lastTailoredId ? (
-          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-emerald-900/60 dark:bg-emerald-950/60 dark:text-emerald-200">
             Tailored resume generated and downloaded. Resume id: <span className="font-mono">{lastTailoredId}</span>
           </div>
         ) : (
-          <div className="mt-4 text-sm text-gray-500">Generate PDF to create and download your tailored resume.</div>
+          <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">Generate PDF to create and download your tailored resume.</div>
         )}
       </Card>
 
-      <Card className="p-6">
+      <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2">
               <History className="h-5 w-5 text-[#1E3A8A]" />
-              <h3 className="text-lg font-semibold text-gray-900">Saved Job Match History</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Saved Job Match History</h3>
             </div>
-            <p className="text-sm text-gray-600">Compare recent job analyses and see how match quality changes across postings.</p>
+            <p className="text-sm text-gray-600 dark:text-slate-300">Compare recent job analyses and see how match quality changes across postings.</p>
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
           {historyLoading ? (
-            <p className="text-sm text-gray-500">Loading saved analyses...</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">Loading saved analyses...</p>
           ) : history.length === 0 ? (
-            <p className="text-sm text-gray-500">No saved analyses yet. Run a Job Match analysis to populate history.</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">No saved analyses yet. Run a Job Match analysis to populate history.</p>
           ) : (
             history.map((entry) => {
               return (
                 <div
                   key={entry.id}
-                  className="cursor-pointer rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:bg-gray-50"
+                  className="cursor-pointer rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-800 dark:bg-slate-950/60 dark:hover:bg-slate-900/80"
                   onClick={() => handleRestoreHistory(entry.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
@@ -795,8 +805,8 @@ export function Jobs() {
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="font-semibold text-gray-900">{entry.title || entry.company || "Saved job match"}</p>
-                      <p className="text-sm text-gray-600">{[entry.company, entry.location].filter(Boolean).join(" • ")}</p>
+                      <p className="font-semibold text-gray-900 dark:text-slate-100">{entry.title || entry.company || "Saved job match"}</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-300">{[entry.company, entry.location].filter(Boolean).join(" • ")}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-sm font-semibold ${getScoreColor(Number(entry.match_score ?? 0))}`}>{Number(entry.match_score ?? 0)}%</span>
@@ -828,13 +838,14 @@ export function Jobs() {
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {asArray<string>(entry.matched_skills).slice(0, 4).map((skill) => (
-                      <Badge key={`${entry.id}:${skill}`} className="bg-green-50 text-green-700 border-green-200">
+                      <Badge key={`${entry.id}:${skill}`} className="border-green-200 bg-green-50 text-green-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
                         {skill}
                       </Badge>
                     ))}
                   </div>
-                  <p className="mt-3 text-xs text-gray-500">
+                  <p className="mt-3 text-xs text-gray-500 dark:text-slate-400">
                     Semantic: {Number(entry.semantic_alignment_score ?? 0)}% • {entry.created_at ? new Date(entry.created_at).toLocaleString() : "Saved"}
+                    {entry.tailored_resume_id ? " • Resume ready" : ""}
                   </p>
                 </div>
               );

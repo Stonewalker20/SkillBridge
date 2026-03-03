@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from app.core.db import get_db
 from app.models.evidence import EvidenceIn, EvidenceOut, EvidencePatch
 from app.utils.ai import extract_skill_candidates, embed_texts, cosine_similarity
+from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 import io
 import os
@@ -147,7 +148,7 @@ async def extract_skill_matches(db, text: str) -> list[dict]:
         return []
 
     skills = await db["skills"].find({}, {"name": 1, "aliases": 1, "category": 1, "hidden": 1}).to_list(length=5000)
-    visible_skills = [skill for skill in skills if not is_hidden_skill(skill)]
+    visible_skills = merge_skill_docs([skill for skill in skills if not is_hidden_skill(skill)])
     matches: dict[str, dict] = {}
 
     for skill in visible_skills:
@@ -178,17 +179,17 @@ async def extract_skill_matches(db, text: str) -> list[dict]:
     for skill in visible_skills:
         name = (skill.get("name") or "").strip()
         if name:
-            visible_skill_tokens.append((name.lower(), skill))
+            visible_skill_tokens.append((normalize_skill_text(name), skill))
         for alias in skill.get("aliases", []) or []:
             alias_text = (alias or "").strip()
             if alias_text:
-                visible_skill_tokens.append((alias_text.lower(), skill))
+                visible_skill_tokens.append((normalize_skill_text(alias_text), skill))
 
     for candidate in ai_candidates:
         candidate_name = str(candidate.get("name") or "").strip()
         if not candidate_name:
             continue
-        candidate_key = candidate_name.lower()
+        candidate_key = normalize_skill_text(candidate_name)
         matched_skill = None
         matched_on = None
         for token, skill in visible_skill_tokens:

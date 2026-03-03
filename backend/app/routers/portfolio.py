@@ -22,7 +22,24 @@ async def create_portfolio_item(payload: PortfolioItemIn):
     doc["created_at"] = now_utc()
     doc["updated_at"] = now_utc()
     res = await db["portfolio_items"].insert_one(doc)
-    return {"id": oid_str(res.inserted_id), **doc}
+    return {
+        "id": oid_str(res.inserted_id),
+        "user_id": oid_str(doc["user_id"]),
+        "type": doc.get("type", "other"),
+        "title": doc.get("title", ""),
+        "org": doc.get("org"),
+        "date_start": doc.get("date_start"),
+        "date_end": doc.get("date_end"),
+        "summary": doc.get("summary"),
+        "bullets": doc.get("bullets", []),
+        "links": doc.get("links", []),
+        "skill_ids": [oid_str(x) for x in doc.get("skill_ids", [])],
+        "tags": doc.get("tags", []),
+        "visibility": doc.get("visibility", "private"),
+        "priority": doc.get("priority", 0),
+        "created_at": doc.get("created_at"),
+        "updated_at": doc.get("updated_at"),
+    }
 
 @router.get("/items", response_model=list[PortfolioItemOut])
 async def list_portfolio_items(
