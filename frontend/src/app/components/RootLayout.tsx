@@ -76,12 +76,14 @@ export function RootLayout() {
           <X className="h-6 w-6" />
         </Button>
 
-        <div className="border-b border-slate-200/80 px-6 py-7">
-          <div className="rounded-2xl border border-white/80 bg-white/70 px-4 py-4 shadow-sm">
-            <div className="flex items-center justify-center">
-              <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-auto max-w-[180px]" />
-            </div>
-          </div>
+        <div className="border-b border-slate-200/80 px-6 py-6">
+          <Link to="/app" className="flex items-center justify-center rounded-2xl px-1 py-1 transition-opacity hover:opacity-90">
+            <img
+              src={LogoSvg}
+              alt="SkillBridge Logo"
+              className="h-24 w-full max-w-[240px] object-contain"
+            />
+          </Link>
         </div>
         
         <nav className="flex-1 p-4 space-y-1">

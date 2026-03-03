@@ -81,11 +81,8 @@ def extract_text_from_upload(filename: str, raw: bytes) -> str:
     raise HTTPException(status_code=400, detail="Unsupported file type. Use PDF, DOCX, or TXT.")
 
 
-def make_excerpt(text: str, limit: int = 2000) -> str:
-    clean = re.sub(r"\s+", " ", (text or "")).strip()
-    if len(clean) <= limit:
-        return clean
-    return clean[: limit - 3] + "..."
+def make_excerpt(text: str) -> str:
+    return str(text or "").strip()
 
 
 def infer_source(url: str | None, filename: str | None) -> str:

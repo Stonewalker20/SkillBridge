@@ -597,9 +597,9 @@ export function Skills() {
           const confirmed = confirmedMap.has(skill.id);
           const confirmationEntry = confirmed ? confirmedMap.get(skill.id)! : null;
 
-          // If backend returns proficiency=0, keep UI stable by treating it as 1 for display
-          const rawProf = confirmed ? (confirmationEntry!.proficiency ?? 1) : 1;
-          const prof = confirmed ? String(Math.max(1, Math.min(5, rawProf))) : "";
+          // Bind the dropdown to the user's manual setting so evidence auto-raises do not mask UI changes.
+          const rawManualProf = confirmed ? (confirmationEntry!.manualProficiency ?? confirmationEntry!.proficiency ?? 1) : 1;
+          const prof = confirmed ? String(Math.max(1, Math.min(5, rawManualProf))) : "";
 
           return (
             <Card key={skill.id} className="p-4 transition-shadow hover:shadow-md">

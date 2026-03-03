@@ -68,9 +68,7 @@ export function SignUp() {
       <div className="grid w-full max-w-5xl gap-8 lg:grid-cols-[0.95fr_1.05fr]">
         <div className="hidden lg:flex flex-col justify-between rounded-[2rem] border border-slate-200 bg-[linear-gradient(135deg,_rgba(30,58,138,0.98),_rgba(15,118,110,0.95))] p-8 text-white shadow-xl">
           <div>
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
-              <img src={LogoSvg} alt="SkillBridge Logo" className="h-10 w-10" />
-            </div>
+            <img src={LogoSvg} alt="SkillBridge Logo" className="h-14 w-auto max-w-[180px] object-contain" />
             <h1 className="mt-8 text-4xl font-bold leading-tight">Build a profile that can prove what you know.</h1>
             <p className="mt-4 text-base leading-7 text-blue-100">
               Create your workspace, add evidence, confirm skills, and generate targeted job-match outputs from a single profile.
@@ -86,9 +84,7 @@ export function SignUp() {
         {/* Logo & Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100">
-              <img src={LogoSvg} alt="SkillBridge Logo" className="h-12 w-12" />
-            </div>
+            <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-auto max-w-[200px] object-contain" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
           <p className="text-gray-600">Join SkillBridge and transform your job search</p>

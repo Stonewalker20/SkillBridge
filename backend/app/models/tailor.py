@@ -62,6 +62,7 @@ class JobMatchOut(BaseModel):
     evidence_aligned_count: int = 0
     evidence_gap_count: int = 0
     keyword_overlap_count: int = 0
+    keyword_overlap_terms: list[str] = Field(default_factory=list)
     semantic_alignment_score: float = 0
     semantic_alignment_explanation: str = ""
     history_id: str | None = None

@@ -29,6 +29,15 @@ function errMsg(error: any) {
   return String(error?.message || error || "Unknown error");
 }
 
+function summarizeEvidenceText(text: string, maxLength: number = 280) {
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  const sentenceMatch = normalized.match(/^(.{0,280}?[.!?])(?:\s|$)/);
+  if (sentenceMatch?.[1]) return sentenceMatch[1];
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
+}
+
 export function Evidence() {
   const { user } = useAuth();
   const { recordActivity } = useActivity();
@@ -110,7 +119,9 @@ export function Evidence() {
 
   const evidenceStats = useMemo(() => {
     const totalEvidence = items.length;
-    const totalExtractedSkills = items.reduce((sum, item) => sum + (item.skill_ids?.length || 0), 0);
+    const totalExtractedSkills = new Set(
+      items.flatMap((item) => (item.skill_ids || []).map((skillId) => String(skillId || "").trim()).filter(Boolean))
+    ).size;
     const typeCounts = items.reduce<Record<string, number>>((acc, item) => {
       const key = String(item.type || "other").trim() || "other";
       acc[key] = (acc[key] || 0) + 1;
@@ -513,7 +524,7 @@ export function Evidence() {
                     <Label htmlFor="evidence-text">Paste Evidence Text</Label>
                     <Textarea
                       id="evidence-text"
-                    value={draft.text}
+                      value={draft.text}
                     onChange={(e) => {
                       const nextDraft = { ...draft, text: e.target.value };
                       setDraft(nextDraft);
@@ -521,7 +532,7 @@ export function Evidence() {
                       else setAnalysisItems([]);
                     }}
                     placeholder="Paste a project summary, certificate text, paper abstract, or any other evidence here..."
-                    rows={12}
+                      rows={14}
                       className="mt-2"
                     />
                   </div>
@@ -647,8 +658,10 @@ export function Evidence() {
                           </div>
 
                           <div>
-                            <div className="mb-2 px-4 text-sm font-medium text-gray-900">Stored excerpt</div>
-                            <div className="mx-4 rounded-xl bg-slate-50 p-3 text-sm leading-6 text-gray-700">{analysis.text_excerpt}</div>
+                            <div className="mb-2 px-4 text-sm font-medium text-gray-900">Full evidence text</div>
+                            <div className="mx-4 whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3 text-sm leading-6 text-gray-700">
+                              {analysis.text_excerpt}
+                            </div>
                           </div>
                         </div>
                       </Card>
@@ -722,7 +735,10 @@ export function Evidence() {
 
                 <div className="px-5 py-4">
                   <div className="min-w-0">
-                    <p className="line-clamp-5 text-sm leading-6 text-gray-600">{item.text_excerpt || item.description || ""}</p>
+                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Summary</div>
+                    <div className="mt-2 text-sm leading-6 text-gray-600">
+                      {summarizeEvidenceText(item.text_excerpt || item.description || "")}
+                    </div>
                     <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
                       Source: {item.source || "manual-entry"}
                     </div>

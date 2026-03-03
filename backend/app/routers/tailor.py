@@ -337,6 +337,16 @@ def _classify_job_skill_priority(job_text: str, extracted: list[dict], skill_doc
         "responsibilities", "what you'll do", "what you will do", "about the role",
         "benefits", "compensation", "about us", "why join", "who we are",
     )
+    section_blocks: dict[str, list[str]] = {"required": [], "preferred": []}
+    extracted_terms_by_id: dict[str, set[str]] = {}
+
+    for entry in extracted:
+        skill_id = str(entry.get("skill_id") or "")
+        if not skill_id:
+            continue
+        terms = _skill_terms(skill_docs.get(skill_id))
+        if terms:
+            extracted_terms_by_id[skill_id] = terms
 
     for raw_line in (job_text or "").splitlines():
         line = raw_line.strip()
@@ -353,16 +363,39 @@ def _classify_job_skill_priority(job_text: str, extracted: list[dict], skill_doc
         elif len(lower) < 60 and lower.endswith(":"):
             current_section = None
 
-        for entry in extracted:
-            skill_id = str(entry.get("skill_id") or "")
-            skill_doc = skill_docs.get(skill_id) or {}
-            candidates = [(skill_doc.get("name") or "").strip()] + [str(alias or "").strip() for alias in (skill_doc.get("aliases") or [])]
-            if not any(candidate and re.search(_skill_match_pattern(candidate), lower) for candidate in candidates):
+        if current_section in {"required", "preferred"}:
+            section_blocks[current_section].append(lower)
+
+        for skill_id, terms in extracted_terms_by_id.items():
+            if not any(term and re.search(_skill_match_pattern(term), lower) for term in terms):
                 continue
             if current_section == "required":
                 required_ids.add(skill_id)
             elif current_section == "preferred":
                 preferred_ids.add(skill_id)
+
+    for section_name, target_ids in (("required", required_ids), ("preferred", preferred_ids)):
+        block_text = "\n".join(section_blocks.get(section_name) or [])
+        if not block_text:
+            continue
+        for skill_id, terms in extracted_terms_by_id.items():
+            if any(term and re.search(_skill_match_pattern(term), block_text) for term in terms):
+                target_ids.add(skill_id)
+
+    if not required_ids:
+        strong_required_blob = "\n".join(
+            raw_line.strip().lower()
+            for raw_line in (job_text or "").splitlines()
+            if raw_line.strip()
+            and (
+                any(marker in raw_line.lower() for marker in required_markers)
+                or re.search(r"\b(must|required|minimum)\b", raw_line.lower())
+            )
+        )
+        if strong_required_blob:
+            for skill_id, terms in extracted_terms_by_id.items():
+                if any(term and re.search(_skill_match_pattern(term), strong_required_blob) for term in terms):
+                    required_ids.add(skill_id)
 
     preferred_ids -= required_ids
     return required_ids, preferred_ids
@@ -572,7 +605,8 @@ async def match_job(payload: dict):
                 if _skill_terms(all_skill_docs.get(skill_id)) & item_terms:
                     evidence_backed_ids.add(skill_id)
     keywords = [str(keyword or "").strip().lower() for keyword in (job_doc.get("keywords") or []) if str(keyword or "").strip()]
-    keyword_overlap_count = sum(1 for keyword in keywords if keyword in item_text)
+    keyword_overlap_terms = [keyword for keyword in keywords if keyword in item_text]
+    keyword_overlap_count = len(keyword_overlap_terms)
 
     matched_docs = [all_skill_docs[skill_id] for skill_id in matched_ids if skill_id in all_skill_docs]
 
@@ -764,6 +798,7 @@ async def match_job(payload: dict):
         evidence_aligned_count=len(evidence_backed_ids),
         evidence_gap_count=evidence_gap_count,
         keyword_overlap_count=keyword_overlap_count,
+        keyword_overlap_terms=keyword_overlap_terms,
         semantic_alignment_score=semantic_alignment_score,
         semantic_alignment_explanation=semantic_alignment_explanation,
     )

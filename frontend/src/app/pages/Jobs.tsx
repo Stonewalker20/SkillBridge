@@ -35,6 +35,7 @@ type MatchResult = {
   evidence_aligned_count?: number;
   evidence_gap_count?: number;
   keyword_overlap_count?: number;
+  keyword_overlap_terms?: string[];
   semantic_alignment_score?: number;
   semantic_alignment_explanation?: string;
   history_id?: string | null;
@@ -104,6 +105,7 @@ export function Jobs() {
       evidenceAlignedCount: Number(a.evidence_aligned_count ?? a.evidenceAlignedCount ?? 0) || 0,
       evidenceGapCount: Number(a.evidence_gap_count ?? a.evidenceGapCount ?? 0) || 0,
       keywordOverlapCount: Number(a.keyword_overlap_count ?? a.keywordOverlapCount ?? 0) || 0,
+      keywordOverlapTerms: asArray<string>(a.keyword_overlap_terms ?? a.keywordOverlapTerms),
       keywordOverlapScore: Number(keywordOverlapBreakdown?.score ?? 0) || 0,
       semanticAlignmentScore: Number(a.semantic_alignment_score ?? a.semanticAlignmentScore ?? 0) || 0,
       semanticAlignmentExplanation: String(a.semantic_alignment_explanation ?? a.semanticAlignmentExplanation ?? ""),
@@ -574,6 +576,18 @@ export function Jobs() {
             <p>Evidence-backed matched skills: {normalized.evidenceAlignedCount} of {normalized.matchedSkillCount}</p>
             <p>Job keywords reflected in your work: {normalized.keywordOverlapScore}%</p>
           </div>
+          {normalized.keywordOverlapTerms.length > 0 ? (
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-gray-500">Keywords Overlapped</p>
+              <div className="flex flex-wrap gap-2">
+                {normalized.keywordOverlapTerms.map((term) => (
+                  <Badge key={term} className="border-slate-200 bg-slate-100 text-slate-700">
+                    {term}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </Card>
       </div>
 

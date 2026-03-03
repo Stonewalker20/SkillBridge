@@ -50,12 +50,9 @@ export function Landing() {
       <nav className="sticky top-0 z-50 border-b border-white/70 bg-white/75 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white shadow-sm">
-                <img src={LogoSvg} alt="SkillBridge Logo" className="h-8 w-8" />
-              </div>
-              <span className="text-2xl font-bold text-[#1E3A8A]">SkillBridge</span>
-            </div>
+            <Link to="/" className="flex items-center rounded-2xl px-1 py-1 transition-opacity hover:opacity-90">
+              <img src={LogoSvg} alt="SkillBridge Logo" className="h-14 w-auto max-w-[220px] object-contain" />
+            </Link>
             <div className="flex items-center gap-4">
               <Button variant="ghost" asChild className="hidden sm:inline-flex">
                 <Link to="/login">Login</Link>
