@@ -41,13 +41,18 @@ export function RootLayout() {
     navigate("/");
   };
 
+  const handleOpenNewJobAnalysis = () => {
+    setMobileMenuOpen(false);
+    navigate(`/app/jobs?new=${Date.now()}`);
+  };
+
   const currentPageTitle =
     location.pathname === "/app/account"
       ? "Account"
       : navigation.find((item) => item.href === location.pathname)?.name || "Page";
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)]">
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div 
@@ -58,7 +63,7 @@ export function RootLayout() {
 
       {/* Sidebar */}
       <div className={cn(
-        "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0",
+        "fixed lg:static inset-y-0 left-0 z-50 w-64 border-r border-slate-200/70 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(241,245,249,0.96))] backdrop-blur-xl flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Close button for mobile */}
@@ -71,9 +76,11 @@ export function RootLayout() {
           <X className="h-6 w-6" />
         </Button>
 
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-center">
-            <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-auto max-w-[180px]" />
+        <div className="border-b border-slate-200/80 px-6 py-7">
+          <div className="rounded-2xl border border-white/80 bg-white/70 px-4 py-4 shadow-sm">
+            <div className="flex items-center justify-center">
+              <img src={LogoSvg} alt="SkillBridge Logo" className="h-16 w-auto max-w-[180px]" />
+            </div>
           </div>
         </div>
         
@@ -86,10 +93,10 @@ export function RootLayout() {
                 to={item.href}
                 onClick={() => setMobileMenuOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                  "flex items-center gap-3 rounded-xl px-4 py-3 transition-all",
                   isActive
-                    ? "bg-[#1E3A8A] text-white"
-                    : "text-gray-700 hover:bg-gray-100"
+                    ? "bg-[linear-gradient(135deg,_#1E3A8A,_#0F766E)] text-white shadow-sm"
+                    : "text-slate-700 hover:bg-white/80 hover:text-slate-900"
                 )}
               >
                 <item.icon className="h-5 w-5" />
@@ -98,13 +105,16 @@ export function RootLayout() {
             );
           })}
 
-          <div className="mt-6 border-t border-gray-200 pt-4">
-            <p className="px-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Quick Actions</p>
+          <div className="mt-6 border-t border-slate-200/80 pt-4">
+            <p className="px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Quick Actions</p>
             <div className="mt-2 space-y-1">
               <Link
                 to="/app/jobs?analyze=1"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-4 py-3 text-gray-700 transition-colors hover:bg-gray-100"
+                onClick={(event) => {
+                  event.preventDefault();
+                  handleOpenNewJobAnalysis();
+                }}
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900"
               >
                 <Briefcase className="h-5 w-5" />
                 <span className="font-medium">Analyze New Job</span>
@@ -112,7 +122,7 @@ export function RootLayout() {
               <Link
                 to="/app/skills?add=1"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-4 py-3 text-gray-700 transition-colors hover:bg-gray-100"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900"
               >
                 <Target className="h-5 w-5" />
                 <span className="font-medium">Add Skill</span>
@@ -120,7 +130,7 @@ export function RootLayout() {
               <Link
                 to="/app/evidence?add=1"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-4 py-3 text-gray-700 transition-colors hover:bg-gray-100"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900"
               >
                 <FolderOpen className="h-5 w-5" />
                 <span className="font-medium">Upload Evidence</span>
@@ -129,7 +139,7 @@ export function RootLayout() {
           </div>
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
+        <div className="border-t border-slate-200/80 p-4">
           {/* Mobile Logout Button */}
           <Button
             variant="outline"
@@ -144,7 +154,7 @@ export function RootLayout() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4">
+        <header className="border-b border-white/70 bg-white/70 px-4 py-4 backdrop-blur-xl sm:px-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               {/* Mobile Menu Button */}
@@ -157,16 +167,19 @@ export function RootLayout() {
                 <Menu className="h-6 w-6" />
               </Button>
               
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Workspace</p>
+                <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">
                 {currentPageTitle}
-              </h2>
+                </h2>
+              </div>
             </div>
             
             <div className="flex items-center gap-2 sm:gap-4">
-              <Button asChild variant="ghost" className="relative h-10 w-10 rounded-full p-0">
+              <Button asChild variant="ghost" className="relative h-11 w-11 rounded-full border border-slate-200/80 bg-white/80 p-0 shadow-sm">
                 <Link to="/app/account" aria-label="Open account settings" title="Account Settings">
                   <Avatar>
-                    <AvatarFallback className="bg-[#1E3A8A] text-white">
+                    <AvatarFallback className="bg-[linear-gradient(135deg,_#1E3A8A,_#0F766E)] text-white">
                       {initials}
                     </AvatarFallback>
                   </Avatar>

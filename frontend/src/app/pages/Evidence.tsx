@@ -108,6 +108,23 @@ export function Evidence() {
     });
   }, [items, searchTerm]);
 
+  const evidenceStats = useMemo(() => {
+    const totalEvidence = items.length;
+    const totalExtractedSkills = items.reduce((sum, item) => sum + (item.skill_ids?.length || 0), 0);
+    const typeCounts = items.reduce<Record<string, number>>((acc, item) => {
+      const key = String(item.type || "other").trim() || "other";
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const topType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "other";
+    return {
+      totalEvidence,
+      totalExtractedSkills,
+      topType,
+      filteredCount: filteredItems.length,
+    };
+  }, [items, filteredItems.length]);
+
   const resetDraft = () => {
     setDraft({ id: "", title: "", type: "project", text: "", url: "" });
     setFiles([]);
@@ -348,20 +365,50 @@ export function Evidence() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Evidence</h1>
-          <p className="text-sm text-gray-600">Only evidence you explicitly add from text or uploaded files appears here.</p>
-        </div>
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.16),_transparent_38%),linear-gradient(135deg,_#ffffff,_#f8fafc)]">
+        <div className="flex flex-col gap-5 px-6 py-7 md:px-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium tracking-wide text-slate-600">
+              <Upload className="h-3.5 w-3.5 text-[#1E3A8A]" />
+              Evidence Library
+            </div>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900">Your proof of work, organized and skill-linked.</h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
+              Add project summaries, resumes, papers, certifications, or uploaded files. Only evidence you explicitly add appears here, and each item can be analyzed for skills before it is saved.
+            </p>
+          </div>
 
-        <div className="flex gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Card className="border-white/70 bg-white/80 p-4 shadow-sm">
+              <div className="text-xs uppercase tracking-wide text-slate-500">Evidence Items</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900">{evidenceStats.totalEvidence}</div>
+            </Card>
+            <Card className="border-white/70 bg-white/80 p-4 shadow-sm">
+              <div className="text-xs uppercase tracking-wide text-slate-500">Extracted Skills</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900">{evidenceStats.totalExtractedSkills}</div>
+            </Card>
+            <Card className="border-white/70 bg-white/80 p-4 shadow-sm col-span-2 sm:col-span-1">
+              <div className="text-xs uppercase tracking-wide text-slate-500">Top Evidence Type</div>
+              <div className="mt-2 text-lg font-semibold capitalize text-slate-900">{evidenceStats.topType}</div>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
           <Input
             placeholder="Search your evidence..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full md:w-72"
+            className="w-full md:w-80"
           />
+          <Badge variant="secondary" className="h-9 rounded-full px-3">
+            Showing {evidenceStats.filteredCount} of {evidenceStats.totalEvidence}
+          </Badge>
+        </div>
 
+        <div className="flex gap-3">
           <Dialog
             open={isAddOpen}
             onOpenChange={(open) => {
@@ -383,8 +430,8 @@ export function Evidence() {
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-2xl">
-              <DialogHeader className="border-b px-6 py-5">
+            <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden border-slate-200 p-0 sm:max-w-3xl">
+              <DialogHeader className="border-b bg-slate-50 px-6 py-5">
                 <DialogTitle>{draft.id ? "Edit Evidence" : "Add Evidence"}</DialogTitle>
                 <DialogDescription>
                   Paste text or upload one or more files. SkillBridge will extract likely skills, including AI-inferred new skill candidates, then you decide what to save.
@@ -442,43 +489,62 @@ export function Evidence() {
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="evidence-text">Paste Evidence Text</Label>
-                  <Textarea
-                    id="evidence-text"
-                    value={draft.text}
-                    onChange={(e) => {
-                      setDraft((prev) => ({ ...prev, text: e.target.value }));
-                      setAnalysisItems([]);
-                    }}
-                    placeholder="Paste a project summary, certificate text, paper abstract, or any other evidence here..."
-                    rows={8}
-                  />
-                </div>
+                <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <Label htmlFor="evidence-text">Paste Evidence Text</Label>
+                    <Textarea
+                      id="evidence-text"
+                      value={draft.text}
+                      onChange={(e) => {
+                        setDraft((prev) => ({ ...prev, text: e.target.value }));
+                        setAnalysisItems([]);
+                      }}
+                      placeholder="Paste a project summary, certificate text, paper abstract, or any other evidence here..."
+                      rows={12}
+                      className="mt-2"
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="evidence-file">Upload PDF / DOCX / TXT / MD</Label>
-                  <Input
-                    id="evidence-file"
-                    type="file"
-                    accept=".pdf,.docx,.txt,.md"
-                    multiple
-                    onChange={(e) => {
-                      setFiles(Array.from(e.target.files || []));
-                      setAnalysisItems([]);
-                    }}
-                  />
-                  {files.length ? (
-                    <div className="text-xs text-gray-500">
-                      Selected {files.length} file{files.length === 1 ? "" : "s"}: {files.map((entry) => entry.name).join(", ")}
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                      <Upload className="h-4 w-4 text-[#1E3A8A]" />
+                      Upload PDF / DOCX / TXT / MD
                     </div>
-                  ) : null}
+                    <p className="mt-2 text-xs leading-5 text-slate-600">
+                      Batch upload multiple files at once. Each file will be analyzed separately so you can review skills before saving.
+                    </p>
+                    <Input
+                      id="evidence-file"
+                      type="file"
+                      accept=".pdf,.docx,.txt,.md"
+                      multiple
+                      className="mt-4 bg-white"
+                      onChange={(e) => {
+                        setFiles(Array.from(e.target.files || []));
+                        setAnalysisItems([]);
+                      }}
+                    />
+                    {files.length ? (
+                      <div className="mt-4 rounded-xl bg-white p-3 text-xs text-slate-600 shadow-sm">
+                        <div className="font-medium text-slate-800">
+                          {files.length} file{files.length === 1 ? "" : "s"} selected
+                        </div>
+                        <div className="mt-2 max-h-28 space-y-1 overflow-y-auto">
+                          {files.map((entry) => (
+                            <div key={entry.name} className="truncate">
+                              {entry.name}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
 
                 <Button
                   onClick={handleAnalyze}
                   disabled={analyzing}
-                  className="w-full bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
+                  className="w-full bg-[#1E3A8A] hover:bg-[#1e3a8a]/90 h-11"
                 >
                   {analyzing ? "Analyzing..." : (
                     <>
@@ -491,11 +557,19 @@ export function Evidence() {
                 {analysisItems.length ? (
                   <div className="space-y-4">
                     {analysisItems.map((analysis) => (
-                      <Card key={analysis.analysis_id} className="p-4">
+                      <Card key={analysis.analysis_id} className="overflow-hidden border-slate-200 p-0">
                         <div className="space-y-4">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Ready to save</div>
-                            <div className="mt-3 grid gap-4 md:grid-cols-2">
+                          <div className="border-b bg-slate-50 px-4 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">Ready to save</div>
+                                <div className="mt-1 text-xs text-slate-600">{analysis.source}</div>
+                              </div>
+                              <Badge variant="secondary">{analysis.extracted_skills.length} detected</Badge>
+                            </div>
+                          </div>
+                          <div className="space-y-4 px-4 pb-4">
+                            <div className="grid gap-4 md:grid-cols-2">
                               <div>
                                 <Label htmlFor={`${analysis.analysis_id}-title`}>Title</Label>
                                 <Input
@@ -523,19 +597,18 @@ export function Evidence() {
                                 </Select>
                               </div>
                             </div>
-                            <div className="mt-2 text-sm text-gray-600">{analysis.source}</div>
                           </div>
 
                           <div>
-                            <div className="mb-2 text-sm font-medium text-gray-900">Extracted skills</div>
+                            <div className="mb-2 px-4 text-sm font-medium text-gray-900">Extracted skills</div>
                             {analysis.extracted_skills.length === 0 ? (
-                              <div className="text-sm text-gray-500">No likely skills detected. You can still save the evidence without adding skills.</div>
+                              <div className="px-4 text-sm text-gray-500">No likely skills detected. You can still save the evidence without adding skills.</div>
                             ) : (
-                              <div className="space-y-3">
+                              <div className="space-y-3 px-4">
                                 {analysis.extracted_skills.map((skill) => {
                                   const checked = (selectedSkillIdsByAnalysis[analysis.analysis_id] || []).includes(skill.skill_id);
                                   return (
-                                    <label key={`${analysis.analysis_id}:${skill.skill_id}`} className="flex items-start gap-3 rounded-md border p-3">
+                                    <label key={`${analysis.analysis_id}:${skill.skill_id}`} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50">
                                       <Checkbox checked={checked} onCheckedChange={(value) => toggleSkill(analysis.analysis_id, skill.skill_id, value === true)} />
                                       <div className="min-w-0">
                                         <div className="font-medium text-gray-900">{skill.skill_name}</div>
@@ -553,8 +626,8 @@ export function Evidence() {
                           </div>
 
                           <div>
-                            <div className="mb-2 text-sm font-medium text-gray-900">Stored excerpt</div>
-                            <div className="rounded-md bg-gray-50 p-3 text-sm text-gray-700">{analysis.text_excerpt}</div>
+                            <div className="mb-2 px-4 text-sm font-medium text-gray-900">Stored excerpt</div>
+                            <div className="mx-4 rounded-xl bg-slate-50 p-3 text-sm leading-6 text-gray-700">{analysis.text_excerpt}</div>
                           </div>
                         </div>
                       </Card>
@@ -581,55 +654,75 @@ export function Evidence() {
       </div>
 
       {filteredItems.length === 0 ? (
-        <Card className="p-10 text-center">
-          <Upload className="mx-auto h-8 w-8 text-gray-400" />
-          <div className="mt-3 text-sm text-gray-600">No user-added evidence yet.</div>
-          <div className="mt-1 text-xs text-gray-500">Add text or upload files to start building your evidence library.</div>
+        <Card className="overflow-hidden border-slate-200 p-0 text-center">
+          <div className="bg-[linear-gradient(135deg,_rgba(30,58,138,0.08),_rgba(15,23,42,0.03))] px-6 py-12">
+            <Upload className="mx-auto h-10 w-10 text-[#1E3A8A]" />
+            <div className="mt-4 text-lg font-semibold text-slate-900">No evidence added yet</div>
+            <div className="mt-2 text-sm text-slate-600">Add text or upload files to start building your evidence library.</div>
+            <Button
+              onClick={() => setIsAddOpen(true)}
+              className="mt-6 bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Your First Evidence
+            </Button>
+          </div>
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filteredItems.map((item) => {
             const externalUrl = item.source && /^https?:\/\//i.test(item.source) ? item.source : "";
             return (
-              <Card key={item.id} className="p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-[#1E3A8A]" />
-                      <h3 className="truncate text-base font-semibold text-gray-900">{item.title}</h3>
+              <Card key={item.id} className="group overflow-hidden border-slate-200 p-0 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <div className="border-b bg-[linear-gradient(135deg,_rgba(30,58,138,0.08),_rgba(255,255,255,0.9))] px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-sm">
+                          <FileText className="h-4 w-4 text-[#1E3A8A]" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="truncate text-base font-semibold text-gray-900">{item.title}</h3>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {item.type ? <Badge variant="outline" className="capitalize">{item.type}</Badge> : null}
+                            {(item.skill_ids || []).length ? <Badge variant="secondary">{item.skill_ids?.length} extracted skills</Badge> : null}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {item.type ? <Badge variant="outline">{item.type}</Badge> : null}
-                      {(item.skill_ids || []).length ? <Badge variant="secondary">{item.skill_ids?.length} extracted skills</Badge> : null}
+
+                    {externalUrl ? (
+                      <a href={externalUrl} target="_blank" rel="noreferrer" className="text-gray-500 transition-colors hover:text-[#1E3A8A]">
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="px-5 py-4">
+                  <div className="min-w-0">
+                    <p className="line-clamp-5 text-sm leading-6 text-gray-600">{item.text_excerpt || item.description || ""}</p>
+                    <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      Source: {item.source || "manual-entry"}
                     </div>
                   </div>
 
-                  {externalUrl ? (
-                    <a href={externalUrl} target="_blank" rel="noreferrer" className="text-gray-500 hover:text-[#1E3A8A]">
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  ) : null}
-                </div>
-
-                <p className="mt-4 text-sm text-gray-600 line-clamp-5">{item.text_excerpt || item.description || ""}</p>
-
-                <div className="mt-4 text-xs text-gray-500">Source: {item.source || "manual-entry"}</div>
-
-                <div className="mt-4 flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDelete(item)}
-                    disabled={deletingId === item.id}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    {deletingId === item.id ? "Deleting..." : "Delete"}
-                  </Button>
+                  <div className="mt-4 flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDelete(item)}
+                      disabled={deletingId === item.id}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {deletingId === item.id ? "Deleting..." : "Delete"}
+                    </Button>
+                  </div>
                 </div>
               </Card>
             );

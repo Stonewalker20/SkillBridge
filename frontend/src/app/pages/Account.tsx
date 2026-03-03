@@ -147,21 +147,24 @@ export function Account() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Profile Card */}
-      <Card className="p-8">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-20 h-20 rounded-full bg-[#1E3A8A] flex items-center justify-center text-white text-2xl font-bold">
+      <Card className="overflow-hidden border-slate-200 p-0">
+        <div className="bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.18),_transparent_38%),linear-gradient(135deg,_#ffffff,_#f8fafc)] px-8 py-8">
+          <div className="flex items-center gap-4">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#1E3A8A,_#0F766E)] text-2xl font-bold text-white shadow-sm">
             {initials}
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{username || "Account"}</h2>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Account Settings</div>
+            <h2 className="mt-2 text-2xl font-bold text-gray-900">{username || "Account"}</h2>
             <p className="text-gray-600">{email || ""}</p>
+            <div className="mt-3 inline-flex rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600">
+              {aiStatus?.provider_mode ?? "Inference unavailable"}
+            </div>
+          </div>
           </div>
         </div>
 
-        <Separator className="my-6" />
-
-        <div className="space-y-6">
+        <div className="space-y-6 p-8">
           {/* Username Section */}
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -175,6 +178,7 @@ export function Account() {
                   id="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  className="mt-1"
                 />
               </div>
               <div className="flex items-end">
@@ -205,6 +209,7 @@ export function Account() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1"
                 />
               </div>
               <div className="flex items-end">
@@ -224,7 +229,7 @@ export function Account() {
           <div>
             <h3 className="text-lg font-semibold text-gray-900">AI Settings</h3>
             <p className="mt-1 text-sm text-gray-600">Current local backend inference mode used for Job Match semantic analysis, evidence extraction, and bullet enhancement.</p>
-            <div className="mt-4 rounded-xl border border-gray-200 bg-slate-50 p-4">
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500">Mode</p>
@@ -303,12 +308,12 @@ export function Account() {
       </Card>
 
       {/* Actions Card */}
-      <Card className="p-8">
+      <Card className="border-slate-200 p-8">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">Account Actions</h3>
 
         <div className="space-y-4">
           {/* Logout */}
-          <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+          <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex items-center gap-3">
               <LogOut className="h-5 w-5 text-gray-600" />
               <div>
@@ -322,7 +327,7 @@ export function Account() {
           </div>
 
           {/* Delete Account */}
-          <div className="border border-red-200 bg-red-50 rounded-lg p-4">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
                 <Trash2 className="h-5 w-5 text-red-600 mt-1" />
@@ -363,7 +368,7 @@ export function Account() {
       </Card>
 
       {/* Info Card */}
-      <Card className="p-6 bg-blue-50 border-blue-200">
+      <Card className="border-blue-200 bg-blue-50 p-6">
         <p className="text-sm text-gray-600">
           <span className="font-semibold text-[#1E3A8A]">Note:</span> Your data is securely stored and encrypted.
         </p>
