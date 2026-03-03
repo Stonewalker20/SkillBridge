@@ -1122,9 +1122,13 @@ async def list_job_match_history(user_id: str, limit: int = 12):
     docs = await cursor.to_list(length=max(1, min(limit, 30)))
     return [_serialize_history(doc) for doc in docs]
 
-@router.get("/history/{history_id}", response_model=JobMatchHistoryDetailOut)
-async def get_job_match_history_detail(history_id: str, user_id: str):
+@router.get("/history/{history_id}", response_model=JobMatchHistoryDetailOut | JobMatchCompareOut)
+async def get_job_match_history_detail(history_id: str, user_id: str, left_id: str | None = None, right_id: str | None = None):
     db = get_db()
+    if history_id == "compare":
+        if not left_id or not right_id:
+            raise HTTPException(status_code=400, detail="left_id and right_id are required")
+        return await compare_job_match_history(user_id=user_id, left_id=left_id, right_id=right_id)
     try:
         oid = ObjectId(history_id)
     except Exception:

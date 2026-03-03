@@ -12,5 +12,15 @@ class Settings(BaseSettings):
     local_zero_shot_model: str = "MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33"
     local_model_device: int = -1
     local_model_prewarm: bool  = True
+    admin_owner_emails: str = ""
+    admin_team_emails: str = ""
+
+    @property
+    def admin_owner_emails_set(self) -> set[str]:
+        return {email.strip().lower() for email in self.admin_owner_emails.split(",") if email.strip()}
+
+    @property
+    def admin_team_emails_set(self) -> set[str]:
+        return {email.strip().lower() for email in self.admin_team_emails.split(",") if email.strip()}
 
 settings = Settings()

@@ -336,6 +336,42 @@ export type AISettingsStatus = {
   rewrite_model: string;
 };
 
+export type AdminSummary = {
+  total_users: number;
+  team_members: number;
+  projects: number;
+  evidence: number;
+  jobs: number;
+  pending_jobs: number;
+  skills: number;
+  tailored_resumes: number;
+  provider_mode: string;
+  collections: Record<string, number>;
+};
+
+export type AdminUserRecord = {
+  id: string;
+  email: string;
+  username: string;
+  role: string;
+  created_at?: string;
+};
+
+export type AdminJob = {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  source: string;
+  description_excerpt: string;
+  moderation_status: string;
+  moderation_reason?: string | null;
+  role_ids: string[];
+  required_skills: string[];
+  created_at?: string;
+  updated_at?: string;
+};
+
 export const api = {
   getToken,
   setToken,
@@ -705,6 +741,17 @@ export const api = {
   },
 
   getAISettingsStatus: () => request<AISettingsStatus>("/tailor/settings/status", "GET"),
+
+  getAdminSummary: () => request<AdminSummary>("/admin/summary", "GET"),
+  listAdminUsers: () => request<AdminUserRecord[]>("/admin/users", "GET"),
+  updateAdminUserRole: (userId: string, role: string) =>
+    request<AdminUserRecord>(`/admin/users/${userId}`, "PATCH", { role }),
+  listAdminJobs: (status?: string) => {
+    const suffix = status ? `?status=${encodeURIComponent(status)}` : "";
+    return request<AdminJob[]>("/admin/jobs" + suffix, "GET");
+  },
+  moderateAdminJob: (jobId: string, payload: { moderation_status: string; moderation_reason?: string | null }) =>
+    request<AdminJob>(`/admin/jobs/${jobId}/moderation`, "PATCH", payload),
 
   previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
     const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };

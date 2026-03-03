@@ -13,6 +13,7 @@ from app.routers.taxonomy import router as taxonomy_router
 from app.routers.tailor import router as tailor_router
 from app.routers.portfolio import router as portfolio_router
 from app.routers.auth import router as auth_router
+from app.routers.admin import router as admin_router
 from app.core.config import settings
 from app.utils.ai import get_inference_status, release_local_models, warm_local_models
 from fastapi.middleware.cors import CORSMiddleware
@@ -70,3 +71,4 @@ app.include_router(taxonomy_router, prefix="/taxonomy", tags=["taxonomy"])
 app.include_router(tailor_router, prefix="/tailor", tags=["tailor"])
 app.include_router(portfolio_router, prefix="/portfolio", tags=["portfolio"])
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
+app.include_router(admin_router, prefix="/admin", tags=["admin"])

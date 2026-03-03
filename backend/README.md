@@ -27,6 +27,8 @@ LOCAL_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 LOCAL_ZERO_SHOT_MODEL=MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33
 LOCAL_MODEL_DEVICE=-1
 LOCAL_MODEL_PREWARM=true
+ADMIN_OWNER_EMAILS=owner@example.com
+ADMIN_TEAM_EMAILS=teammate1@example.com,teammate2@example.com
 ```
 
 Notes:
@@ -34,6 +36,8 @@ Notes:
 - `LOCAL_MODEL_DEVICE=-1` keeps inference on CPU.
 - Set `LOCAL_MODEL_DEVICE=0` if you have a CUDA GPU available to the backend.
 - `LOCAL_MODEL_PREWARM=true` loads the transformer models on backend startup instead of waiting for the first Job Match or Evidence request.
+- `ADMIN_OWNER_EMAILS` bootstraps owner access on registration for the listed emails.
+- `ADMIN_TEAM_EMAILS` bootstraps team access on registration for the listed emails.
 
 ## Run
 

@@ -13,8 +13,18 @@ from app.core.auth import (
 )
 from app.models.auth import RegisterIn, LoginIn, AuthOut, UserOut, UserPatch
 from app.utils.mongo import oid_str
+from app.core.config import settings
 
 router = APIRouter()
+
+
+def bootstrap_role_for_email(email: str) -> str:
+    normalized = str(email or "").strip().lower()
+    if normalized in settings.admin_owner_emails_set:
+        return "owner"
+    if normalized in settings.admin_team_emails_set:
+        return "team"
+    return "user"
 
 @router.post("/register", response_model=AuthOut)
 async def register(payload: RegisterIn):
@@ -33,7 +43,7 @@ async def register(payload: RegisterIn):
         "username": payload.username,
         "password_salt": password_parts["salt"],
         "password_hash": password_parts["hash"],
-        "role": "user",
+        "role": bootstrap_role_for_email(payload.email),
         "created_at": now_utc(),
     }
 

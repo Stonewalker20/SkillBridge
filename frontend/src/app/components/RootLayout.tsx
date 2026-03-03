@@ -5,6 +5,7 @@ import {
   FolderOpen, 
   FileText,
   Target,
+  Shield,
   Menu,
   X,
   LogOut,
@@ -20,7 +21,7 @@ import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 
-const navigation = [
+const baseNavigation = [
   { name: "Dashboard", href: "/app", icon: LayoutDashboard },
   { name: "Skills", href: "/app/skills", icon: Target },
   { name: "Evidence", href: "/app/evidence", icon: FolderOpen },
@@ -40,6 +41,10 @@ export function RootLayout() {
   }, []);
 
   const displayName = user?.username || user?.email?.split("@")[0] || "Account";
+  const isAdminUser = ["owner", "admin", "team"].includes(String(user?.role ?? "").toLowerCase());
+  const navigation = isAdminUser
+    ? [...baseNavigation, { name: "Admin", href: "/app/admin", icon: Shield }]
+    : baseNavigation;
   const initials = (() => {
     const parts = String(displayName).trim().split(/[\s._-]+/).filter(Boolean);
     const a = parts[0]?.[0] ?? "S";

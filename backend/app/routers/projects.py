@@ -50,7 +50,17 @@ async def create_project(payload: ProjectIn):
     doc["created_at"] = now
     doc["updated_at"] = now
     res = await db["projects"].insert_one(doc)
-    return {"id": oid_str(res.inserted_id), **doc}
+    return {
+        "id": oid_str(res.inserted_id),
+        "user_id": oid_str(doc["user_id"]),
+        "title": doc.get("title", ""),
+        "description": doc.get("description", ""),
+        "start_date": doc.get("start_date"),
+        "end_date": doc.get("end_date"),
+        "tags": doc.get("tags", []),
+        "created_at": doc.get("created_at"),
+        "updated_at": doc.get("updated_at"),
+    }
 
 @router.get("/{project_id}", response_model=ProjectOut)
 async def get_project(project_id: str):
