@@ -11,14 +11,6 @@ import {
 import { cn } from "./ui/utils";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
 import LogoSvg from "../../imports/file.svg";
 import { useAuth } from "../context/AuthContext";
 import { useState } from "react";
@@ -141,33 +133,19 @@ export function RootLayout() {
             </div>
             
             <div className="flex items-center gap-2 sm:gap-4">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                    <Avatar>
-                      <AvatarFallback className="bg-[#1E3A8A] text-white">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{displayName}</span>
-                      <span className="text-xs text-gray-500">{user?.email || "john@example.com"}</span>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/app/account">Account Settings</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleLogout} className="text-red-600">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Logout
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button asChild variant="ghost" className="relative h-10 w-10 rounded-full p-0">
+                <Link to="/app/account" aria-label="Open account settings" title="Account Settings">
+                  <Avatar>
+                    <AvatarFallback className="bg-[#1E3A8A] text-white">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
+              </Button>
+              <Button variant="outline" onClick={handleLogout} className="hidden sm:inline-flex">
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
             </div>
           </div>
         </header>

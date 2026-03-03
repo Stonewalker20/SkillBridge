@@ -8,7 +8,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import type { JobMatchComparison, JobMatchHistoryEntry } from "../services/api";
-import { Download, CheckCircle2, AlertCircle, Sparkles, Wand2, History, GitCompareArrows, Trash2, RotateCw } from "lucide-react";
+import { Download, CheckCircle2, AlertCircle, Sparkles, Wand2, History, GitCompareArrows, Trash2, RotateCw, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 
@@ -670,18 +670,16 @@ export function Jobs() {
               <span className="text-sm text-gray-500">None returned</span>
             ) : (
               normalized.missingSkills.map((s) => (
-                <div key={s} className="flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1">
-                  <span className="text-sm font-medium text-orange-700">{s}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleAddMissingSkill(s)}
-                    disabled={addingMissingSkill === s}
-                    className="h-7 rounded-full px-2 text-[#1E3A8A] hover:bg-white"
-                  >
-                    {addingMissingSkill === s ? "Adding..." : "Add Skill"}
-                  </Button>
-                </div>
+                <Button
+                  key={s}
+                  variant="outline"
+                  onClick={() => handleAddMissingSkill(s)}
+                  disabled={addingMissingSkill === s}
+                  className="h-auto rounded-full border-orange-300 bg-white px-3 py-1 text-sm font-medium text-orange-700 hover:bg-orange-50"
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  {addingMissingSkill === s ? "Adding..." : s}
+                </Button>
               ))
             )}
           </div>
