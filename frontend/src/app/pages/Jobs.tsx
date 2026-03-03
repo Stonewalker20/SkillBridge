@@ -111,6 +111,29 @@ export function Jobs() {
     };
   }, [analysis]);
 
+  const handleReset = () => {
+    setJobDescription("");
+    setJobTitle("");
+    setCompany("");
+    setLocation("");
+    setAnalysis(null);
+    setTailored(null);
+    setJobId(null);
+  };
+
+  useEffect(() => {
+    const newToken = searchParams.get("new");
+    if (!newToken) return;
+
+    handleReset();
+    descriptionRef.current?.focus();
+    descriptionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    const next = new URLSearchParams(searchParams);
+    next.delete("new");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   useEffect(() => {
     if (searchParams.get("analyze") === "1" && !analysis) {
       descriptionRef.current?.focus();
@@ -228,16 +251,6 @@ export function Jobs() {
       setGenerating(false);
     }
   };
-
-  const handleReset = () => {
-    setJobDescription("");
-    setJobTitle("");
-    setCompany("");
-    setLocation("");
-    setAnalysis(null);
-      setTailored(null);
-      setJobId(null);
-    };
 
   const handleRestoreHistory = async (historyId: string) => {
     setRestoringHistoryId(historyId);
@@ -769,7 +782,16 @@ export function Jobs() {
               return (
                 <div
                   key={entry.id}
-                  className="rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:bg-gray-50"
+                  className="cursor-pointer rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:bg-gray-50"
+                  onClick={() => handleRestoreHistory(entry.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleRestoreHistory(entry.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
