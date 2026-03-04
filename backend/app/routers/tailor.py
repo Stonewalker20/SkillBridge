@@ -632,7 +632,7 @@ def _canonical_template_section_title(raw_title: str) -> str:
     return cleaned or "Section"
 
 
-def _load_default_resume_template_sections(user_doc: dict | None) -> list[ResumeSection]:
+def _load_default_resume_template_sections(user_doc: dict | None, include_content: bool = True) -> list[ResumeSection]:
     if not DEFAULT_RESUME_TEMPLATE_TEX.exists():
         return []
     raw_tex = DEFAULT_RESUME_TEMPLATE_TEX.read_text(encoding="utf-8", errors="ignore")
@@ -640,19 +640,19 @@ def _load_default_resume_template_sections(user_doc: dict | None) -> list[Resume
     body = body_match.group(1) if body_match else raw_tex
 
     sections: list[ResumeSection] = []
-    header_match = re.search(r"\\begin\{center\}(.*?)\\end\{center\}", body, re.DOTALL)
-    header_lines = _latex_block_to_lines(header_match.group(1) if header_match else "")
-    sections.append(ResumeSection(title="Header", lines=header_lines or _build_default_header_lines(user_doc)))
+    sections.append(ResumeSection(title="Header", lines=_build_default_header_lines(user_doc)))
 
     matches = list(re.finditer(r"\\section\*\{([^}]+)\}", body))
     for index, match in enumerate(matches):
         start = match.end()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(body)
         title = _canonical_template_section_title(match.group(1))
-        lines = _latex_block_to_lines(body[start:end])
+        lines = _latex_block_to_lines(body[start:end]) if include_content else []
         sections.append(ResumeSection(title=title, lines=lines))
 
-    return [section for section in sections if section.lines]
+    if include_content:
+        return [section for section in sections if section.lines]
+    return sections
 
 
 def _clean_resume_line(line: str) -> str:
@@ -876,8 +876,9 @@ def _build_sections_from_resume_template(
     selected_skill_names: list[str],
     selected_items: list[dict],
     max_bullets_per_item: int,
+    preserve_template_content: bool = True,
 ) -> list[ResumeSection]:
-    fallback_template_sections = _load_default_resume_template_sections(None)
+    fallback_template_sections = _load_default_resume_template_sections(None, include_content=False)
     fallback_lines_by_title = {section.title: [line for line in section.lines if line.strip()] for section in fallback_template_sections}
     summary_section = next((section for section in template_sections if section.title == "Summary"), None)
     skills_section = next((section for section in template_sections if section.title == "Skills"), None)
@@ -896,7 +897,7 @@ def _build_sections_from_resume_template(
     inserted_highlights = False
 
     for section in template_sections:
-        base_lines = [line for line in section.lines if line.strip()]
+        base_lines = [line for line in section.lines if line.strip()] if preserve_template_content else []
         if section.title == "Summary":
             sections.append(
                 ResumeSection(
@@ -973,7 +974,11 @@ def _build_sections_from_resume_template(
     for title in ("Header", "Summary", "Skills", "Experience", "Projects", "Education"):
         if title in existing_titles:
             continue
-        lines = required_sections.get(title) or [f"{title} details are available in your selected resume source."]
+        lines = required_sections.get(title) or (
+            [f"{title} details available upon request."]
+            if title == "Education"
+            else [f"{title} information is being tailored from your selected profile data."]
+        )
         insert_index = len(sections)
         if title == "Header":
             insert_index = 0
@@ -1547,9 +1552,11 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
     if resume_snapshot:
         template_sections = _parse_resume_sections(str(resume_snapshot.get("raw_text") or ""))
         template_source = "user_resume"
+        preserve_template_content = True
     else:
-        template_sections = _load_default_resume_template_sections(user_doc)
+        template_sections = _load_default_resume_template_sections(user_doc, include_content=False)
         template_source = "default_template" if template_sections else "generated_fallback"
+        preserve_template_content = False
 
     if template_sections:
         sections = _build_sections_from_resume_template(
@@ -1558,6 +1565,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
             selected_skill_names=skill_names,
             selected_items=selected_items,
             max_bullets_per_item=payload.max_bullets_per_item,
+            preserve_template_content=preserve_template_content,
         )
     else:
         fallback_lines = [f"Tailored for {target_label}."]

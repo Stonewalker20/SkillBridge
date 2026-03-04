@@ -57,6 +57,22 @@ def _inflected_variants(value: str) -> list[str]:
     return unique_casefolded(variants)
 
 
+def _initialism_variant(value: str) -> str | None:
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    if not text or " " not in text:
+        return None
+    parts = [part for part in re.split(r"[\s/&+-]+", text) if part]
+    letters = []
+    for part in parts:
+        alnum = re.sub(r"[^A-Za-z0-9]", "", part)
+        if not alnum:
+            continue
+        letters.append(alnum[0].upper())
+    if len(letters) < 2:
+        return None
+    return "".join(letters)
+
+
 def unique_casefolded(values: Iterable[str]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
@@ -76,6 +92,10 @@ def expand_alias_variants(values: Iterable[str], base_name: str | None = None) -
     expanded: list[str] = []
     for value in values:
         expanded.extend(_inflected_variants(str(value or "")))
+    if base_name:
+        initialism = _initialism_variant(base_name)
+        if initialism:
+            expanded.extend(_inflected_variants(initialism))
     deduped = unique_casefolded(expanded)
     if base_name:
         name_key = normalize_skill_text(base_name)
