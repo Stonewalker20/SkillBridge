@@ -1,3 +1,5 @@
+"""Centralized application settings loaded from environment variables for database, auth, and local ML behavior."""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -10,8 +12,10 @@ class Settings(BaseSettings):
     openai_chat_model: str = "gpt-4o-mini"
     local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     local_zero_shot_model: str = "MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33"
+    local_rewrite_model: str = "google/flan-t5-small"
     local_embedding_model_options: str = "sentence-transformers/all-MiniLM-L6-v2,sentence-transformers/all-MiniLM-L12-v2"
     local_zero_shot_model_options: str = "MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33,facebook/bart-large-mnli"
+    local_rewrite_model_options: str = "google/flan-t5-small,google/flan-t5-base"
     local_model_device: int = -1
     local_model_prewarm: bool  = True
     admin_owner_emails: str = ""
@@ -37,6 +41,13 @@ class Settings(BaseSettings):
         options = [value.strip() for value in self.local_zero_shot_model_options.split(",") if value.strip()]
         if self.local_zero_shot_model not in options:
             options.insert(0, self.local_zero_shot_model)
+        return list(dict.fromkeys(options))
+
+    @property
+    def local_rewrite_model_options_list(self) -> list[str]:
+        options = [value.strip() for value in self.local_rewrite_model_options.split(",") if value.strip()]
+        if self.local_rewrite_model not in options:
+            options.insert(0, self.local_rewrite_model)
         return list(dict.fromkeys(options))
 
 settings = Settings()

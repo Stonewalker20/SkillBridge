@@ -1,3 +1,5 @@
+"""Job match, tailoring, retrieval, and export routes that turn user data into saved analyses and targeted resume outputs."""
+
 from __future__ import annotations
 
 import re
@@ -19,6 +21,7 @@ from app.models.tailor import (
     AISettingsDetailOut,
     AISettingsStatusOut,
     ExtractedSkill,
+    GapInsight,
     JobIngestIn,
     JobIngestOut,
     JobMatchCompareOut,
@@ -34,6 +37,8 @@ from app.models.tailor import (
     TailoredResumeListEntryOut,
     TailoredResumeOut,
     TailorPreviewIn,
+    UserSkillVectorOut,
+    UserSkillVectorHistoryPoint,
 )
 from app.utils.rag import retrieve_rag_context
 from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
@@ -83,6 +88,8 @@ def _build_ai_settings_detail(user_doc: dict | None) -> AISettingsDetailOut:
 
 @router.get("/rag/search", response_model=list[RAGContextItem])
 async def search_rag_context(q: str, user=Depends(require_user), limit: int = 5):
+    # This endpoint is mainly for product/debug visibility: it lets the frontend show
+    # which grounded snippets the retriever considers most relevant for a free-text query.
     db = get_db()
     preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
     rows = await retrieve_rag_context(
@@ -94,6 +101,40 @@ async def search_rag_context(q: str, user=Depends(require_user), limit: int = 5)
         source_types=("evidence", "resume_snapshot"),
     )
     return [RAGContextItem(**row) for row in rows]
+
+
+@router.get("/user-vector", response_model=UserSkillVectorOut)
+async def get_user_skill_vector(user=Depends(require_user)):
+    db = get_db()
+    preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
+    doc = await _compute_and_store_user_skill_vector(db, oid_str(user["_id"]), ai_preferences=preferences)
+    return UserSkillVectorOut(
+        user_id=oid_str(user["_id"]),
+        embedding_dimensions=int(doc.get("embedding_dimensions") or 0),
+        confirmed_skill_count=int(doc.get("confirmed_skill_count") or 0),
+        evidence_item_count=int(doc.get("evidence_item_count") or 0),
+        portfolio_item_count=int(doc.get("portfolio_item_count") or 0),
+        source_preview=str(doc.get("source_preview") or ""),
+        updated_at=doc.get("updated_at"),
+    )
+
+
+@router.get("/user-vector/history", response_model=list[UserSkillVectorHistoryPoint])
+async def get_user_skill_vector_history(user=Depends(require_user), limit: int = 12):
+    db = get_db()
+    rows = await db["user_skill_vector_history"].find(
+        ref_query("user_id", oid_str(user["_id"])),
+        {"score": 1, "label": 1, "updated_at": 1},
+    ).sort("updated_at", -1).limit(max(1, min(limit, 30))).to_list(length=max(1, min(limit, 30)))
+    ordered = list(reversed(rows))
+    return [
+        UserSkillVectorHistoryPoint(
+            score=float(row.get("score") or 0.0),
+            label=str(row.get("label") or ""),
+            updated_at=row.get("updated_at"),
+        )
+        for row in ordered
+    ]
 
 def _job_focus_lines(text: str) -> list[tuple[str, float]]:
     section_markers = {
@@ -194,6 +235,84 @@ def _top_average(scores: Iterable[float], limit: int) -> float:
         return 0.0
     ranked = sorted(positives, reverse=True)[:limit]
     return sum(ranked) / len(ranked)
+
+
+async def _load_latest_resume_snapshot_text(db, user_id: str) -> str:
+    snapshot = await db["resume_snapshots"].find_one(
+        ref_query("user_id", user_id),
+        sort=[("created_at", -1)],
+    )
+    return str((snapshot or {}).get("raw_text") or "").strip()
+
+
+def _build_user_vector_source_text(
+    confirmed_entries: list[dict],
+    skill_docs: dict[str, dict],
+    items: list[dict],
+    resume_text: str,
+) -> tuple[str, dict]:
+    confirmed_skill_names = [
+        _display_skill_name(skill_docs.get(str(entry.get("skill_id") or "").strip()), str(entry.get("skill_id") or "").strip())
+        for entry in confirmed_entries
+        if str(entry.get("skill_id") or "").strip()
+    ]
+    confirmed_skill_names = [name for name in _dedupe_preserve_order(confirmed_skill_names) if name]
+
+    evidence_items = [item for item in items if str(item.get("_source_collection") or "") == "evidence"]
+    portfolio_items = [item for item in items if str(item.get("_source_collection") or "") == "portfolio_items"]
+
+    sections: list[str] = []
+    if confirmed_skill_names:
+        sections.append(f"Confirmed skills: {', '.join(confirmed_skill_names[:40])}.")
+    for item in items[:10]:
+        blob = _normalize_text_blob(item)
+        if blob:
+            sections.append(blob[:500])
+    if resume_text:
+        sections.append(resume_text[:1500])
+
+    source_text = "\n".join(section for section in sections if section).strip()
+    return source_text, {
+        "confirmed_skill_count": len(confirmed_skill_names),
+        "evidence_item_count": len(evidence_items),
+        "portfolio_item_count": len(portfolio_items),
+    }
+
+
+async def _compute_and_store_user_skill_vector(db, user_id: str, ai_preferences: dict | None = None) -> dict:
+    conf = await _load_profile_confirmation(db, user_id)
+    confirmed_entries = list((conf or {}).get("confirmed") or [])
+    confirmed_skill_ids = [str(entry.get("skill_id") or "").strip() for entry in confirmed_entries if str(entry.get("skill_id") or "").strip()]
+    skill_docs = await _load_skills_by_ids(db, confirmed_skill_ids)
+    items = await _load_user_items(db, user_id)
+    resume_text = await _load_latest_resume_snapshot_text(db, user_id)
+    source_text, stats = _build_user_vector_source_text(confirmed_entries, skill_docs, items, resume_text)
+
+    vectors, provider = await embed_texts([source_text or "empty profile"], preferences=ai_preferences)
+    vector = vectors[0] if vectors else []
+    doc = {
+        "user_id": to_object_id(user_id),
+        "provider": provider,
+        "vector": vector,
+        "embedding_dimensions": len(vector),
+        "source_preview": source_text[:300],
+        **stats,
+        "updated_at": now_utc(),
+    }
+    await db["user_skill_vectors"].update_one(
+        ref_query("user_id", user_id),
+        {"$set": doc},
+        upsert=True,
+    )
+    await db["user_skill_vector_history"].insert_one(
+        {
+            "user_id": to_object_id(user_id),
+            "score": round(min(100.0, len(vector) * 5.0), 2),
+            "label": f"{stats['confirmed_skill_count']} skills / {stats['evidence_item_count']} evidence / {stats['portfolio_item_count']} portfolio",
+            "updated_at": doc["updated_at"],
+        }
+    )
+    return doc
 
 def _is_hidden_skill_doc(doc: dict) -> bool:
     name = (doc.get("name") or "").strip().lower()
@@ -299,6 +418,9 @@ def _score_item(item: dict, job_skill_ids: set[str], keywords: set[str]) -> floa
 
 
 def _attach_retrieved_context_to_items(items: list[dict], retrieved_context: list[dict]) -> dict[str, float]:
+    # Evidence items still drive resume selection, but retrieval gives us a better way
+    # to boost items whose text is semantically close to the job posting. We attach the
+    # winning snippets back onto those items so later summarization can reuse them.
     context_score_by_item_id: dict[str, float] = {}
     snippets_by_item_id: dict[str, list[str]] = {}
     for context in retrieved_context:
@@ -554,6 +676,68 @@ def _build_strength_areas(matched_skill_docs: list[dict], evidence_backed_ids: s
             strengths.append(f"{item_type.title()} evidence from {title}")
 
     return strengths[:4]
+
+
+def _build_gap_insights(
+    missing_ids: list[str],
+    required_ids: set[str],
+    preferred_ids: set[str],
+    related_skill_ids: list[str],
+    skill_docs: dict[str, dict],
+) -> tuple[str, list[GapInsight]]:
+    related_set = set(related_skill_ids)
+    insights: list[GapInsight] = []
+    required_missing = 0
+    bridgeable_missing = 0
+
+    for skill_id in missing_ids:
+        name = _display_skill_name(skill_docs.get(skill_id), skill_id)
+        if skill_id in required_ids:
+            gap_type = "required"
+            severity = "high"
+            reason = f"{name} appears in a likely required section of the posting and is not yet confirmed on the profile."
+            action = f"Add direct evidence or confirm recent work that proves {name}."
+            required_missing += 1
+        elif skill_id in preferred_ids:
+            gap_type = "preferred"
+            severity = "medium"
+            reason = f"{name} appears in a preferred or secondary section, so it improves competitiveness but is less critical than the required set."
+            action = f"Strengthen the profile with a project, course, or evidence snippet tied to {name}."
+        elif skill_id in related_set:
+            gap_type = "adjacent"
+            severity = "medium"
+            reason = f"{name} is not confirmed directly, but the profile contains semantically related experience that could help bridge the gap."
+            action = f"Translate related work into explicit {name} evidence or add the closest supporting project."
+            bridgeable_missing += 1
+        else:
+            gap_type = "general"
+            severity = "medium"
+            reason = f"{name} was extracted from the posting but does not yet appear in confirmed skills or supporting evidence."
+            action = f"Decide whether to learn {name} or remove it from this analysis if the extraction is not relevant."
+
+        insights.append(
+            GapInsight(
+                skill_id=skill_id,
+                skill_name=name,
+                gap_type=gap_type,
+                severity=severity,
+                reason=reason,
+                recommended_action=action,
+            )
+        )
+
+    summary_parts: list[str] = []
+    if required_missing:
+        summary_parts.append(f"{required_missing} missing skills appear to be required, which is the main reason the score is being capped.")
+    if bridgeable_missing:
+        summary_parts.append(f"{bridgeable_missing} gaps are partially offset by adjacent confirmed experience, so they are more about proof and positioning than total absence.")
+    remaining = max(0, len(missing_ids) - required_missing - bridgeable_missing)
+    if remaining:
+        summary_parts.append(f"{remaining} remaining gaps are lower-priority or secondary skills relative to the required set.")
+    if not summary_parts:
+        summary_parts.append("No material skill gaps were identified beyond the confirmed coverage already shown in the score.")
+
+    return " ".join(summary_parts), insights[:8]
 
 def _display_skill_name(doc: dict | None, fallback: str = "") -> str:
     if not doc:
@@ -1280,6 +1464,8 @@ async def match_job(payload: dict):
         if entry.get("skill_id") is not None
     }
     items = await _load_user_items(db, payload["user_id"])
+    # Pull the most relevant evidence/resume chunks first, then let the existing job
+    # analysis logic incorporate that grounded context into semantic examples and item hits.
     retrieved_context = await retrieve_rag_context(
         db,
         user_id=payload["user_id"],
@@ -1359,6 +1545,7 @@ async def match_job(payload: dict):
     matched_docs = [all_skill_docs[skill_id] for skill_id in matched_ids if skill_id in all_skill_docs]
 
     semantic_alignment_score = 0.0
+    personal_skill_vector_score = 0.0
     related_skill_ids: list[str] = []
     if job_doc.get("text"):
         ordered_user_skill_ids = [skill_id for skill_id in user_skill_ids if skill_id in all_skill_docs]
@@ -1436,6 +1623,13 @@ async def match_job(payload: dict):
     else:
         semantic_examples = []
 
+    if job_doc.get("text"):
+        user_vector_doc = await _compute_and_store_user_skill_vector(db, payload["user_id"], ai_preferences=ai_preferences)
+        user_vector = list(user_vector_doc.get("vector") or [])
+        job_vectors, _provider = await embed_texts([job_doc.get("text", "")], preferences=ai_preferences)
+        if user_vector and job_vectors and len(user_vector) == len(job_vectors[0]):
+            personal_skill_vector_score = _clamp_score(cosine_similarity(user_vector, job_vectors[0]) * 100.0)
+
     required_coverage_score = _score_percent(len(matched_required_ids), len(required_ids)) if required_ids else 100.0
     preferred_coverage_score = _score_percent(len(matched_preferred_ids), len(preferred_ids)) if preferred_ids else 100.0
     overall_coverage_score = _score_percent(len(matched_ids), len(extracted_skill_ids))
@@ -1488,11 +1682,23 @@ async def match_job(payload: dict):
             score=semantic_alignment_score,
             detail="Concept-level similarity between the job description and your saved work, even when the exact words do not match",
         ),
+        MatchScoreBreakdown(
+            label="Personal skill vector",
+            score=personal_skill_vector_score,
+            detail="Embedding similarity between the job posting and your aggregated user profile built from confirmed skills, evidence, portfolio items, and resume context",
+        ),
     ]
 
     missing_names = [_display_skill_name(all_skill_docs.get(skill_id), skill_id) for skill_id in missing_ids if skill_id in all_skill_docs]
     matched_names = [_display_skill_name(all_skill_docs.get(skill_id), skill_id) for skill_id in matched_ids if skill_id in all_skill_docs]
     related_skill_names = [all_skill_docs[skill_id].get("name", skill_id) for skill_id in related_skill_ids if skill_id in all_skill_docs]
+    gap_reasoning_summary, gap_insights = _build_gap_insights(
+        missing_ids,
+        required_ids,
+        preferred_ids,
+        related_skill_ids,
+        all_skill_docs,
+    )
     semantic_alignment_examples = [text for _score, text in sorted(semantic_examples, key=lambda item: item[0], reverse=True)[:4]]
     if retrieved_context:
         for context in retrieved_context[:3]:
@@ -1505,6 +1711,9 @@ async def match_job(payload: dict):
     confidence_label = _match_confidence_label(overall_score)
     semantic_alignment_explanation = (
         "Semantic alignment estimates how closely your saved evidence, projects, and confirmed skills resemble the responsibilities and tools in the job posting, even when the wording is different."
+    )
+    personal_skill_vector_explanation = (
+        "Your personal skill vector is a single embedding built from confirmed skills, evidence, portfolio items, and resume context, then compared directly against the job vector."
     )
     analysis_summary_parts = [
         f"{confidence_label} fit based on {len(matched_ids)} matched skills out of {len(extracted_skill_ids)} extracted job skills."
@@ -1547,6 +1756,8 @@ async def match_job(payload: dict):
         related_skills=related_skill_names,
         semantic_alignment_examples=semantic_alignment_examples,
         retrieved_context=[RAGContextItem(**context) for context in retrieved_context],
+        gap_reasoning_summary=gap_reasoning_summary,
+        gap_insights=gap_insights,
         score_breakdown=breakdown,
         recommended_next_steps=next_steps[:3],
         extracted_skill_count=len(extracted_skill_ids),
@@ -1561,6 +1772,8 @@ async def match_job(payload: dict):
         keyword_overlap_terms=keyword_overlap_terms,
         semantic_alignment_score=semantic_alignment_score,
         semantic_alignment_explanation=semantic_alignment_explanation,
+        personal_skill_vector_score=personal_skill_vector_score,
+        personal_skill_vector_explanation=personal_skill_vector_explanation,
     )
 
     if not persist_history:
@@ -1659,6 +1872,8 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
 
     # load user portfolio items and user evidence-backed items
     items = await _load_user_items(db, payload.user_id)
+    # Tailoring works better when item ranking can see which evidence chunks were
+    # actually closest to the target role, not just which items happened to share tags.
     retrieved_context = await retrieve_rag_context(
         db,
         user_id=payload.user_id,

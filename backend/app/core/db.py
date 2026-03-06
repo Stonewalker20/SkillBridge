@@ -1,3 +1,5 @@
+"""MongoDB connection helpers that expose a shared client and database handle to the rest of the backend."""
+
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from app.core.config import settings
 

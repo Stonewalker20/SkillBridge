@@ -1,3 +1,5 @@
+"""Portfolio item routes for managing structured user work history outside the evidence collection."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Depends

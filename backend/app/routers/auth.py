@@ -1,3 +1,5 @@
+"""Authentication routes for account creation, login, profile updates, logout, and account deletion."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Depends

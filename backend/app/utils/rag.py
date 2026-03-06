@@ -1,3 +1,5 @@
+"""Local retrieval helpers that chunk user documents, persist embeddings, and rank relevant evidence snippets for RAG workflows."""
+
 from __future__ import annotations
 
 import re
@@ -19,6 +21,9 @@ def _clean_text(text: str) -> str:
 
 
 def split_text_into_chunks(text: str, chunk_size: int = 500, overlap: int = 80) -> list[str]:
+    # Retrieval quality is much better when we embed focused slices of text instead of
+    # entire documents. This chunker keeps enough overlap that context near a chunk
+    # boundary is still retrievable in one piece.
     cleaned = _clean_text(text)
     if not cleaned:
         return []
@@ -51,6 +56,9 @@ async def sync_rag_document(
     preferences: dict | None = None,
     metadata: dict | None = None,
 ) -> int:
+    # Re-index the full source document on every write so retrieval stays consistent
+    # with the user-visible evidence/resume record. That keeps the contract simple:
+    # the source of truth is the main collection, and rag_chunks is a derived index.
     prefs = normalize_ai_preferences(preferences)
     source_oid = to_object_id(source_id)
     user_oid = to_object_id(user_id)
@@ -109,6 +117,9 @@ async def retrieve_rag_context(
     limit: int = 5,
     source_types: Iterable[str] | None = None,
 ) -> list[dict]:
+    # Retrieval is intentionally kept local and simple: fetch the user's indexed chunks,
+    # embed the query once, then rank by cosine similarity. That avoids introducing a
+    # separate vector database while keeping the grounding path inspectable.
     query = _clean_text(query_text)
     if not query:
         return []
@@ -151,6 +162,7 @@ async def retrieve_rag_context(
     deduped: list[dict] = []
     seen: set[tuple[str, str, int]] = set()
     for item in ranked:
+        # One stored chunk should appear at most once in the final context list.
         key = (item["source_type"], item["source_id"], item["chunk_index"])
         if key in seen:
             continue

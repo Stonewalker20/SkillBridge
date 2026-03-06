@@ -8,6 +8,7 @@ import { Badge } from "../components/ui/badge";
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { useHeaderTheme } from "../lib/headerTheme";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 interface DashboardSummary {
   totalSkills: number;
@@ -23,6 +24,16 @@ interface DashboardSummary {
     date: string;
   }>;
   topSkillCategories: Array<{ category: string; count: number }>;
+  portfolioToJobAnalytics: {
+    job_skill_coverage_pct: number;
+    matched_skill_rate_pct: number;
+    evidence_backed_match_pct: number;
+    portfolio_backed_match_pct: number;
+    portfolio_skill_count: number;
+    job_skill_count: number;
+  };
+  portfolioTypeDistribution: Array<{ type: string; count: number }>;
+  recentMatchTrend: Array<{ label: string; score: number; created_at?: string }>;
 }
 
 const EMPTY_SUMMARY: DashboardSummary = {
@@ -32,6 +43,16 @@ const EMPTY_SUMMARY: DashboardSummary = {
   tailoredResumes: 0,
   recentActivity: [],
   topSkillCategories: [],
+  portfolioToJobAnalytics: {
+    job_skill_coverage_pct: 0,
+    matched_skill_rate_pct: 0,
+    evidence_backed_match_pct: 0,
+    portfolio_backed_match_pct: 0,
+    portfolio_skill_count: 0,
+    job_skill_count: 0,
+  },
+  portfolioTypeDistribution: [],
+  recentMatchTrend: [],
 };
 
 function safeNum(v: any): number {
@@ -172,6 +193,24 @@ export function Dashboard() {
             : Array.isArray(base?.top_skill_categories)
               ? base.top_skill_categories
               : [],
+          portfolioToJobAnalytics: {
+            job_skill_coverage_pct: safeNum(base?.portfolioToJobAnalytics?.job_skill_coverage_pct ?? base?.portfolio_to_job_analytics?.job_skill_coverage_pct ?? 0),
+            matched_skill_rate_pct: safeNum(base?.portfolioToJobAnalytics?.matched_skill_rate_pct ?? base?.portfolio_to_job_analytics?.matched_skill_rate_pct ?? 0),
+            evidence_backed_match_pct: safeNum(base?.portfolioToJobAnalytics?.evidence_backed_match_pct ?? base?.portfolio_to_job_analytics?.evidence_backed_match_pct ?? 0),
+            portfolio_backed_match_pct: safeNum(base?.portfolioToJobAnalytics?.portfolio_backed_match_pct ?? base?.portfolio_to_job_analytics?.portfolio_backed_match_pct ?? 0),
+            portfolio_skill_count: safeNum(base?.portfolioToJobAnalytics?.portfolio_skill_count ?? base?.portfolio_to_job_analytics?.portfolio_skill_count ?? 0),
+            job_skill_count: safeNum(base?.portfolioToJobAnalytics?.job_skill_count ?? base?.portfolio_to_job_analytics?.job_skill_count ?? 0),
+          },
+          portfolioTypeDistribution: Array.isArray(base?.portfolioTypeDistribution)
+            ? base.portfolioTypeDistribution
+            : Array.isArray(base?.portfolio_type_distribution)
+              ? base.portfolio_type_distribution
+              : [],
+          recentMatchTrend: Array.isArray(base?.recentMatchTrend)
+            ? base.recentMatchTrend
+            : Array.isArray(base?.recent_match_trend)
+              ? base.recent_match_trend
+              : [],
         };
 
         // 2) User-specific overrides for skills:
@@ -275,6 +314,32 @@ export function Dashboard() {
           !clearedRecentActivityKeys.includes(String(activity.eventKey ?? `${activity.id}:${activity.date}`))
       ),
     [summary.recentActivity, hiddenRecentActivityKeys, clearedRecentActivityKeys, clearedRecentActivityIds]
+  );
+
+  const portfolioVisualMetrics = useMemo(
+    () => [
+      {
+        label: "Portfolio Coverage",
+        value: `${Math.round(summary.portfolioToJobAnalytics.job_skill_coverage_pct)}%`,
+        detail: `${summary.portfolioToJobAnalytics.portfolio_skill_count} portfolio skills across ${summary.portfolioToJobAnalytics.job_skill_count} recent job skills`,
+      },
+      {
+        label: "Matched Skills",
+        value: `${Math.round(summary.portfolioToJobAnalytics.matched_skill_rate_pct)}%`,
+        detail: "Coverage across recent analyzed jobs",
+      },
+      {
+        label: "Evidence-Backed",
+        value: `${Math.round(summary.portfolioToJobAnalytics.evidence_backed_match_pct)}%`,
+        detail: "Matched skills already supported by evidence",
+      },
+      {
+        label: "Portfolio-Backed",
+        value: `${Math.round(summary.portfolioToJobAnalytics.portfolio_backed_match_pct)}%`,
+        detail: "Matched skills already represented in portfolio items",
+      },
+    ],
+    [summary.portfolioToJobAnalytics]
   );
 
   const hideRecentActivityItem = (id: string | number) => {
@@ -416,6 +481,84 @@ export function Dashboard() {
                     </div>
                     <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800">
                       <div className={`h-2.5 rounded-full transition-all ${activeHeaderTheme.barClass}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Portfolio to Job Match</h3>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                How strongly your saved work history supports the skills showing up in recent job analyses.
+              </p>
+            </div>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/app/analytics/skills">Open analytics</Link>
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {portfolioVisualMetrics.map((metric) => (
+              <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{metric.label}</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">{metric.value}</p>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{metric.detail}</p>
+              </div>
+            ))}
+          </div>
+          {summary.recentMatchTrend.length > 0 ? (
+            <div className="mt-6 h-64 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={summary.recentMatchTrend} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                  <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(148, 163, 184, 0.12)" }}
+                    formatter={(value: number) => [`${Math.round(Number(value) || 0)}%`, "Match score"]}
+                    labelFormatter={(label) => String(label)}
+                  />
+                  <Bar dataKey="score" radius={[10, 10, 4, 4]} fill="var(--dashboard-accent, #1E3A8A)" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="mt-6 rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              Analyze a few jobs to unlock a recent match trend chart here.
+            </div>
+          )}
+        </Card>
+
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="mb-5">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Portfolio Signal Mix</h3>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+              The types of portfolio entries currently contributing to your profile depth.
+            </p>
+          </div>
+          {summary.portfolioTypeDistribution.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              Add portfolio items to start visualizing how your work history is distributed.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {summary.portfolioTypeDistribution.map((entry) => {
+                const maxCount = Math.max(...summary.portfolioTypeDistribution.map((item) => item.count), 1);
+                const width = (entry.count / maxCount) * 100;
+                return (
+                  <div key={entry.type} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium capitalize text-slate-900 dark:text-slate-100">{entry.type}</span>
+                      <span className="text-slate-600 dark:text-slate-300">{entry.count}</span>
+                    </div>
+                    <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-800">
+                      <div className={`h-3 rounded-full ${activeHeaderTheme.barClass}`} style={{ width: `${width}%` }} />
                     </div>
                   </div>
                 );

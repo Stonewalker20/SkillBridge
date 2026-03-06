@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowRight, BarChart3, FolderOpen, Layers3, Target } from "lucide-react";
-import { api, type ConfirmationOut, type Evidence, type Skill } from "../services/api";
+import {
+  api,
+  type CareerPathDetail,
+  type ConfirmationOut,
+  type Evidence,
+  type LearningPathProgress,
+  type LearningPathSkillDetail,
+  type Skill,
+  type SkillTrajectoryOut,
+  type UserSkillVectorHistoryPoint,
+} from "../services/api";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -21,6 +31,9 @@ type AnalyticsState = {
   skills: Skill[];
   evidence: Evidence[];
   confirmation: ConfirmationOut | null;
+  trajectory: SkillTrajectoryOut | null;
+  learningProgress: LearningPathProgress[];
+  vectorHistory: UserSkillVectorHistoryPoint[];
 };
 
 const CHART_COLORS = ["#1E3A8A", "#0F766E", "#F59E0B", "#2563EB", "#14B8A6", "#F97316", "#7C3AED", "#DC2626"];
@@ -94,23 +107,34 @@ export function SkillAnalytics() {
     skills: [],
     evidence: [],
     confirmation: null,
+    trajectory: null,
+    learningProgress: [],
+    vectorHistory: [],
   });
+  const [selectedLearningSkill, setSelectedLearningSkill] = useState<string | null>(null);
+  const [selectedLearningSkillDetail, setSelectedLearningSkillDetail] = useState<LearningPathSkillDetail | null>(null);
+  const [selectedCareerPathId, setSelectedCareerPathId] = useState<string | null>(null);
+  const [selectedCareerPathDetail, setSelectedCareerPathDetail] = useState<CareerPathDetail | null>(null);
+  const [updatingProgressSkill, setUpdatingProgressSkill] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     const load = async () => {
       try {
-        const [skills, evidence, confirmation] = await Promise.all([
+        const [skills, evidence, confirmation, trajectory, learningProgress, vectorHistory] = await Promise.all([
           loadAllSkills(),
           api.listEvidence({ origin: "user" }).catch(() => [] as Evidence[]),
           api.getProfileConfirmation().catch(() => null as ConfirmationOut | null),
+          api.getSkillTrajectory().catch(() => null as SkillTrajectoryOut | null),
+          api.listLearningPathProgress().catch(() => [] as LearningPathProgress[]),
+          api.getUserSkillVectorHistory().catch(() => [] as UserSkillVectorHistoryPoint[]),
         ]);
         if (!active) return;
-        setState({ loading: false, skills, evidence, confirmation });
+        setState({ loading: false, skills, evidence, confirmation, trajectory, learningProgress, vectorHistory });
       } catch (error) {
         console.error("Failed to load skill analytics:", error);
         if (!active) return;
-        setState({ loading: false, skills: [], evidence: [], confirmation: null });
+        setState({ loading: false, skills: [], evidence: [], confirmation: null, trajectory: null, learningProgress: [], vectorHistory: [] });
       }
     };
     load();
@@ -118,6 +142,52 @@ export function SkillAnalytics() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const firstSkill = state.trajectory?.learning_path?.[0]?.target_skills?.[0] ?? null;
+    if (firstSkill && !selectedLearningSkill) {
+      setSelectedLearningSkill(firstSkill);
+    }
+  }, [state.trajectory, selectedLearningSkill]);
+
+  useEffect(() => {
+    const firstPath = state.trajectory?.career_paths?.[0]?.role_id ?? null;
+    if (firstPath && !selectedCareerPathId) {
+      setSelectedCareerPathId(firstPath);
+    }
+  }, [state.trajectory, selectedCareerPathId]);
+
+  useEffect(() => {
+    let active = true;
+    const loadSkillDetail = async () => {
+      if (!selectedLearningSkill) {
+        setSelectedLearningSkillDetail(null);
+        return;
+      }
+      const detail = await api.getLearningPathSkillDetail(selectedLearningSkill).catch(() => null);
+      if (active) setSelectedLearningSkillDetail(detail);
+    };
+    loadSkillDetail();
+    return () => {
+      active = false;
+    };
+  }, [selectedLearningSkill, state.learningProgress]);
+
+  useEffect(() => {
+    let active = true;
+    const loadCareerPathDetail = async () => {
+      if (!selectedCareerPathId) {
+        setSelectedCareerPathDetail(null);
+        return;
+      }
+      const detail = await api.getCareerPathDetail(selectedCareerPathId).catch(() => null);
+      if (active) setSelectedCareerPathDetail(detail);
+    };
+    loadCareerPathDetail();
+    return () => {
+      active = false;
+    };
+  }, [selectedCareerPathId]);
 
   const analytics = useMemo(() => {
     const skillsById = new Map(state.skills.map((skill) => [String(skill.id || "").trim(), skill]));
@@ -200,8 +270,26 @@ export function SkillAnalytics() {
       topEvidenceSkills,
       evidenceTypes,
       proficiencyData,
+      trajectoryClusters: state.trajectory?.clusters ?? [],
+      careerPaths: state.trajectory?.career_paths ?? [],
+      learningPath: state.trajectory?.learning_path ?? [],
+      learningProgress: state.learningProgress,
+      vectorHistory: state.vectorHistory,
     };
   }, [state]);
+
+  const handleProgressUpdate = async (skillName: string, status: LearningPathProgress["status"]) => {
+    setUpdatingProgressSkill(skillName);
+    try {
+      const updated = await api.patchLearningPathProgress({ skill_name: skillName, status });
+      setState((current) => {
+        const others = current.learningProgress.filter((item) => item.skill_name !== updated.skill_name);
+        return { ...current, learningProgress: [...others, updated].sort((a, b) => a.skill_name.localeCompare(b.skill_name)) };
+      });
+    } finally {
+      setUpdatingProgressSkill(null);
+    }
+  };
 
   if (state.loading) {
     return <div className="flex h-full items-center justify-center text-gray-500 dark:text-slate-400">Loading analytics...</div>;
@@ -231,6 +319,30 @@ export function SkillAnalytics() {
           </div>
         </div>
       </div>
+
+      <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Personal Skill Vector Drift</h3>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            Tracks how your aggregate user embedding evolves as you confirm skills and add proof.
+          </p>
+        </div>
+        {analytics.vectorHistory.length === 0 ? (
+          <div className="text-sm text-slate-500 dark:text-slate-400">No vector history yet. Analyze jobs or open the job match page to generate one.</div>
+        ) : (
+          <div className="h-56 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={analytics.vectorHistory}>
+                <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(value: number) => [`${Math.round(Number(value) || 0)}%`, "Vector score"]} />
+                <Line type="monotone" dataKey="score" stroke="#1E3A8A" strokeWidth={2.5} dot={{ r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
         <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
@@ -405,6 +517,268 @@ export function SkillAnalytics() {
           ) : null}
         </Card>
       </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Skill Clusters</h3>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">The strongest clusters in your profile that are currently shaping career direction.</p>
+          </div>
+          {analytics.trajectoryClusters.length === 0 ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">Confirm more skills to generate cluster-level trajectory signals.</div>
+          ) : (
+            <div className="space-y-4">
+              {analytics.trajectoryClusters.map((cluster) => (
+                <div key={cluster.category} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{cluster.category}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {cluster.skill_count} skills • {cluster.evidence_backed_count} evidence-backed • avg proficiency {cluster.average_proficiency.toFixed(1)}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                      {cluster.skill_names.length}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {cluster.skill_names.map((skill) => (
+                      <Badge key={`${cluster.category}:${skill}`} variant="secondary" className="dark:bg-slate-900 dark:text-slate-200">
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Career Path Trajectory</h3>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Predicted role paths based on weighted skill coverage, evidence support, and semantic fit.</p>
+          </div>
+          {analytics.careerPaths.length === 0 ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">Add roles and analyze jobs to unlock career path predictions.</div>
+          ) : (
+            <div className="space-y-4">
+              {analytics.careerPaths.map((path) => (
+                <button
+                  type="button"
+                  key={path.role_id}
+                  onClick={() => setSelectedCareerPathId(path.role_id)}
+                  className={`w-full rounded-2xl border p-4 text-left transition ${selectedCareerPathId === path.role_id ? "border-slate-400 bg-white dark:border-slate-600 dark:bg-slate-900/70" : "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-800/60"}`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{path.role_name}</p>
+                        <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                          {path.confidence_label}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{path.reasoning}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{Math.round(path.score)}%</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{path.cluster_category || "General"} cluster</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Vector {Math.round(path.personal_vector_alignment_score ?? 0)}%</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Matched Skills</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {path.matched_skills.length ? path.matched_skills.map((skill) => (
+                          <Badge key={`${path.role_id}:matched:${skill}`} variant="secondary" className="dark:bg-slate-900 dark:text-slate-200">
+                            {skill}
+                          </Badge>
+                        )) : <span className="text-xs text-slate-500 dark:text-slate-400">No matched skills yet.</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Missing Skills</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {path.missing_skills.length ? path.missing_skills.map((skill) => (
+                          <Badge key={`${path.role_id}:missing:${skill}`} variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                            {skill}
+                          </Badge>
+                        )) : <span className="text-xs text-slate-500 dark:text-slate-400">No critical gaps detected.</span>}
+                      </div>
+                    </div>
+                  </div>
+                  {path.next_steps.length ? (
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Next Steps</p>
+                      <ul className="mt-2 space-y-1 text-sm text-slate-700 dark:text-slate-300">
+                        {path.next_steps.map((step) => (
+                          <li key={`${path.role_id}:${step}`}>{step}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {selectedCareerPathDetail ? (
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{selectedCareerPathDetail.role_name} Deep Dive</h3>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{selectedCareerPathDetail.reasoning}</p>
+            </div>
+            <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+              Vector {Math.round(selectedCareerPathDetail.personal_vector_alignment_score)}%
+            </Badge>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Top Role Skills</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedCareerPathDetail.top_role_skills.map((skill) => (
+                  <Badge key={`top:${skill}`} variant="secondary" className="dark:bg-slate-900 dark:text-slate-200">{skill}</Badge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Graph Neighbors</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedCareerPathDetail.graph_neighbor_skills.map((skill) => (
+                  <Badge key={`neighbor:${skill}`} variant="outline" className="dark:border-slate-700 dark:text-slate-200">{skill}</Badge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Project Ideas</p>
+              <ul className="mt-2 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                {selectedCareerPathDetail.recommended_project_ideas.map((idea) => (
+                  <li key={idea} className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-950/50">{idea}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
+      <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Learning Path Recommendation</h3>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            A staged plan based on your strongest clusters, projected career paths, and the highest-impact missing skills.
+          </p>
+        </div>
+        {analytics.learningPath.length === 0 ? (
+          <div className="text-sm text-slate-500 dark:text-slate-400">Confirm more skills and analyze target roles to generate a learning path.</div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            {analytics.learningPath.map((step) => (
+              <div key={`${step.phase}:${step.title}`} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-800/60">
+                <div className="flex items-center justify-between gap-3">
+                  <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                    {step.phase}
+                  </Badge>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    {step.target_skills.length} targets
+                  </span>
+                </div>
+                <h4 className="mt-4 text-base font-semibold text-slate-900 dark:text-slate-100">{step.title}</h4>
+                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{step.rationale}</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {step.target_skills.map((skill) => (
+                    <button
+                      type="button"
+                      key={`${step.phase}:${skill}`}
+                      onClick={() => setSelectedLearningSkill(skill)}
+                      className={`rounded-full px-2.5 py-1 text-sm ${selectedLearningSkill === skill ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "bg-slate-200 text-slate-800 dark:bg-slate-900 dark:text-slate-200"}`}
+                    >
+                      {skill}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Evidence Action</p>
+                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">{step.evidence_action}</p>
+                </div>
+              </div>
+            ))}
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-800/60">
+              <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                {selectedLearningSkillDetail?.skill_name || selectedLearningSkill || "Select a target skill"}
+              </h4>
+              {selectedLearningSkillDetail ? (
+                <>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                    {selectedLearningSkillDetail.confirmed
+                      ? "This skill is already confirmed. The remaining focus is stronger proof and project depth."
+                      : "This skill is not yet confirmed in your profile and should be treated as a targeted learning gap."}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                      Evidence support {selectedLearningSkillDetail.evidence_support_count}
+                    </Badge>
+                    <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                      {selectedLearningSkillDetail.progress_status.replace("_", " ")}
+                    </Badge>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={updatingProgressSkill === selectedLearningSkillDetail.skill_name}
+                      onClick={() => handleProgressUpdate(selectedLearningSkillDetail.skill_name, "in_progress")}
+                    >
+                      In Progress
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={updatingProgressSkill === selectedLearningSkillDetail.skill_name}
+                      onClick={() => handleProgressUpdate(selectedLearningSkillDetail.skill_name, "completed")}
+                      className={activeHeaderTheme.buttonClass}
+                    >
+                      Complete
+                    </Button>
+                  </div>
+                  <div className="mt-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Related Career Paths</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedLearningSkillDetail.related_career_paths.map((path) => (
+                        <Badge key={path} variant="secondary" className="dark:bg-slate-900 dark:text-slate-200">{path}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Graph Neighbors</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedLearningSkillDetail.graph_neighbors.map((skill) => (
+                        <Badge key={skill} variant="outline" className="dark:border-slate-700 dark:text-slate-200">{skill}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Recommended Projects</p>
+                    <ul className="mt-2 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                      {selectedLearningSkillDetail.recommended_projects.map((idea) => (
+                        <li key={idea} className="rounded-xl bg-white/70 px-3 py-2 dark:bg-slate-950/40">{idea}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                  Choose a target skill to inspect evidence gaps, graph neighbors, and project ideas.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

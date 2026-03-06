@@ -1,3 +1,5 @@
+"""Pydantic schemas for evidence creation, patching, and serialized evidence records."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field

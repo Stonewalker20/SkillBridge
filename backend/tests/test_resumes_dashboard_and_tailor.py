@@ -1,3 +1,5 @@
+"""Integration-style tests for resume ingestion, dashboard aggregation, job match, and tailoring endpoints."""
+
 from io import BytesIO
 
 
@@ -26,6 +28,20 @@ def _create_confirmation_and_evidence(client, headers, user_id, skill_python, sk
             "text_excerpt": "Built Python ML dashboards and APIs.",
             "skill_ids": [skill_python, skill_ml],
             "origin": "user",
+        },
+    )
+    client.post(
+        "/portfolio/items",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "type": "project",
+            "title": "Analytics Platform",
+            "summary": "Built internal analytics systems.",
+            "bullets": ["Delivered Python and ML workflows."],
+            "skill_ids": [skill_python, skill_ml],
+            "visibility": "private",
+            "priority": 2,
         },
     )
 
@@ -88,6 +104,9 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     summary = client.get("/dashboard/summary", headers=headers)
     assert summary.status_code == 200
     assert summary.json()["totals"]["confirmed_skills"] >= 1
+    assert "portfolio_to_job_analytics" in summary.json()
+    assert "portfolio_type_distribution" in summary.json()
+    assert "recent_match_trend" in summary.json()
 
     ingest = client.post(
         "/tailor/job/ingest",
@@ -105,6 +124,24 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     match = client.post("/tailor/match", json={"user_id": user_id, "job_id": job_id})
     assert match.status_code == 200
     history_id = match.json()["history_id"]
+    assert "gap_reasoning_summary" in match.json()
+    assert "gap_insights" in match.json()
+    assert "personal_skill_vector_score" in match.json()
+    assert any(item["label"] == "Personal skill vector" for item in match.json()["score_breakdown"])
+
+    user_vector = client.get("/tailor/user-vector", headers=headers)
+    assert user_vector.status_code == 200
+    assert user_vector.json()["embedding_dimensions"] > 0
+
+    vector_history = client.get("/tailor/user-vector/history", headers=headers)
+    assert vector_history.status_code == 200
+    assert vector_history.json()
+
+    refreshed_summary = client.get("/dashboard/summary", headers=headers)
+    assert refreshed_summary.status_code == 200
+    dashboard_payload = refreshed_summary.json()
+    assert isinstance(dashboard_payload["portfolio_to_job_analytics"]["matched_skill_rate_pct"], float)
+    assert dashboard_payload["recent_match_trend"]
 
     preview = client.post("/tailor/preview", json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id})
     assert preview.status_code == 200

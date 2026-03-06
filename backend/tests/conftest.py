@@ -1,3 +1,5 @@
+"""Shared pytest fixtures, fake services, and seeded backend state for contract and smoke tests."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,6 +19,7 @@ from app.core import db as core_db
 from app.core.auth import hash_password, now_utc
 from app.routers import evidence as evidence_router
 from app.routers import tailor as tailor_router
+from app.routers import taxonomy as taxonomy_router
 
 from .fake_mongo import FakeDatabase, FakeMongoClient
 
@@ -118,6 +121,18 @@ def _seed(fake_db: FakeDatabase):
             "updated_at": now_utc(),
         }
     ]
+    fake_db["role_skill_weights"].docs = [
+        {
+            "_id": ObjectId(),
+            "role_id": role_id,
+            "role_name": "ML Engineer",
+            "computed_at": now_utc(),
+            "weights": [
+                {"skill_id": str(skill_python), "skill_name": "Python", "weight": 0.9},
+                {"skill_id": str(skill_ml), "skill_name": "ML", "weight": 1.0},
+            ],
+        }
+    ]
     return {
         "user_id": str(user_id),
         "token": "test-token",
@@ -154,6 +169,7 @@ def test_context(monkeypatch):
     monkeypatch.setattr(evidence_router, "extract_skill_candidates", _async_fake_extract_skill_candidates)
     monkeypatch.setattr(evidence_router, "embed_texts", _async_fake_embed_texts)
     monkeypatch.setattr(tailor_router, "embed_texts", _async_fake_embed_texts)
+    monkeypatch.setattr(taxonomy_router, "embed_texts", _async_fake_embed_texts)
     monkeypatch.setattr(tailor_router, "rewrite_resume_bullets", _async_fake_rewrite)
     monkeypatch.setattr(
         tailor_router,

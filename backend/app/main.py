@@ -1,3 +1,5 @@
+"""Application entrypoint that assembles the FastAPI app, lifecycle hooks, middleware, router registration, and database indexes."""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -23,6 +25,8 @@ from datetime import datetime
 import os
 
 async def ensure_indexes():
+    # These indexes support the hot paths we exercise on every authenticated session:
+    # login/session lookup, saved analyses, tailored resumes, and the derived RAG index.
     db = get_db()
     await db["users"].create_index("email", unique=True)
     await db["sessions"].create_index("token", unique=True)
@@ -34,6 +38,9 @@ async def ensure_indexes():
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # FastAPI lifespan keeps startup/shutdown work in one place and avoids the
+    # deprecated on_event hooks. This is the right place to connect the database,
+    # materialize indexes, and optionally prewarm local ML models.
     await connect_to_mongo()
     await ensure_indexes()
     if settings.local_model_prewarm:

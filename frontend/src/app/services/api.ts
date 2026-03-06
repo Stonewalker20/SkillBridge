@@ -245,6 +245,85 @@ export type EvidenceAnalysis = {
   }>;
 };
 
+export type PortfolioToJobAnalytics = {
+  job_skill_coverage_pct: number;
+  matched_skill_rate_pct: number;
+  evidence_backed_match_pct: number;
+  portfolio_backed_match_pct: number;
+  portfolio_skill_count: number;
+  job_skill_count: number;
+};
+
+export type SkillTrajectoryCluster = {
+  category: string;
+  skill_count: number;
+  evidence_backed_count: number;
+  average_proficiency: number;
+  skill_names: string[];
+};
+
+export type SkillTrajectoryPath = {
+  role_id: string;
+  role_name: string;
+  score: number;
+  confidence_label: string;
+  cluster_category: string;
+  personal_vector_alignment_score: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  top_role_skills: string[];
+  reasoning: string;
+  next_steps: string[];
+};
+
+export type LearningPathRecommendation = {
+  phase: string;
+  title: string;
+  target_skills: string[];
+  rationale: string;
+  evidence_action: string;
+};
+
+export type LearningPathProgress = {
+  skill_name: string;
+  status: "not_started" | "in_progress" | "completed";
+  updated_at?: string;
+};
+
+export type LearningPathSkillDetail = {
+  skill_name: string;
+  skill_id?: string | null;
+  confirmed: boolean;
+  evidence_support_count: number;
+  graph_neighbors: string[];
+  related_career_paths: string[];
+  recommended_projects: string[];
+  progress_status: "not_started" | "in_progress" | "completed";
+};
+
+export type CareerPathDetail = {
+  role_id: string;
+  role_name: string;
+  score: number;
+  confidence_label: string;
+  cluster_category: string;
+  personal_vector_alignment_score: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  top_role_skills: string[];
+  graph_neighbor_skills: string[];
+  recommended_skills_to_add: string[];
+  recommended_project_ideas: string[];
+  reasoning: string;
+};
+
+export type SkillTrajectoryOut = {
+  generated_at?: string;
+  clusters: SkillTrajectoryCluster[];
+  career_paths: SkillTrajectoryPath[];
+  learning_path: LearningPathRecommendation[];
+};
+
 export type EvidenceAnalysisBatch = {
   items: EvidenceAnalysis[];
   user_id: string;
@@ -290,6 +369,29 @@ export type RAGContextItem = {
   snippet: string;
   score: number;
   chunk_index?: number;
+};
+
+export type SkillGraphNode = {
+  skill_id: string;
+  name: string;
+  category?: string;
+  aliases?: string[];
+  distance: number;
+  node_type: "seed" | "neighbor";
+};
+
+export type SkillGraphEdge = {
+  source_skill_id: string;
+  target_skill_id: string;
+  relation_type: string;
+  edge_type: "explicit" | "semantic" | "evidence_cooccurrence" | "job_cooccurrence";
+  weight: number;
+};
+
+export type SkillGraph = {
+  root_skill_id: string;
+  nodes: SkillGraphNode[];
+  edges: SkillGraphEdge[];
 };
 
 export type JobMatchHistoryEntry = {
@@ -365,6 +467,22 @@ export type AIPreferences = {
 
 export type AISettingsDetail = AISettingsStatus & {
   preferences: AIPreferences;
+};
+
+export type UserSkillVector = {
+  user_id: string;
+  embedding_dimensions: number;
+  confirmed_skill_count: number;
+  evidence_item_count: number;
+  portfolio_item_count: number;
+  source_preview: string;
+  updated_at?: string;
+};
+
+export type UserSkillVectorHistoryPoint = {
+  score: number;
+  label: string;
+  updated_at?: string;
 };
 
 export type AdminSummary = {
@@ -706,6 +824,23 @@ export const api = {
           count: Number(skill?.evidence_count ?? 0) || 0,
         }))
         .filter((skill) => skill.count > 0),
+      portfolioToJobAnalytics: {
+        job_skill_coverage_pct: Number(raw?.portfolio_to_job_analytics?.job_skill_coverage_pct ?? 0) || 0,
+        matched_skill_rate_pct: Number(raw?.portfolio_to_job_analytics?.matched_skill_rate_pct ?? 0) || 0,
+        evidence_backed_match_pct: Number(raw?.portfolio_to_job_analytics?.evidence_backed_match_pct ?? 0) || 0,
+        portfolio_backed_match_pct: Number(raw?.portfolio_to_job_analytics?.portfolio_backed_match_pct ?? 0) || 0,
+        portfolio_skill_count: Number(raw?.portfolio_to_job_analytics?.portfolio_skill_count ?? 0) || 0,
+        job_skill_count: Number(raw?.portfolio_to_job_analytics?.job_skill_count ?? 0) || 0,
+      },
+      portfolioTypeDistribution: asArray(raw?.portfolio_type_distribution).map((entry: any) => ({
+        type: String(entry?.type ?? "Other"),
+        count: Number(entry?.count ?? 0) || 0,
+      })),
+      recentMatchTrend: asArray(raw?.recent_match_trend).map((entry: any) => ({
+        label: String(entry?.label ?? ""),
+        score: Number(entry?.score ?? 0) || 0,
+        created_at: entry?.created_at,
+      })),
     };
   },
 
@@ -721,6 +856,23 @@ export const api = {
     const suffix = skillId ? `?skill_id=${encodeURIComponent(skillId)}` : "";
     return request<any[]>("/taxonomy/relations" + suffix, "GET");
   },
+  getSkillGraph: (skillId: string, params?: { depth?: number; limit?: number; include_inferred?: boolean }) => {
+    const search = new URLSearchParams();
+    if (params?.depth != null) search.set("depth", String(params.depth));
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    if (params?.include_inferred != null) search.set("include_inferred", String(params.include_inferred));
+    const suffix = search.size ? `?${search.toString()}` : "";
+    return request<SkillGraph>(`/taxonomy/graph/${skillId}${suffix}`, "GET");
+  },
+  getSkillTrajectory: () => request<SkillTrajectoryOut>("/taxonomy/trajectory", "GET"),
+  getCareerPathDetail: (roleId: string) => request<CareerPathDetail>(`/taxonomy/trajectory/path/${encodeURIComponent(roleId)}`, "GET"),
+  getLearningPathSkillDetail: (skillName: string) =>
+    request<LearningPathSkillDetail>(`/taxonomy/learning-path/skill/${encodeURIComponent(skillName)}`, "GET"),
+  listLearningPathProgress: () => request<LearningPathProgress[]>("/taxonomy/learning-path/progress", "GET"),
+  patchLearningPathProgress: (payload: { skill_name: string; status: "not_started" | "in_progress" | "completed" }) =>
+    request<LearningPathProgress>("/taxonomy/learning-path/progress", "PATCH", payload),
+  getUserSkillVector: () => request<UserSkillVector>("/tailor/user-vector", "GET"),
+  getUserSkillVectorHistory: (limit = 12) => request<UserSkillVectorHistoryPoint[]>(`/tailor/user-vector/history?limit=${encodeURIComponent(String(limit))}`, "GET"),
 
   ingestJob: async (payload: { user_id?: string; title?: string; company?: string; location?: string; text: string }) => {
     const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };

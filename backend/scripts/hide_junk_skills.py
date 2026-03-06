@@ -1,3 +1,5 @@
+"""Cleanup script that marks noisy or test-like skills as hidden so they stay out of product flows."""
+
 #!/usr/bin/env python3
 from __future__ import annotations
 

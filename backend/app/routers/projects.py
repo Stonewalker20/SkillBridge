@@ -1,3 +1,5 @@
+"""Project routes for authenticated CRUD access to user projects and project-to-skill links."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, HTTPException, Depends

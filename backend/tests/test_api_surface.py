@@ -1,3 +1,5 @@
+"""OpenAPI surface tests that ensure the expected route contract remains registered."""
+
 from app.main import app
 
 
@@ -42,6 +44,7 @@ def test_openapi_includes_expected_route_surface():
         "/roles/{role_id}/weights",
         "/taxonomy/aliases/{skill_id}",
         "/taxonomy/relations",
+        "/taxonomy/graph/{skill_id}",
         "/tailor/job/ingest",
         "/tailor/match",
         "/tailor/preview",

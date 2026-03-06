@@ -1,3 +1,5 @@
+"""Dashboard summary routes that aggregate user metrics, recent activity, and top skill category signals."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
@@ -7,6 +9,13 @@ from app.core.auth import require_user
 from app.utils.mongo import oid_str, ref_values
 
 router = APIRouter()
+
+
+def _score_percent(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round((numerator / denominator) * 100.0, 2)
+
 
 # UC 1.4 – Dashboard Summary (user-specific)
 @router.get("/summary")
@@ -148,6 +157,86 @@ async def dashboard_summary(
     average_match_score = round(float((match_score_rows[0] or {}).get("avg_match_score", 0) or 0), 2) if match_score_rows else 0.0
     tailored_resumes = await db["tailored_resumes"].count_documents({"user_id": {"$in": user_refs}})
 
+    portfolio_items = await (
+        db["portfolio_items"]
+        .find({"user_id": {"$in": user_refs}}, {"type": 1, "skill_ids": 1})
+        .to_list(length=2000)
+    )
+    evidence_items = await (
+        db["evidence"]
+        .find({"user_id": {"$in": user_refs}, "origin": "user"}, {"type": 1, "skill_ids": 1})
+        .to_list(length=2000)
+    )
+    recent_match_runs = await (
+        db["job_match_runs"]
+        .find({"user_id": {"$in": user_refs}}, {"analysis": 1, "created_at": 1})
+        .sort("created_at", -1)
+        .limit(6)
+        .to_list(length=6)
+    )
+
+    portfolio_type_counts: dict[str, int] = {}
+    for item in portfolio_items:
+        item_type = str(item.get("type") or "other").strip() or "other"
+        portfolio_type_counts[item_type] = portfolio_type_counts.get(item_type, 0) + 1
+
+    portfolio_skill_ids = {
+        oid_str(skill_id)
+        for item in portfolio_items
+        for skill_id in (item.get("skill_ids") or [])
+        if oid_str(skill_id)
+    }
+    evidence_skill_ids = {
+        oid_str(skill_id)
+        for item in evidence_items
+        for skill_id in (item.get("skill_ids") or [])
+        if oid_str(skill_id)
+    }
+
+    recent_job_skill_ids: set[str] = set()
+    matched_recent_skill_ids: set[str] = set()
+    evidence_backed_recent_skill_ids: set[str] = set()
+    portfolio_backed_recent_skill_ids: set[str] = set()
+    recent_match_trend: list[dict] = []
+
+    for index, run in enumerate(reversed(recent_match_runs), start=1):
+        analysis = run.get("analysis") or {}
+        extracted_ids = {
+            str(skill_id).strip()
+            for skill_id in (analysis.get("extracted_skill_ids") or [])
+            if str(skill_id).strip()
+        }
+        matched_ids = {
+            str(skill_id).strip()
+            for skill_id in (analysis.get("matched_skill_ids") or [])
+            if str(skill_id).strip()
+        }
+        recent_job_skill_ids.update(extracted_ids)
+        matched_recent_skill_ids.update(matched_ids)
+        evidence_backed_recent_skill_ids.update(matched_ids & evidence_skill_ids)
+        portfolio_backed_recent_skill_ids.update(matched_ids & portfolio_skill_ids)
+        recent_match_trend.append(
+            {
+                "label": f"Run {index}",
+                "score": round(float(analysis.get("match_score") or 0.0), 2),
+                "created_at": run.get("created_at"),
+            }
+        )
+
+    portfolio_to_job_analytics = {
+        "job_skill_coverage_pct": _score_percent(len(portfolio_skill_ids & recent_job_skill_ids), len(recent_job_skill_ids)),
+        "matched_skill_rate_pct": _score_percent(len(matched_recent_skill_ids), len(recent_job_skill_ids)),
+        "evidence_backed_match_pct": _score_percent(len(evidence_backed_recent_skill_ids), len(matched_recent_skill_ids)),
+        "portfolio_backed_match_pct": _score_percent(len(portfolio_backed_recent_skill_ids), len(matched_recent_skill_ids)),
+        "portfolio_skill_count": len(portfolio_skill_ids),
+        "job_skill_count": len(recent_job_skill_ids),
+    }
+
+    portfolio_type_distribution = [
+        {"type": item_type, "count": count}
+        for item_type, count in sorted(portfolio_type_counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
     return {
         "user_id": user_id_str,
         "totals": totals,
@@ -156,4 +245,7 @@ async def dashboard_summary(
         "recent_projects": proj_out,
         "recent_activity": recent_activity,
         "top_skills_by_evidence": top_skills,
+        "portfolio_to_job_analytics": portfolio_to_job_analytics,
+        "portfolio_type_distribution": portfolio_type_distribution,
+        "recent_match_trend": recent_match_trend,
     }

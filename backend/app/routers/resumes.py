@@ -1,3 +1,5 @@
+"""Resume ingestion routes for pasted or uploaded resumes plus promotion flows that turn confirmed resume skills into user data."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
@@ -28,7 +30,7 @@ def extract_pdf_text(file_bytes: bytes) -> str:
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {e}")
 
-# UC 3.1 – Resume Ingestion (already implemented)
+# UC 3.1 – Resume Ingestion
 @router.post("/text", response_model=ResumeSnapshotOut)
 async def ingest_resume_text(payload: ResumeSnapshotIn, user=Depends(require_user)):
     db = get_db()
@@ -48,6 +50,8 @@ async def ingest_resume_text(payload: ResumeSnapshotIn, user=Depends(require_use
         "created_at": now_utc(),
     }
     res = await db["resume_snapshots"].insert_one(doc)
+    # Resume snapshots are a high-value grounding source for both tailoring and job
+    # analysis, so we index them as soon as they are persisted.
     await sync_rag_document(
         db,
         user_id=oid_str(user["_id"]),
@@ -85,6 +89,8 @@ async def ingest_resume_pdf(user_id: str = Form(...), file: UploadFile = File(..
         "created_at": now_utc(),
     }
     res = await db["resume_snapshots"].insert_one(doc)
+    # PDF uploads follow the same contract as pasted resumes: one canonical snapshot
+    # record plus a derived retrieval index over the extracted text.
     await sync_rag_document(
         db,
         user_id=oid_str(user["_id"]),

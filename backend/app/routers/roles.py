@@ -1,3 +1,5 @@
+"""Role routes for creating target roles and computing role-specific skill weighting metadata."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
