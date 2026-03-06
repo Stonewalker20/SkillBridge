@@ -1,3 +1,5 @@
+"""Tests that validate owner-only admin flows and access control enforcement."""
+
 def test_admin_workspace_endpoints(test_context):
     client = test_context["client"]
     db = test_context["db"]

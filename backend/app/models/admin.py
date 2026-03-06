@@ -1,3 +1,5 @@
+"""Pydantic schemas that shape admin dashboard responses and role update payloads."""
+
 from __future__ import annotations
 
 from datetime import datetime

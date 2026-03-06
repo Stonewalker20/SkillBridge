@@ -1,3 +1,5 @@
+"""In-memory MongoDB test double used to exercise route logic without a real database."""
+
 from __future__ import annotations
 
 from copy import deepcopy

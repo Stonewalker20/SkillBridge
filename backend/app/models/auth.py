@@ -1,3 +1,5 @@
+"""Pydantic schemas for authentication requests and authenticated user responses."""
+
 from __future__ import annotations
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional

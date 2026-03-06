@@ -1,3 +1,5 @@
+"""MongoDB normalization helpers for converting ObjectIds, building mixed-type queries, and serializing ids safely."""
+
 from __future__ import annotations
 from bson import ObjectId
 from typing import Any

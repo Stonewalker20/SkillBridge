@@ -1,3 +1,5 @@
+"""Integration-style tests for resume ingestion, dashboard aggregation, job match, and tailoring endpoints."""
+
 from io import BytesIO
 
 
@@ -28,6 +30,20 @@ def _create_confirmation_and_evidence(client, headers, user_id, skill_python, sk
             "origin": "user",
         },
     )
+    client.post(
+        "/portfolio/items",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "type": "project",
+            "title": "Analytics Platform",
+            "summary": "Built internal analytics systems.",
+            "bullets": ["Delivered Python and ML workflows."],
+            "skill_ids": [skill_python, skill_ml],
+            "visibility": "private",
+            "priority": 2,
+        },
+    )
 
 
 def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monkeypatch):
@@ -41,6 +57,7 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
 
     text_ingest = client.post(
         "/ingest/resume/text",
+        headers=headers,
         json={
             "user_id": user_id,
             "text": "\n".join(
@@ -60,9 +77,14 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     )
     assert text_ingest.status_code == 200
     snapshot_id = text_ingest.json()["snapshot_id"]
+    assert any(
+        str(doc.get("source_id")) == snapshot_id and doc.get("source_type") == "resume_snapshot"
+        for doc in test_context["db"]["rag_chunks"].docs
+    )
 
     pdf_ingest = client.post(
         "/ingest/resume/pdf",
+        headers=headers,
         files={"file": ("resume.pdf", b"%PDF-1.4 fake", "application/pdf")},
         data={"user_id": user_id},
     )
@@ -74,7 +96,7 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
         json={"resume_snapshot_id": snapshot_id, "confirmed": [{"skill_id": skill_python, "proficiency": 4}], "rejected": [], "edited": []},
     )
 
-    promoted = client.post(f"/ingest/resume/{snapshot_id}/promote", data={"user_id": user_id})
+    promoted = client.post(f"/ingest/resume/{snapshot_id}/promote", headers=headers, data={"user_id": user_id})
     assert promoted.status_code == 200
 
     _create_confirmation_and_evidence(client, headers, user_id, skill_python, skill_ml)
@@ -82,6 +104,9 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     summary = client.get("/dashboard/summary", headers=headers)
     assert summary.status_code == 200
     assert summary.json()["totals"]["confirmed_skills"] >= 1
+    assert "portfolio_to_job_analytics" in summary.json()
+    assert "portfolio_type_distribution" in summary.json()
+    assert "recent_match_trend" in summary.json()
 
     ingest = client.post(
         "/tailor/job/ingest",
@@ -99,10 +124,33 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     match = client.post("/tailor/match", json={"user_id": user_id, "job_id": job_id})
     assert match.status_code == 200
     history_id = match.json()["history_id"]
+    assert "gap_reasoning_summary" in match.json()
+    assert "gap_insights" in match.json()
+    assert "personal_skill_vector_score" in match.json()
+    assert any(item["label"] == "Personal skill vector" for item in match.json()["score_breakdown"])
+
+    user_vector = client.get("/tailor/user-vector", headers=headers)
+    assert user_vector.status_code == 200
+    assert user_vector.json()["embedding_dimensions"] > 0
+
+    vector_history = client.get("/tailor/user-vector/history", headers=headers)
+    assert vector_history.status_code == 200
+    assert vector_history.json()
+
+    refreshed_summary = client.get("/dashboard/summary", headers=headers)
+    assert refreshed_summary.status_code == 200
+    dashboard_payload = refreshed_summary.json()
+    assert isinstance(dashboard_payload["portfolio_to_job_analytics"]["matched_skill_rate_pct"], float)
+    assert dashboard_payload["recent_match_trend"]
 
     preview = client.post("/tailor/preview", json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id})
     assert preview.status_code == 200
     tailored_id = preview.json()["id"]
+    assert preview.json()["retrieved_context"]
+
+    rag_search = client.get("/tailor/rag/search", headers=headers, params={"q": "Python ML dashboards", "limit": 3})
+    assert rag_search.status_code == 200
+    assert rag_search.json()
 
     resumes = client.get("/tailor/resumes", params={"user_id": user_id})
     assert resumes.status_code == 200
@@ -161,7 +209,7 @@ def test_tailored_resume_uses_user_resume_template_and_ai_preferences(test_conte
             "BS Computer Science",
         ]
     )
-    ingest = client.post("/ingest/resume/text", json={"user_id": user_id, "text": resume_text})
+    ingest = client.post("/ingest/resume/text", headers=headers, json={"user_id": user_id, "text": resume_text})
     assert ingest.status_code == 200
     snapshot_id = ingest.json()["snapshot_id"]
 
@@ -229,6 +277,7 @@ def test_tailored_resume_uses_user_resume_template_and_ai_preferences(test_conte
     payload = preview.json()
     assert payload["resume_snapshot_id"] == snapshot_id
     assert payload["template_source"] == "user_resume"
+    assert payload["retrieved_context"]
     section_titles = [section["title"] for section in payload["sections"]]
     assert "Summary" in section_titles
     assert "Education" in section_titles

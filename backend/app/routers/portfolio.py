@@ -1,12 +1,15 @@
+"""Portfolio item routes for managing structured user work history outside the evidence collection."""
+
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from datetime import datetime, timezone
 from bson import ObjectId
 
 from app.core.db import get_db
+from app.core.auth import require_user
 from app.models.portfolio import PortfolioItemIn, PortfolioItemOut, PortfolioItemPatch
-from app.utils.mongo import oid_str, ref_query, to_object_id
+from app.utils.mongo import oid_str, ref_query, to_object_id, ref_values
 
 router = APIRouter()
 
@@ -14,10 +17,12 @@ def now_utc():
     return datetime.now(timezone.utc)
 
 @router.post("/items", response_model=PortfolioItemOut)
-async def create_portfolio_item(payload: PortfolioItemIn):
+async def create_portfolio_item(payload: PortfolioItemIn, user=Depends(require_user)):
     db = get_db()
+    if oid_str(payload.user_id) != oid_str(user.get("_id")):
+        raise HTTPException(status_code=403, detail="user_id must match authenticated user")
     doc = payload.model_dump()
-    doc["user_id"] = to_object_id(payload.user_id)
+    doc["user_id"] = user["_id"]
     doc["skill_ids"] = [to_object_id(sid) for sid in (payload.skill_ids or [])]
     doc["created_at"] = now_utc()
     doc["updated_at"] = now_utc()
@@ -43,13 +48,16 @@ async def create_portfolio_item(payload: PortfolioItemIn):
 
 @router.get("/items", response_model=list[PortfolioItemOut])
 async def list_portfolio_items(
-    user_id: str = Query(...),
+    user_id: str | None = Query(default=None),
     type: str | None = Query(default=None),
     visibility: str | None = Query(default=None),
+    user=Depends(require_user),
 ):
     db = get_db()
-    q: dict = {"user_id": user_id}
-    q = ref_query("user_id", user_id)
+    effective_user_id = oid_str(user.get("_id"))
+    if user_id and oid_str(user_id) != effective_user_id:
+        raise HTTPException(status_code=403, detail="You can only list your own portfolio items")
+    q = ref_query("user_id", effective_user_id)
     if type:
         q["type"] = type
     if visibility:
@@ -82,7 +90,7 @@ async def list_portfolio_items(
     return out
 
 @router.patch("/items/{item_id}", response_model=PortfolioItemOut)
-async def patch_portfolio_item(item_id: str, payload: PortfolioItemPatch):
+async def patch_portfolio_item(item_id: str, payload: PortfolioItemPatch, user=Depends(require_user)):
     db = get_db()
     try:
         oid = ObjectId(item_id)
@@ -97,11 +105,13 @@ async def patch_portfolio_item(item_id: str, payload: PortfolioItemPatch):
 
     updates["updated_at"] = now_utc()
 
-    res = await db["portfolio_items"].update_one({"_id": oid}, {"$set": updates})
+    res = await db["portfolio_items"].update_one({"_id": oid, "user_id": {"$in": ref_values(user["_id"])}}, {"$set": updates})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Portfolio item not found")
 
-    d = await db["portfolio_items"].find_one({"_id": oid})
+    d = await db["portfolio_items"].find_one({"_id": oid, "user_id": {"$in": ref_values(user["_id"])}})
+    if not d:
+        raise HTTPException(status_code=404, detail="Portfolio item not found")
     return {
         "id": oid_str(d["_id"]),
         "user_id": oid_str(d["user_id"]),
@@ -122,14 +132,14 @@ async def patch_portfolio_item(item_id: str, payload: PortfolioItemPatch):
     }
 
 @router.delete("/items/{item_id}")
-async def delete_portfolio_item(item_id: str):
+async def delete_portfolio_item(item_id: str, user=Depends(require_user)):
     db = get_db()
     try:
         oid = ObjectId(item_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid item_id")
 
-    res = await db["portfolio_items"].delete_one({"_id": oid})
+    res = await db["portfolio_items"].delete_one({"_id": oid, "user_id": {"$in": ref_values(user["_id"])}})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Portfolio item not found")
     return {"deleted": True, "id": item_id}

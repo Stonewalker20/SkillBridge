@@ -1,3 +1,5 @@
+"""Notebook bootstrap helpers for local ML experimentation without changing production backend code."""
+
 from __future__ import annotations
 
 import json

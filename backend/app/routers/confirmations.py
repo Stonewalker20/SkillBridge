@@ -1,3 +1,5 @@
+"""Confirmation routes that persist the user-approved skill state used across dashboards, evidence, and job matching."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone

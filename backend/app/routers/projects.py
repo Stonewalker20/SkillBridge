@@ -1,9 +1,12 @@
+"""Project routes for authenticated CRUD access to user projects and project-to-skill links."""
+
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
 from datetime import datetime, timezone
 from bson import ObjectId
 from app.core.db import get_db
+from app.core.auth import require_user
 from app.utils.mongo import oid_str, ref_query, to_object_id
 from app.models.project import (
     ProjectIn,
@@ -18,11 +21,12 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 @router.get("/", response_model=list[ProjectOut])
-async def list_projects(user_id: str | None = Query(default=None)):
+async def list_projects(user_id: str | None = Query(default=None), user=Depends(require_user)):
     db = get_db()
-    q = {}
-    if user_id:
-        q.update(ref_query("user_id", user_id))
+    effective_user_id = oid_str(user.get("_id"))
+    if user_id and oid_str(user_id) != effective_user_id:
+        raise HTTPException(status_code=403, detail="You can only list your own projects")
+    q = ref_query("user_id", effective_user_id)
     docs = await db["projects"].find(q).sort("created_at", -1).to_list(length=500)
     out = []
     for d in docs:
@@ -42,11 +46,13 @@ async def list_projects(user_id: str | None = Query(default=None)):
     return out
 
 @router.post("/", response_model=ProjectOut)
-async def create_project(payload: ProjectIn):
+async def create_project(payload: ProjectIn, user=Depends(require_user)):
     db = get_db()
     now = now_utc()
+    if oid_str(payload.user_id) != oid_str(user.get("_id")):
+        raise HTTPException(status_code=403, detail="user_id must match authenticated user")
     doc = payload.model_dump()
-    doc["user_id"] = to_object_id(payload.user_id)
+    doc["user_id"] = user["_id"]
     doc["created_at"] = now
     doc["updated_at"] = now
     res = await db["projects"].insert_one(doc)
@@ -63,13 +69,13 @@ async def create_project(payload: ProjectIn):
     }
 
 @router.get("/{project_id}", response_model=ProjectOut)
-async def get_project(project_id: str):
+async def get_project(project_id: str, user=Depends(require_user)):
     db = get_db()
     try:
         oid = ObjectId(project_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid project_id")
-    d = await db["projects"].find_one({"_id": oid})
+    d = await db["projects"].find_one({"_id": oid, **ref_query("user_id", user["_id"])})
     if not d:
         raise HTTPException(status_code=404, detail="Project not found")
     return {
@@ -86,7 +92,7 @@ async def get_project(project_id: str):
 
 # UC 1.2 – Link skill to project
 @router.post("/{project_id}/skills", response_model=ProjectSkillLinkOut)
-async def link_skill_to_project(project_id: str, payload: ProjectSkillLinkIn):
+async def link_skill_to_project(project_id: str, payload: ProjectSkillLinkIn, user=Depends(require_user)):
     db = get_db()
     try:
         project_oid = ObjectId(project_id)
@@ -97,7 +103,7 @@ async def link_skill_to_project(project_id: str, payload: ProjectSkillLinkIn):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid skill_id")
 
-    if not await db["projects"].find_one({"_id": project_oid}):
+    if not await db["projects"].find_one({"_id": project_oid, **ref_query("user_id", user["_id"])}):
         raise HTTPException(status_code=404, detail="Project not found")
     if not await db["skills"].find_one({"_id": skill_oid}):
         raise HTTPException(status_code=404, detail="Skill not found")
@@ -123,12 +129,15 @@ async def link_skill_to_project(project_id: str, payload: ProjectSkillLinkIn):
     }
 
 @router.get("/{project_id}/skills", response_model=list[dict])
-async def list_project_skills(project_id: str):
+async def list_project_skills(project_id: str, user=Depends(require_user)):
     db = get_db()
     try:
         project_oid = ObjectId(project_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid project_id")
+
+    if not await db["projects"].find_one({"_id": project_oid, **ref_query("user_id", user["_id"])}):
+        raise HTTPException(status_code=404, detail="Project not found")
 
     pipeline = [
         {"$match": {"project_id": project_oid}},

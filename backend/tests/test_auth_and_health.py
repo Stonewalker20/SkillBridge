@@ -1,3 +1,5 @@
+"""Smoke tests covering authentication flows and health endpoints."""
+
 def test_health_endpoints(test_context):
     client = test_context["client"]
     assert client.get("/health/").status_code == 200

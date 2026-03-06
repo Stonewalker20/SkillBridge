@@ -1,3 +1,5 @@
+"""Skill catalog normalization and merge utilities that reconcile aliases, categories, and canonical skill documents."""
+
 from __future__ import annotations
 
 import re
@@ -6,6 +8,21 @@ from typing import Iterable
 from bson import ObjectId
 
 from app.utils.mongo import oid_str
+
+
+STRICT_SHORT_SKILL_KEYS = {
+    "ai",
+    "bi",
+    "c",
+    "c#",
+    "c++",
+    "go",
+    "ml",
+    "qa",
+    "r",
+    "ui",
+    "ux",
+}
 
 
 def normalize_skill_text(value: str | None) -> str:
@@ -101,6 +118,57 @@ def expand_alias_variants(values: Iterable[str], base_name: str | None = None) -
         name_key = normalize_skill_text(base_name)
         deduped = [value for value in deduped if normalize_skill_text(value) != name_key]
     return deduped
+
+
+def should_use_strict_exact_match(value: str | None) -> bool:
+    normalized = normalize_skill_text(value)
+    if not normalized:
+        return True
+    return normalized in STRICT_SHORT_SKILL_KEYS or len(normalized) <= 2
+
+
+def canonical_skill_terms(doc: dict) -> list[str]:
+    name = str(doc.get("name") or "").strip()
+    aliases = [str(alias or "").strip() for alias in (doc.get("aliases") or [])]
+    return unique_casefolded([name, *aliases])
+
+
+def build_canonical_skill_index(docs: Iterable[dict]) -> tuple[dict[str, dict], dict[str, set[str]]]:
+    exact_index: dict[str, dict] = {}
+    term_index: dict[str, set[str]] = {}
+    for doc in docs:
+        skill_id = oid_str(doc.get("_id"))
+        if not skill_id:
+            continue
+        for term in canonical_skill_terms(doc):
+            normalized = normalize_skill_text(term)
+            if not normalized:
+                continue
+            exact_index.setdefault(normalized, doc)
+            term_index.setdefault(skill_id, set()).add(normalized)
+    return exact_index, term_index
+
+
+def lexical_skill_similarity(left: str | None, right: str | None) -> float:
+    left_key = normalize_skill_text(left)
+    right_key = normalize_skill_text(right)
+    if not left_key or not right_key:
+        return 0.0
+    if left_key == right_key:
+        return 1.0
+    if should_use_strict_exact_match(left_key) or should_use_strict_exact_match(right_key):
+        return 0.0
+    left_tokens = {token for token in re.split(r"[\s/&+.#-]+", left_key) if token}
+    right_tokens = {token for token in re.split(r"[\s/&+.#-]+", right_key) if token}
+    if not left_tokens or not right_tokens:
+        return 0.0
+    overlap = len(left_tokens & right_tokens)
+    union = len(left_tokens | right_tokens)
+    if overlap == 0 or union == 0:
+        return 0.0
+    if (left_key in right_key or right_key in left_key) and len(left_tokens) >= 2 and len(right_tokens) >= 2:
+        return max(overlap / union, 0.72)
+    return overlap / union
 
 
 def merge_skill_docs(docs: Iterable[dict], current_user_oid: ObjectId | None = None) -> list[dict]:

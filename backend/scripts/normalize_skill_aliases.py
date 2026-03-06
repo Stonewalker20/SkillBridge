@@ -1,3 +1,5 @@
+"""Maintenance script that expands and normalizes skill aliases for stronger matching behavior."""
+
 #!/usr/bin/env python3
 from __future__ import annotations
 

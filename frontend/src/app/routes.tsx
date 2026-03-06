@@ -13,6 +13,7 @@ import { NotFound } from "./pages/NotFound";
 import { TailoredResumes } from "./pages/TailoredResumes";
 import { Admin } from "./pages/Admin";
 import { SkillAnalytics } from "./pages/SkillAnalytics";
+import { CareerPathDetail } from "./pages/CareerPathDetail";
 
 export const router = createBrowserRouter([
   {
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
       { path: "jobs", element: <Jobs /> },
       { path: "resumes", element: <TailoredResumes /> },
       { path: "analytics/skills", element: <SkillAnalytics /> },
+      { path: "analytics/career-paths/:roleId", element: <CareerPathDetail /> },
       { path: "account", element: <Account /> },
       {
         path: "admin",

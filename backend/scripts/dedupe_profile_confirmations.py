@@ -1,3 +1,5 @@
+"""Cleanup script that merges duplicate profile confirmation records for the same user."""
+
 #!/usr/bin/env python3
 from __future__ import annotations
 

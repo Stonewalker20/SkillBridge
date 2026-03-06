@@ -1,3 +1,5 @@
+"""One-time migration script that consolidates duplicate skills and rewrites dependent references."""
+
 #!/usr/bin/env python3
 from __future__ import annotations
 

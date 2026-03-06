@@ -1,3 +1,5 @@
+"""Admin-only routes for user management, moderation, and platform-level operational summaries."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone

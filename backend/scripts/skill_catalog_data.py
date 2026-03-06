@@ -1,3 +1,5 @@
+"""Static skill catalog source data used by seeding and normalization scripts."""
+
 from __future__ import annotations
 
 SKILL_CATALOG: list[dict[str, object]] = [

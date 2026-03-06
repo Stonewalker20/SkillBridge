@@ -76,7 +76,9 @@ export function RootLayout() {
       ? "Account"
       : location.pathname === "/app/analytics/skills"
         ? "Skill Analytics"
-      : navigation.find((item) => item.href === location.pathname)?.name || "Page";
+      : location.pathname.startsWith("/app/analytics/career-paths/")
+        ? "Career Path"
+        : navigation.find((item) => item.href === location.pathname)?.name || "Page";
 
   return (
     <div className="flex h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)] text-slate-900 dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_48%,_#020617)] dark:text-slate-100">

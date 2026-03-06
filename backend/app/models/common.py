@@ -1,3 +1,5 @@
+"""Shared Pydantic primitives reused across multiple API modules."""
+
 from pydantic import BaseModel, Field
 
 class MongoOut(BaseModel):

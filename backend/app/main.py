@@ -1,3 +1,7 @@
+"""Application entrypoint that assembles the FastAPI app, lifecycle hooks, middleware, router registration, and database indexes."""
+
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from app.core.db import connect_to_mongo, close_mongo_connection, get_db
 from app.routers.health import router as health_router
@@ -21,27 +25,22 @@ from datetime import datetime
 import os
 
 async def ensure_indexes():
+    # These indexes support the hot paths we exercise on every authenticated session:
+    # login/session lookup, saved analyses, tailored resumes, and the derived RAG index.
     db = get_db()
     await db["users"].create_index("email", unique=True)
     await db["sessions"].create_index("token", unique=True)
     await db["sessions"].create_index("expires_at", expireAfterSeconds=0)
     await db["job_match_runs"].create_index([("user_id", 1), ("created_at", -1)])
     await db["tailored_resumes"].create_index([("user_id", 1), ("created_at", -1)])
+    await db["rag_chunks"].create_index([("user_id", 1), ("source_type", 1), ("source_id", 1), ("chunk_index", 1)])
 
-app = FastAPI(title="SkillBridge API", version="0.5.0")
 
-origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.on_event("startup")
-async def on_startup():
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # FastAPI lifespan keeps startup/shutdown work in one place and avoids the
+    # deprecated on_event hooks. This is the right place to connect the database,
+    # materialize indexes, and optionally prewarm local ML models.
     await connect_to_mongo()
     await ensure_indexes()
     if settings.local_model_prewarm:
@@ -52,11 +51,24 @@ async def on_startup():
         status["provider_mode"],
         f"(embeddings={status['embeddings_provider']}, model={status['embedding_model']})",
     )
+    try:
+        yield
+    finally:
+        release_local_models()
+        await close_mongo_connection()
 
-@app.on_event("shutdown")
-async def on_shutdown():
-    release_local_models()
-    await close_mongo_connection()
+
+app = FastAPI(title="SkillBridge API", version="0.5.0", lifespan=lifespan)
+
+origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(health_router, prefix="/health", tags=["health"])
 app.include_router(skills_router, prefix="/skills", tags=["skills"])

@@ -13,6 +13,24 @@ import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateC
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 
+type RetrievedContextItem = {
+  source_type: string;
+  source_id: string;
+  title: string;
+  snippet: string;
+  score: number;
+  chunk_index?: number;
+};
+
+type GapInsightItem = {
+  skill_id: string;
+  skill_name: string;
+  gap_type: string;
+  severity: string;
+  reason: string;
+  recommended_action: string;
+};
+
 type MatchResult = {
   job_id?: string;
   match_score?: number;
@@ -31,6 +49,9 @@ type MatchResult = {
   strength_areas?: string[];
   related_skills?: string[];
   semantic_alignment_examples?: string[];
+  retrieved_context?: RetrievedContextItem[];
+  gap_reasoning_summary?: string;
+  gap_insights?: GapInsightItem[];
   score_breakdown?: Array<{ label?: string; score?: number; detail?: string }>;
   recommended_next_steps?: string[];
   extracted_skill_count?: number;
@@ -45,6 +66,8 @@ type MatchResult = {
   keyword_overlap_terms?: string[];
   semantic_alignment_score?: number;
   semantic_alignment_explanation?: string;
+  personal_skill_vector_score?: number;
+  personal_skill_vector_explanation?: string;
   history_id?: string | null;
   tailored_resume_id?: string | null;
   [k: string]: any;
@@ -135,6 +158,9 @@ export function Jobs() {
       strengthAreas: asArray<string>(a.strength_areas ?? a.strengthAreas),
       relatedSkills: asArray<string>(a.related_skills ?? a.relatedSkills),
       semanticAlignmentExamples: asArray<string>(a.semantic_alignment_examples ?? a.semanticAlignmentExamples),
+      retrievedContext: asArray<RetrievedContextItem>(a.retrieved_context ?? a.retrievedContext),
+      gapReasoningSummary: String(a.gap_reasoning_summary ?? a.gapReasoningSummary ?? ""),
+      gapInsights: asArray<GapInsightItem>(a.gap_insights ?? a.gapInsights),
       scoreBreakdown,
       nextSteps: asArray<string>(a.recommended_next_steps ?? a.recommendedNextSteps),
       extractedSkillCount: Number(a.extracted_skill_count ?? a.extractedSkillCount ?? 0) || 0,
@@ -150,6 +176,8 @@ export function Jobs() {
       keywordOverlapScore: Number(keywordOverlapBreakdown?.score ?? 0) || 0,
       semanticAlignmentScore: Number(a.semantic_alignment_score ?? a.semanticAlignmentScore ?? 0) || 0,
       semanticAlignmentExplanation: String(a.semantic_alignment_explanation ?? a.semanticAlignmentExplanation ?? ""),
+      personalSkillVectorScore: Number(a.personal_skill_vector_score ?? a.personalSkillVectorScore ?? 0) || 0,
+      personalSkillVectorExplanation: String(a.personal_skill_vector_explanation ?? a.personalSkillVectorExplanation ?? ""),
       historyId: a.history_id ?? a.historyId ?? null,
       tailoredResumeId: a.tailored_resume_id ?? a.tailoredResumeId ?? null,
     };
@@ -795,6 +823,13 @@ export function Jobs() {
           </p>
         </Card>
         <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-sm text-gray-500 dark:text-slate-400">Personal Skill Vector</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.personalSkillVectorScore}%</p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
+            {normalized.personalSkillVectorExplanation || "This compares the job vector against your combined user profile vector built from confirmed skills, evidence, portfolio items, and resume context."}
+          </p>
+        </Card>
+        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <p className="text-sm text-gray-500 dark:text-slate-400">Coverage Snapshot</p>
           <div className="mt-3 space-y-2 text-sm text-gray-700 dark:text-slate-200">
             <p>Matched job skills: {normalized.matchedSkillCount} of {normalized.extractedSkillCount}</p>
@@ -818,6 +853,44 @@ export function Jobs() {
           ) : null}
         </Card>
       </div>
+
+      <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-gray-500 dark:text-slate-400">Retrieved Evidence</p>
+            <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
+              These are the strongest evidence and resume snippets the backend retrieved to ground this analysis.
+            </p>
+          </div>
+          <Badge className="border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            {normalized.retrievedContext.length} snippets
+          </Badge>
+        </div>
+        {normalized.retrievedContext.length === 0 ? (
+          <p className="mt-4 text-sm text-gray-600 dark:text-slate-300">
+            No retrieval context was available. Add resume or evidence text to strengthen grounded matching.
+          </p>
+        ) : (
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {normalized.retrievedContext.map((context) => (
+              <div key={`${context.source_type}:${context.source_id}:${context.chunk_index ?? 0}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{context.title || "Retrieved context"}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                      {String(context.source_type || "context").replaceAll("_", " ")}
+                    </p>
+                  </div>
+                  <Badge className="shrink-0 border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/50 dark:text-sky-200">
+                    {Math.round(Number(context.score ?? 0) * 100)}%
+                  </Badge>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{context.snippet}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
         <p className="text-sm text-gray-500 dark:text-slate-400">Semantic Alignment Examples</p>
@@ -1012,6 +1085,43 @@ export function Jobs() {
               </li>
             ))}
           </ul>
+        )}
+      </Card>
+
+      <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex items-center gap-2 mb-4">
+          <AlertCircle className="h-5 w-5 text-[#1E3A8A]" />
+          <h3 className="font-semibold text-gray-900 dark:text-slate-100">Gap Reasoning</h3>
+        </div>
+        <p className="mb-4 text-sm text-gray-600 dark:text-slate-300">
+          {normalized.gapReasoningSummary || "The backend did not return a detailed gap rationale for this analysis."}
+        </p>
+        {normalized.gapInsights.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-slate-400">No individual gap insights were returned.</p>
+        ) : (
+          <div className="space-y-3">
+            {normalized.gapInsights.map((insight) => (
+              <div key={`${insight.skill_id}:${insight.gap_type}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{insight.skill_name}</span>
+                  <Badge className="border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                    {insight.gap_type}
+                  </Badge>
+                  <Badge
+                    className={
+                      insight.severity === "high"
+                        ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
+                        : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
+                    }
+                  >
+                    {insight.severity}
+                  </Badge>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{insight.reason}</p>
+                <p className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-100">{insight.recommended_action}</p>
+              </div>
+            ))}
+          </div>
         )}
       </Card>
 

@@ -1,3 +1,5 @@
+"""Pydantic schemas for structured portfolio items stored alongside evidence and projects."""
+
 from __future__ import annotations
 
 from datetime import datetime

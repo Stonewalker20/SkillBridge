@@ -1,3 +1,5 @@
+"""Authentication primitives for password hashing, session creation, token validation, and user dependency injection."""
+
 from __future__ import annotations
 
 from fastapi import HTTPException, Header, Depends

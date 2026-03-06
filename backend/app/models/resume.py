@@ -1,3 +1,5 @@
+"""Pydantic schemas for resume snapshot ingestion and resume listing responses."""
+
 from __future__ import annotations
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Optional
