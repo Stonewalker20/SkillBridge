@@ -63,6 +63,7 @@ class SkillTrajectoryPath(BaseModel):
     confidence_label: str = "Low"
     cluster_category: str = ""
     personal_vector_alignment_score: float = 0.0
+    progress_bonus_score: float = 0.0
     matched_skills: List[str] = Field(default_factory=list)
     missing_skills: List[str] = Field(default_factory=list)
     top_role_skills: List[str] = Field(default_factory=list)
@@ -104,6 +105,7 @@ class LearningPathSkillDetailOut(BaseModel):
     graph_neighbors: List[str] = Field(default_factory=list)
     related_career_paths: List[str] = Field(default_factory=list)
     recommended_projects: List[str] = Field(default_factory=list)
+    recommended_resources: List[dict[str, str]] = Field(default_factory=list)
     progress_status: Literal["not_started", "in_progress", "completed"] = "not_started"
 
 
@@ -114,10 +116,12 @@ class CareerPathDetailOut(BaseModel):
     confidence_label: str = "Low"
     cluster_category: str = ""
     personal_vector_alignment_score: float = 0.0
+    progress_bonus_score: float = 0.0
     matched_skills: List[str] = Field(default_factory=list)
     missing_skills: List[str] = Field(default_factory=list)
     top_role_skills: List[str] = Field(default_factory=list)
     graph_neighbor_skills: List[str] = Field(default_factory=list)
     recommended_skills_to_add: List[str] = Field(default_factory=list)
     recommended_project_ideas: List[str] = Field(default_factory=list)
+    recommended_resources: List[dict[str, str]] = Field(default_factory=list)
     reasoning: str = ""

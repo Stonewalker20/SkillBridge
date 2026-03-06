@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from app.core.auth import require_user
 from app.core.db import get_db
+from app.utils.learning_resources import recommended_resources, recommended_resources_for_many
 from app.utils.mongo import oid_str
 from app.utils.ai import cosine_similarity, embed_texts
 from app.utils.skill_catalog import expand_alias_variants, unique_casefolded, normalize_skill_text
@@ -132,6 +133,15 @@ async def _load_recent_job_history_missing_counts(db, user_oid: ObjectId) -> tup
                 continue
             missing_counts[skill_name] = missing_counts.get(skill_name, 0) + 1
     return missing_counts, _normalize_phrase_list(titles)
+
+
+async def _load_learning_progress_lookup(db, user_oid: ObjectId) -> dict[str, str]:
+    rows = await db["learning_path_progress"].find({"user_id": user_oid}, {"skill_name": 1, "status": 1}).to_list(length=500)
+    return {
+        str(row.get("skill_name") or "").strip().casefold(): str(row.get("status") or "not_started")
+        for row in rows
+        if str(row.get("skill_name") or "").strip()
+    }
 
 
 def _build_learning_path(
@@ -587,6 +597,7 @@ async def get_skill_trajectory(user=Depends(require_user)):
         f"{cluster.category}: {' '.join(cluster.skill_names[:8])}" for cluster in clusters[:5]
     ).strip()
     missing_history_counts, recent_job_titles = await _load_recent_job_history_missing_counts(db, user_oid)
+    learning_progress = await _load_learning_progress_lookup(db, user_oid)
 
     career_paths: list[SkillTrajectoryPath] = []
     confirmed_skill_id_set = set(confirmed_skill_ids)
@@ -630,23 +641,6 @@ async def get_skill_trajectory(user=Depends(require_user)):
             role_text,
         )
 
-        cluster_scores: dict[str, float] = {}
-        for item in matched:
-            skill_doc = skill_docs.get(str(item.get("skill_id") or "").strip())
-            category = str((skill_doc or {}).get("category") or "Uncategorized").strip() or "Uncategorized"
-            cluster_scores[category] = cluster_scores.get(category, 0.0) + float(item.get("weight") or 0.0)
-        dominant_cluster = sorted(cluster_scores.items(), key=lambda pair: (-pair[1], pair[0]))[0][0] if cluster_scores else (clusters[0].category if clusters else "")
-
-        score = round(
-            (
-                (weighted_coverage * 0.48)
-                + (evidence_support * 0.14)
-                + (semantic_alignment * 0.18)
-                + ((personal_vector_alignment_score / 100.0) * 0.20)
-            )
-            * 100.0,
-            2,
-        )
         matched_skill_names = [
             str(item.get("skill_name") or "")
             for item in sorted(matched, key=lambda entry: float(entry.get("weight") or 0.0), reverse=True)[:5]
@@ -657,6 +651,35 @@ async def get_skill_trajectory(user=Depends(require_user)):
             for item in sorted(missing, key=lambda entry: float(entry.get("weight") or 0.0), reverse=True)[:5]
             if str(item.get("skill_name") or "")
         ]
+        cluster_scores: dict[str, float] = {}
+        for item in matched:
+            skill_doc = skill_docs.get(str(item.get("skill_id") or "").strip())
+            category = str((skill_doc or {}).get("category") or "Uncategorized").strip() or "Uncategorized"
+            cluster_scores[category] = cluster_scores.get(category, 0.0) + float(item.get("weight") or 0.0)
+        dominant_cluster = sorted(cluster_scores.items(), key=lambda pair: (-pair[1], pair[0]))[0][0] if cluster_scores else (clusters[0].category if clusters else "")
+        completed_missing = [
+            skill_name
+            for skill_name in missing_skill_names
+            if learning_progress.get(skill_name.casefold()) == "completed"
+        ]
+        in_progress_missing = [
+            skill_name
+            for skill_name in missing_skill_names
+            if learning_progress.get(skill_name.casefold()) == "in_progress"
+        ]
+        progress_bonus_score = round(min(8.0, (len(completed_missing) * 2.5) + (len(in_progress_missing) * 1.0)), 2)
+
+        score = round(
+            (
+                (weighted_coverage * 0.48)
+                + (evidence_support * 0.14)
+                + (semantic_alignment * 0.18)
+                + ((personal_vector_alignment_score / 100.0) * 0.20)
+            )
+            * 100.0
+            + progress_bonus_score,
+            2,
+        )
         reasoning = (
             f"{role.get('name', 'This path')} most closely matches your {dominant_cluster or 'current'} cluster. "
             f"You cover {round(weighted_coverage * 100)}% of this path's weighted skills"
@@ -678,6 +701,7 @@ async def get_skill_trajectory(user=Depends(require_user)):
                 confidence_label=_trajectory_confidence_label(score),
                 cluster_category=dominant_cluster,
                 personal_vector_alignment_score=personal_vector_alignment_score,
+                progress_bonus_score=progress_bonus_score,
                 matched_skills=matched_skill_names,
                 missing_skills=missing_skill_names,
                 top_role_skills=[
@@ -773,6 +797,7 @@ async def get_learning_path_skill_detail(skill_name: str, user=Depends(require_u
         graph_neighbors=_normalize_phrase_list(graph_neighbors)[:8],
         related_career_paths=_normalize_phrase_list(related_career_paths)[:4],
         recommended_projects=_normalize_phrase_list(recommended_projects)[:3],
+        recommended_resources=recommended_resources(decoded_skill_name, str((skill_doc or {}).get("category") or ""), limit=3),
         progress_status=str((progress_doc or {}).get("status") or "not_started"),
     )
 
@@ -810,11 +835,16 @@ async def get_career_path_detail(role_id: str, user=Depends(require_user)):
         confidence_label=path.confidence_label,
         cluster_category=path.cluster_category,
         personal_vector_alignment_score=path.personal_vector_alignment_score,
+        progress_bonus_score=path.progress_bonus_score,
         matched_skills=path.matched_skills,
         missing_skills=path.missing_skills,
         top_role_skills=path.top_role_skills,
         graph_neighbor_skills=_normalize_phrase_list(graph_neighbor_skills)[:8],
         recommended_skills_to_add=path.missing_skills[:4],
         recommended_project_ideas=_normalize_phrase_list(recommended_project_ideas)[:4],
+        recommended_resources=recommended_resources_for_many(
+            [(skill, path.cluster_category) for skill in path.missing_skills[:3]],
+            limit=4,
+        ),
         reasoning=path.reasoning,
     )

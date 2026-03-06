@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowRight, BarChart3, FolderOpen, Layers3, Target } from "lucide-react";
 import {
@@ -102,6 +102,7 @@ function normalizeEvidenceTypeLabel(value: string): string {
 
 export function SkillAnalytics() {
   const { activeHeaderTheme } = useHeaderTheme();
+  const navigate = useNavigate();
   const [state, setState] = useState<AnalyticsState>({
     loading: true,
     skills: [],
@@ -116,6 +117,7 @@ export function SkillAnalytics() {
   const [selectedCareerPathId, setSelectedCareerPathId] = useState<string | null>(null);
   const [selectedCareerPathDetail, setSelectedCareerPathDetail] = useState<CareerPathDetail | null>(null);
   const [updatingProgressSkill, setUpdatingProgressSkill] = useState<string | null>(null);
+  const [progressImpact, setProgressImpact] = useState<{ roleName: string; delta: number } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -282,9 +284,31 @@ export function SkillAnalytics() {
     setUpdatingProgressSkill(skillName);
     try {
       const updated = await api.patchLearningPathProgress({ skill_name: skillName, status });
+      const previousCareerPaths = state.trajectory?.career_paths ?? [];
+      const [trajectory, pathDetail, skillDetail] = await Promise.all([
+        api.getSkillTrajectory().catch(() => state.trajectory),
+        selectedCareerPathId ? api.getCareerPathDetail(selectedCareerPathId).catch(() => selectedCareerPathDetail) : Promise.resolve(selectedCareerPathDetail),
+        api.getLearningPathSkillDetail(skillName).catch(() => selectedLearningSkillDetail),
+      ]);
+      const previousSelected = selectedCareerPathId ? previousCareerPaths.find((item) => item.role_id === selectedCareerPathId) : null;
+      const nextSelected = selectedCareerPathId ? trajectory?.career_paths?.find((item) => item.role_id === selectedCareerPathId) ?? null : null;
+      if (previousSelected && nextSelected) {
+        setProgressImpact({
+          roleName: nextSelected.role_name,
+          delta: Number((nextSelected.score - previousSelected.score).toFixed(2)),
+        });
+      } else {
+        setProgressImpact(null);
+      }
+      setSelectedCareerPathDetail(pathDetail ?? null);
+      setSelectedLearningSkillDetail(skillDetail ?? null);
       setState((current) => {
         const others = current.learningProgress.filter((item) => item.skill_name !== updated.skill_name);
-        return { ...current, learningProgress: [...others, updated].sort((a, b) => a.skill_name.localeCompare(b.skill_name)) };
+        return {
+          ...current,
+          trajectory: trajectory ?? current.trajectory,
+          learningProgress: [...others, updated].sort((a, b) => a.skill_name.localeCompare(b.skill_name)),
+        };
       });
     } finally {
       setUpdatingProgressSkill(null);
@@ -567,7 +591,10 @@ export function SkillAnalytics() {
                 <button
                   type="button"
                   key={path.role_id}
-                  onClick={() => setSelectedCareerPathId(path.role_id)}
+                  onClick={() => {
+                    setSelectedCareerPathId(path.role_id);
+                    navigate(`/app/analytics/career-paths/${path.role_id}`);
+                  }}
                   className={`w-full rounded-2xl border p-4 text-left transition ${selectedCareerPathId === path.role_id ? "border-slate-400 bg-white dark:border-slate-600 dark:bg-slate-900/70" : "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-800/60"}`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -709,6 +736,11 @@ export function SkillAnalytics() {
             ))}
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-800/60">
+              {progressImpact ? (
+                <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/80 dark:bg-emerald-950/40 dark:text-emerald-200">
+                  {progressImpact.roleName} trajectory {progressImpact.delta >= 0 ? "increased" : "decreased"} by {Math.abs(progressImpact.delta).toFixed(2)} points after this progress update.
+                </div>
+              ) : null}
               <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                 {selectedLearningSkillDetail?.skill_name || selectedLearningSkill || "Select a target skill"}
               </h4>
@@ -768,6 +800,23 @@ export function SkillAnalytics() {
                         <li key={idea} className="rounded-xl bg-white/70 px-3 py-2 dark:bg-slate-950/40">{idea}</li>
                       ))}
                     </ul>
+                  </div>
+                  <div className="mt-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Recommended Resources</p>
+                    <div className="mt-2 space-y-2">
+                      {selectedLearningSkillDetail.recommended_resources.map((resource) => (
+                        <a
+                          key={`${resource.title}:${resource.url}`}
+                          href={resource.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block rounded-xl bg-white/70 px-3 py-2 text-sm text-slate-700 transition hover:bg-white dark:bg-slate-950/40 dark:text-slate-300 dark:hover:bg-slate-900"
+                        >
+                          <span className="font-medium">{resource.title}</span>
+                          <span className="ml-2 text-slate-500 dark:text-slate-400">{resource.provider}</span>
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 </>
               ) : (

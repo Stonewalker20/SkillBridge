@@ -269,6 +269,7 @@ export type SkillTrajectoryPath = {
   confidence_label: string;
   cluster_category: string;
   personal_vector_alignment_score: number;
+  progress_bonus_score: number;
   matched_skills: string[];
   missing_skills: string[];
   top_role_skills: string[];
@@ -298,6 +299,7 @@ export type LearningPathSkillDetail = {
   graph_neighbors: string[];
   related_career_paths: string[];
   recommended_projects: string[];
+  recommended_resources: Array<{ title: string; provider: string; url: string }>;
   progress_status: "not_started" | "in_progress" | "completed";
 };
 
@@ -308,12 +310,14 @@ export type CareerPathDetail = {
   confidence_label: string;
   cluster_category: string;
   personal_vector_alignment_score: number;
+  progress_bonus_score: number;
   matched_skills: string[];
   missing_skills: string[];
   top_role_skills: string[];
   graph_neighbor_skills: string[];
   recommended_skills_to_add: string[];
   recommended_project_ideas: string[];
+  recommended_resources: Array<{ title: string; provider: string; url: string }>;
   reasoning: string;
 };
 
