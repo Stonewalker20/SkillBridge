@@ -26,6 +26,7 @@ from app.models.tailor import (
     JobMatchHistoryEntryOut,
     JobMatchOut,
     MatchScoreBreakdown,
+    RAGContextItem,
     ResumeSection,
     RewriteBulletsIn,
     RewriteBulletsOut,
@@ -34,6 +35,7 @@ from app.models.tailor import (
     TailoredResumeOut,
     TailorPreviewIn,
 )
+from app.utils.rag import retrieve_rag_context
 from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
 from app.utils.ai import (
     AVAILABLE_INFERENCE_MODES,
@@ -77,6 +79,21 @@ def _build_ai_settings_detail(user_doc: dict | None) -> AISettingsDetailOut:
         preferences=prefs,
         **status,
     )
+
+
+@router.get("/rag/search", response_model=list[RAGContextItem])
+async def search_rag_context(q: str, user=Depends(require_user), limit: int = 5):
+    db = get_db()
+    preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
+    rows = await retrieve_rag_context(
+        db,
+        user_id=oid_str(user["_id"]),
+        query_text=q,
+        preferences=preferences,
+        limit=max(1, min(limit, 10)),
+        source_types=("evidence", "resume_snapshot"),
+    )
+    return [RAGContextItem(**row) for row in rows]
 
 def _job_focus_lines(text: str) -> list[tuple[str, float]]:
     section_markers = {
@@ -279,6 +296,34 @@ def _score_item(item: dict, job_skill_ids: set[str], keywords: set[str]) -> floa
     kw_hit = sum(1 for k in keywords if k in txt)
 
     return overlap * 5.0 + kw_hit * 1.0 + pri * 0.25
+
+
+def _attach_retrieved_context_to_items(items: list[dict], retrieved_context: list[dict]) -> dict[str, float]:
+    context_score_by_item_id: dict[str, float] = {}
+    snippets_by_item_id: dict[str, list[str]] = {}
+    for context in retrieved_context:
+        source_type = str(context.get("source_type") or "").strip()
+        if source_type != "evidence":
+            continue
+        source_id = str(context.get("source_id") or "").strip()
+        if not source_id:
+            continue
+        snippets_by_item_id.setdefault(source_id, [])
+        snippet = str(context.get("snippet") or "").strip()
+        if snippet:
+            snippets_by_item_id[source_id].append(snippet)
+        context_score_by_item_id[source_id] = max(
+            float(context_score_by_item_id.get(source_id, 0.0)),
+            float(context.get("score") or 0.0),
+        )
+
+    for item in items:
+        item_id = oid_str(item.get("_id"))
+        if not item_id:
+            continue
+        if item_id in snippets_by_item_id:
+            item["rag_snippets"] = _dedupe_preserve_order(snippets_by_item_id[item_id])[:3]
+    return context_score_by_item_id
 
 def _dedupe_preserve_order(values: Iterable[str]) -> list[str]:
     out: list[str] = []
@@ -800,6 +845,7 @@ def _sentence_candidates(text: str) -> list[str]:
 
 def _summarize_item_for_resume(item: dict, selected_skill_names: list[str], max_bullets_per_item: int) -> list[str]:
     text_sources = [
+        *[str(snippet or "") for snippet in (item.get("rag_snippets") or [])],
         *[str(bullet or "") for bullet in (item.get("bullets") or [])],
         str(item.get("summary") or ""),
         str(item.get("title") or ""),
@@ -1112,6 +1158,7 @@ def _serialize_tailored_resume(doc: dict) -> TailoredResumeOut:
         template=str(doc.get("template") or "ats_v1"),
         selected_skill_ids=[oid_str(value) for value in (doc.get("selected_skill_ids") or [])],
         selected_item_ids=[oid_str(value) for value in (doc.get("selected_item_ids") or [])],
+        retrieved_context=[RAGContextItem(**item) for item in (doc.get("retrieved_context") or [])],
         sections=[ResumeSection(**section) for section in (doc.get("sections") or [])],
         plain_text=str(doc.get("plain_text") or ""),
         created_at=doc.get("created_at"),
@@ -1233,6 +1280,15 @@ async def match_job(payload: dict):
         if entry.get("skill_id") is not None
     }
     items = await _load_user_items(db, payload["user_id"])
+    retrieved_context = await retrieve_rag_context(
+        db,
+        user_id=payload["user_id"],
+        query_text=job_doc.get("text", ""),
+        preferences=ai_preferences,
+        limit=6,
+        source_types=("evidence", "resume_snapshot"),
+    )
+    context_score_by_item_id = _attach_retrieved_context_to_items(items, retrieved_context)
     item_skill_ids = {
         str(skill_id)
         for item in items
@@ -1294,6 +1350,8 @@ async def match_job(payload: dict):
             for skill_id in matched_ids:
                 if _skill_terms(all_skill_docs.get(skill_id)) & item_terms:
                     evidence_backed_ids.add(skill_id)
+        elif context_score_by_item_id.get(oid_str(item.get("_id")), 0.0) >= 0.28:
+            matched_item_hits.append(item)
     keywords = [str(keyword or "").strip().lower() for keyword in (job_doc.get("keywords") or []) if str(keyword or "").strip()]
     keyword_overlap_terms = [keyword for keyword in keywords if keyword in item_text]
     keyword_overlap_count = len(keyword_overlap_terms)
@@ -1436,6 +1494,13 @@ async def match_job(payload: dict):
     matched_names = [_display_skill_name(all_skill_docs.get(skill_id), skill_id) for skill_id in matched_ids if skill_id in all_skill_docs]
     related_skill_names = [all_skill_docs[skill_id].get("name", skill_id) for skill_id in related_skill_ids if skill_id in all_skill_docs]
     semantic_alignment_examples = [text for _score, text in sorted(semantic_examples, key=lambda item: item[0], reverse=True)[:4]]
+    if retrieved_context:
+        for context in retrieved_context[:3]:
+            title = str(context.get("title") or "Retrieved evidence").strip()
+            snippet = str(context.get("snippet") or "").strip()
+            if snippet:
+                semantic_alignment_examples.append(f"{title}: {snippet[:140]}")
+    semantic_alignment_examples = _dedupe_preserve_order(semantic_alignment_examples)[:4]
     strength_areas = _build_strength_areas(matched_docs, evidence_backed_ids, matched_item_hits)
     confidence_label = _match_confidence_label(overall_score)
     semantic_alignment_explanation = (
@@ -1481,6 +1546,7 @@ async def match_job(payload: dict):
         strength_areas=strength_areas,
         related_skills=related_skill_names,
         semantic_alignment_examples=semantic_alignment_examples,
+        retrieved_context=[RAGContextItem(**context) for context in retrieved_context],
         score_breakdown=breakdown,
         recommended_next_steps=next_steps[:3],
         extracted_skill_count=len(extracted_skill_ids),
@@ -1549,7 +1615,8 @@ async def match_job(payload: dict):
 @router.post("/preview", response_model=TailoredResumeOut)
 async def preview_tailored_resume(payload: TailorPreviewIn):
     db = get_db()
-    user_doc = await db["users"].find_one(ref_query("_id", payload.user_id), {"username": 1, "email": 1})
+    user_doc = await db["users"].find_one(ref_query("_id", payload.user_id), {"username": 1, "email": 1, "ai_preferences": 1})
+    ai_preferences = normalize_ai_preferences((user_doc or {}).get("ai_preferences"))
 
     job_text = payload.job_text
     job_id = payload.job_id
@@ -1592,10 +1659,20 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
 
     # load user portfolio items and user evidence-backed items
     items = await _load_user_items(db, payload.user_id)
+    retrieved_context = await retrieve_rag_context(
+        db,
+        user_id=payload.user_id,
+        query_text=job_text or "",
+        preferences=ai_preferences,
+        limit=8,
+        source_types=("evidence", "resume_snapshot"),
+    )
+    context_score_by_item_id = _attach_retrieved_context_to_items(items, retrieved_context)
 
     scored = []
     for it in items:
-        scored.append(( _score_item(it, job_skill_ids, keyword_set), it))
+        bonus = context_score_by_item_id.get(oid_str(it.get("_id")), 0.0) * 6.0
+        scored.append((_score_item(it, job_skill_ids, keyword_set) + bonus, it))
     scored.sort(key=lambda x: x[0], reverse=True)
 
     selected_items = [it for score, it in scored[: payload.max_items] if score > 0] or [it for score, it in scored[: payload.max_items]]
@@ -1687,6 +1764,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
         "template": payload.template,
         "selected_skill_ids": selected_skill_ids,
         "selected_item_ids": selected_item_ids,
+        "retrieved_context": retrieved_context,
         "sections": [s.model_dump() for s in sections],
         "plain_text": _render_plain_text(sections),
         "created_at": now,

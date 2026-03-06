@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from app.core.db import get_db
 from app.models.evidence import EvidenceIn, EvidenceOut, EvidencePatch
 from app.utils.ai import extract_skill_candidates, embed_texts, cosine_similarity, normalize_ai_preferences
+from app.utils.rag import delete_rag_document, sync_rag_document
 from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 import io
@@ -355,6 +356,7 @@ async def list_evidence(
 @router.post("/", response_model=EvidenceOut)
 async def create_evidence(payload: EvidenceIn, user=Depends(require_user)):
     db = get_db()
+    ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
 
     skill_ids = []
     for sid in payload.skill_ids or []:
@@ -376,6 +378,16 @@ async def create_evidence(payload: EvidenceIn, user=Depends(require_user)):
     }
 
     res = await db["evidence"].insert_one(doc)
+    await sync_rag_document(
+        db,
+        user_id=oid_str(user["_id"]),
+        source_type="evidence",
+        source_id=oid_str(res.inserted_id),
+        title=doc.get("title", ""),
+        text=doc.get("text_excerpt", ""),
+        preferences=ai_preferences,
+        metadata={"evidence_type": doc.get("type", "other"), "origin": doc.get("origin", "user")},
+    )
 
     return EvidenceOut(
         **serialize_evidence({"_id": res.inserted_id, **doc}),
@@ -385,6 +397,7 @@ async def create_evidence(payload: EvidenceIn, user=Depends(require_user)):
 @router.patch("/{evidence_id}", response_model=EvidenceOut)
 async def patch_evidence(evidence_id: str, payload: EvidencePatch, user=Depends(require_user)):
     db = get_db()
+    ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
 
     try:
         evidence_oid = to_object_id(evidence_id)
@@ -413,6 +426,17 @@ async def patch_evidence(evidence_id: str, payload: EvidencePatch, user=Depends(
     updated = await db["evidence"].find_one({"_id": evidence_oid})
     if not updated:
         raise HTTPException(status_code=500, detail="Failed to load updated evidence")
+
+    await sync_rag_document(
+        db,
+        user_id=oid_str(user["_id"]),
+        source_type="evidence",
+        source_id=evidence_id,
+        title=updated.get("title", ""),
+        text=updated.get("text_excerpt", ""),
+        preferences=ai_preferences,
+        metadata={"evidence_type": updated.get("type", "other"), "origin": updated.get("origin", "user")},
+    )
 
     return EvidenceOut(**serialize_evidence(updated))
 
@@ -495,6 +519,13 @@ async def delete_evidence(evidence_id: str, user=Depends(require_user)):
                     continue
 
                 await db["skills"].delete_one({"_id": {"$in": ref_values(sid)}})
+
+    await delete_rag_document(
+        db,
+        user_id=oid_str(user["_id"]),
+        source_type="evidence",
+        source_id=evidence_id,
+    )
 
     return {
         "ok": True,

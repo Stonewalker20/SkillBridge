@@ -29,6 +29,7 @@ async def ensure_indexes():
     await db["sessions"].create_index("expires_at", expireAfterSeconds=0)
     await db["job_match_runs"].create_index([("user_id", 1), ("created_at", -1)])
     await db["tailored_resumes"].create_index([("user_id", 1), ("created_at", -1)])
+    await db["rag_chunks"].create_index([("user_id", 1), ("source_type", 1), ("source_id", 1), ("chunk_index", 1)])
 
 
 @asynccontextmanager

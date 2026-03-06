@@ -6,6 +6,8 @@ from bson import ObjectId
 from app.core.db import get_db
 from app.core.auth import require_user
 from app.models.resume import ResumeSnapshotIn, ResumeSnapshotOut, ResumeSnapshotListEntryOut
+from app.utils.ai import normalize_ai_preferences
+from app.utils.rag import sync_rag_document
 from app.utils.mongo import oid_str, ref_values
 from pypdf import PdfReader
 import io
@@ -30,6 +32,7 @@ def extract_pdf_text(file_bytes: bytes) -> str:
 @router.post("/text", response_model=ResumeSnapshotOut)
 async def ingest_resume_text(payload: ResumeSnapshotIn, user=Depends(require_user)):
     db = get_db()
+    ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
     raw_text = payload.text.strip()
     if len(raw_text) < 10:
         raise HTTPException(status_code=400, detail="Resume text too short.")
@@ -45,12 +48,23 @@ async def ingest_resume_text(payload: ResumeSnapshotIn, user=Depends(require_use
         "created_at": now_utc(),
     }
     res = await db["resume_snapshots"].insert_one(doc)
+    await sync_rag_document(
+        db,
+        user_id=oid_str(user["_id"]),
+        source_type="resume_snapshot",
+        source_id=oid_str(res.inserted_id),
+        title="Resume Snapshot",
+        text=raw_text,
+        preferences=ai_preferences,
+        metadata={"source_type": "paste"},
+    )
     preview = raw_text[:200] + ("..." if len(raw_text) > 200 else "")
     return {"snapshot_id": str(res.inserted_id), "preview": preview}
 
 @router.post("/pdf", response_model=ResumeSnapshotOut)
 async def ingest_resume_pdf(user_id: str = Form(...), file: UploadFile = File(...), user=Depends(require_user)):
     db = get_db()
+    ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
     if oid_str(user_id) != oid_str(user.get("_id")):
         raise HTTPException(status_code=403, detail="user_id must match authenticated user")
     if not file.filename.lower().endswith(".pdf"):
@@ -71,6 +85,16 @@ async def ingest_resume_pdf(user_id: str = Form(...), file: UploadFile = File(..
         "created_at": now_utc(),
     }
     res = await db["resume_snapshots"].insert_one(doc)
+    await sync_rag_document(
+        db,
+        user_id=oid_str(user["_id"]),
+        source_type="resume_snapshot",
+        source_id=oid_str(res.inserted_id),
+        title=file.filename or "Resume Snapshot",
+        text=raw_text,
+        preferences=ai_preferences,
+        metadata={"source_type": "pdf", "filename": file.filename},
+    )
     preview = raw_text[:200] + ("..." if len(raw_text) > 200 else "")
     return {"snapshot_id": str(res.inserted_id), "preview": preview}
 

@@ -283,6 +283,15 @@ export type DashboardSummary = {
   topSkillCategories: Array<{ category: string; count: number }>;
 };
 
+export type RAGContextItem = {
+  source_type: string;
+  source_id: string;
+  title: string;
+  snippet: string;
+  score: number;
+  chunk_index?: number;
+};
+
 export type JobMatchHistoryEntry = {
   id: string;
   job_id: string;
@@ -332,6 +341,7 @@ export type TailoredResumeListEntry = {
 export type TailoredResumeDetail = TailoredResumeListEntry & {
   selected_skill_ids: string[];
   selected_item_ids: string[];
+  retrieved_context?: RAGContextItem[];
   sections: Array<{ title: string; lines: string[] }>;
   plain_text: string;
 };

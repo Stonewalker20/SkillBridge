@@ -4,6 +4,7 @@ from io import BytesIO
 def test_evidence_analysis_and_crud(test_context):
     client = test_context["client"]
     headers = test_context["headers"]
+    db = test_context["db"]
 
     analysis = client.post(
         "/evidence/analyze",
@@ -29,6 +30,7 @@ def test_evidence_analysis_and_crud(test_context):
     )
     assert created.status_code == 200
     evidence_id = created.json()["id"]
+    assert any(str(doc.get("source_id")) == evidence_id for doc in db["rag_chunks"].docs)
 
     listed = client.get("/evidence/", headers=headers)
     assert listed.status_code == 200
@@ -37,9 +39,11 @@ def test_evidence_analysis_and_crud(test_context):
     patched = client.patch(f"/evidence/{evidence_id}", headers=headers, json={"title": "Updated Project Summary"})
     assert patched.status_code == 200
     assert patched.json()["title"] == "Updated Project Summary"
+    assert any(doc.get("title") == "Updated Project Summary" for doc in db["rag_chunks"].docs if str(doc.get("source_id")) == evidence_id)
 
     deleted = client.delete(f"/evidence/{evidence_id}", headers=headers)
     assert deleted.status_code == 200
+    assert not any(str(doc.get("source_id")) == evidence_id for doc in db["rag_chunks"].docs)
 
 
 def test_evidence_multi_file_analysis(test_context, monkeypatch):

@@ -61,6 +61,10 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     )
     assert text_ingest.status_code == 200
     snapshot_id = text_ingest.json()["snapshot_id"]
+    assert any(
+        str(doc.get("source_id")) == snapshot_id and doc.get("source_type") == "resume_snapshot"
+        for doc in test_context["db"]["rag_chunks"].docs
+    )
 
     pdf_ingest = client.post(
         "/ingest/resume/pdf",
@@ -105,6 +109,11 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     preview = client.post("/tailor/preview", json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id})
     assert preview.status_code == 200
     tailored_id = preview.json()["id"]
+    assert preview.json()["retrieved_context"]
+
+    rag_search = client.get("/tailor/rag/search", headers=headers, params={"q": "Python ML dashboards", "limit": 3})
+    assert rag_search.status_code == 200
+    assert rag_search.json()
 
     resumes = client.get("/tailor/resumes", params={"user_id": user_id})
     assert resumes.status_code == 200
@@ -231,6 +240,7 @@ def test_tailored_resume_uses_user_resume_template_and_ai_preferences(test_conte
     payload = preview.json()
     assert payload["resume_snapshot_id"] == snapshot_id
     assert payload["template_source"] == "user_resume"
+    assert payload["retrieved_context"]
     section_titles = [section["title"] for section in payload["sections"]]
     assert "Summary" in section_titles
     assert "Education" in section_titles
