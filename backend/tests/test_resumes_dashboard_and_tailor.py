@@ -41,6 +41,7 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
 
     text_ingest = client.post(
         "/ingest/resume/text",
+        headers=headers,
         json={
             "user_id": user_id,
             "text": "\n".join(
@@ -63,6 +64,7 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
 
     pdf_ingest = client.post(
         "/ingest/resume/pdf",
+        headers=headers,
         files={"file": ("resume.pdf", b"%PDF-1.4 fake", "application/pdf")},
         data={"user_id": user_id},
     )
@@ -74,7 +76,7 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
         json={"resume_snapshot_id": snapshot_id, "confirmed": [{"skill_id": skill_python, "proficiency": 4}], "rejected": [], "edited": []},
     )
 
-    promoted = client.post(f"/ingest/resume/{snapshot_id}/promote", data={"user_id": user_id})
+    promoted = client.post(f"/ingest/resume/{snapshot_id}/promote", headers=headers, data={"user_id": user_id})
     assert promoted.status_code == 200
 
     _create_confirmation_and_evidence(client, headers, user_id, skill_python, skill_ml)
@@ -161,7 +163,7 @@ def test_tailored_resume_uses_user_resume_template_and_ai_preferences(test_conte
             "BS Computer Science",
         ]
     )
-    ingest = client.post("/ingest/resume/text", json={"user_id": user_id, "text": resume_text})
+    ingest = client.post("/ingest/resume/text", headers=headers, json={"user_id": user_id, "text": resume_text})
     assert ingest.status_code == 200
     snapshot_id = ingest.json()["snapshot_id"]
 

@@ -313,13 +313,16 @@ async def list_evidence(
     skill_id: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
     origin: str | None = Query(default=None),
+    user=Depends(require_user),
 ):
     db = get_db()
-    q: dict = {}
+    effective_user_id = oid_str(user.get("_id"))
+    if user_id and oid_str(user_id) != effective_user_id:
+        raise HTTPException(status_code=403, detail="You can only list your own evidence")
+
+    q: dict = ref_query("user_id", effective_user_id)
     if user_email:
         q["user_email"] = user_email
-    if user_id:
-        q.update(ref_query("user_id", user_id))
     if skill_id:
         q["skill_ids"] = {"$in": ref_values(skill_id)}
     if project_id:

@@ -611,6 +611,77 @@ def _build_default_header_lines(user_doc: dict | None) -> list[str]:
     return header_lines
 
 
+def _looks_like_name_line(value: str) -> bool:
+    text = _clean_resume_line(value)
+    if not text or len(text) > 60:
+        return False
+    if "@" in text or "http" in text or re.search(r"\d{3}", text):
+        return False
+    tokens = [token for token in re.split(r"\s+", text) if token]
+    if not 2 <= len(tokens) <= 4:
+        return False
+    alpha_tokens = [token for token in tokens if re.search(r"[A-Za-z]", token)]
+    if len(alpha_tokens) != len(tokens):
+        return False
+    return all(token[:1].isupper() for token in alpha_tokens if token)
+
+
+def _extract_resume_header_lines(raw_text: str, user_doc: dict | None = None) -> list[str]:
+    fallback = _build_default_header_lines(user_doc)
+    text = str(raw_text or "")
+    if not text.strip():
+        return fallback
+
+    lines = [_clean_resume_line(line) for line in text.splitlines()]
+    lines = [line for line in lines if line]
+    header_window = lines[:12]
+
+    email_match = re.search(r"\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b", text, re.IGNORECASE)
+    phone_match = re.search(r"(?:\+?1[\s.\-]?)?(?:\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})", text)
+    linkedin_match = re.search(r"(?:https?://)?(?:www\.)?linkedin\.com/[^\s|,;]+", text, re.IGNORECASE)
+    github_match = re.search(r"(?:https?://)?(?:www\.)?github\.com/[^\s|,;]+", text, re.IGNORECASE)
+
+    name = next((line for line in header_window if _looks_like_name_line(line)), "") or str((user_doc or {}).get("username") or "").strip()
+    if not name and fallback:
+        name = fallback[0]
+
+    contact_parts: list[str] = []
+    if phone_match:
+        contact_parts.append(_clean_resume_line(phone_match.group(0)))
+    email = _clean_resume_line(email_match.group(0)) if email_match else str((user_doc or {}).get("email") or "").strip()
+    if email:
+        contact_parts.append(email)
+    profile_links: list[str] = []
+    if linkedin_match:
+        profile_links.append(_clean_resume_line(linkedin_match.group(0).rstrip(").,;")))
+    if github_match:
+        profile_links.append(_clean_resume_line(github_match.group(0).rstrip(").,;")))
+    contact_parts.extend(profile_links)
+
+    location_line = next(
+        (
+            line for line in header_window
+            if line != name
+            and line not in contact_parts
+            and "@" not in line
+            and not re.search(r"(linkedin|github|http)", line, re.IGNORECASE)
+            and len(line) <= 48
+            and re.search(r"[A-Za-z]", line)
+        ),
+        "",
+    )
+
+    header_lines: list[str] = []
+    if name:
+        header_lines.append(name)
+    if location_line:
+        header_lines.append(location_line)
+    if contact_parts:
+        header_lines.append(" | ".join(_dedupe_preserve_order(contact_parts)))
+
+    return header_lines or fallback
+
+
 def _canonical_template_section_title(raw_title: str) -> str:
     cleaned = _clean_resume_line(raw_title)
     canonical = _canonical_resume_section_title(cleaned)
@@ -877,6 +948,7 @@ def _build_sections_from_resume_template(
     selected_items: list[dict],
     max_bullets_per_item: int,
     preserve_template_content: bool = True,
+    header_lines: list[str] | None = None,
 ) -> list[ResumeSection]:
     fallback_template_sections = _load_default_resume_template_sections(None, include_content=False)
     fallback_lines_by_title = {section.title: [line for line in section.lines if line.strip()] for section in fallback_template_sections}
@@ -898,6 +970,9 @@ def _build_sections_from_resume_template(
 
     for section in template_sections:
         base_lines = [line for line in section.lines if line.strip()] if preserve_template_content else []
+        if section.title == "Header":
+            sections.append(ResumeSection(title="Header", lines=header_lines or base_lines or fallback_lines_by_title.get("Header", [])))
+            continue
         if section.title == "Summary":
             sections.append(
                 ResumeSection(
@@ -961,9 +1036,17 @@ def _build_sections_from_resume_template(
                 insert_index = idx
                 break
         sections.insert(insert_index, ResumeSection(title="Targeted Highlights", lines=targeted_highlights_lines))
+    elif targeted_highlights_lines and not any(section.title == "Targeted Highlights" for section in sections):
+        # Keep a dedicated rewriteable highlights section even when Experience/Projects were already populated.
+        insert_index = len(sections)
+        for idx, section in enumerate(sections):
+            if section.title in {"Education", "Certifications", "Awards"}:
+                insert_index = idx
+                break
+        sections.insert(insert_index, ResumeSection(title="Targeted Highlights", lines=targeted_highlights_lines))
 
     required_sections = {
-        "Header": fallback_lines_by_title.get("Header", []),
+        "Header": header_lines or fallback_lines_by_title.get("Header", []),
         "Summary": _build_targeted_summary_lines(summary_section, target_label, selected_skill_names, selected_items),
         "Skills": _chunk_skill_lines(merged_skill_names) or fallback_lines_by_title.get("Skills", []),
         "Experience": experience_lines or fallback_lines_by_title.get("Experience", []),
@@ -1550,13 +1633,16 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
 
     resume_snapshot = await _load_resume_template_snapshot(db, payload.user_id, payload.resume_snapshot_id)
     if resume_snapshot:
-        template_sections = _parse_resume_sections(str(resume_snapshot.get("raw_text") or ""))
+        resume_raw_text = str(resume_snapshot.get("raw_text") or "")
+        template_sections = _parse_resume_sections(resume_raw_text)
         template_source = "user_resume"
         preserve_template_content = True
+        header_lines = _extract_resume_header_lines(resume_raw_text, user_doc)
     else:
         template_sections = _load_default_resume_template_sections(user_doc, include_content=False)
         template_source = "default_template" if template_sections else "generated_fallback"
         preserve_template_content = False
+        header_lines = _build_default_header_lines(user_doc)
 
     if template_sections:
         sections = _build_sections_from_resume_template(
@@ -1566,6 +1652,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
             selected_items=selected_items,
             max_bullets_per_item=payload.max_bullets_per_item,
             preserve_template_content=preserve_template_content,
+            header_lines=header_lines,
         )
     else:
         fallback_lines = [f"Tailored for {target_label}."]
@@ -1836,6 +1923,15 @@ async def rewrite_tailored_resume_bullets(tailored_id: str, payload: RewriteBull
         ),
         None,
     )
+    if relevant_index is None:
+        relevant_index = next(
+            (
+                index
+                for index, section in enumerate(sections)
+                if section.title.lower() in {"experience", "projects"}
+            ),
+            None,
+        )
     if relevant_index is None:
         raise HTTPException(status_code=400, detail="Tailored resume has no rewriteable work section")
 
