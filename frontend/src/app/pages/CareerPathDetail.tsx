@@ -5,8 +5,10 @@ import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { ArrowLeft, Compass, Sparkles } from "lucide-react";
+import { useHeaderTheme } from "../lib/headerTheme";
 
 export function CareerPathDetail() {
+  const { activeHeaderTheme } = useHeaderTheme();
   const { roleId } = useParams();
   const [detail, setDetail] = useState<CareerPathDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,21 +41,23 @@ export function CareerPathDetail() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-            <Compass className="h-3.5 w-3.5" />
-            Career Path Detail
+      <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
+        <div className="flex flex-col justify-between gap-4 px-6 py-7 md:px-8 lg:flex-row lg:items-end">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+              <Compass className={`h-3.5 w-3.5 ${activeHeaderTheme.accentTextClass}`} />
+              Career Path Detail
+            </div>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{detail.role_name}</h1>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{detail.reasoning}</p>
           </div>
-          <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{detail.role_name}</h1>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{detail.reasoning}</p>
+          <Button asChild variant="outline" className="border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/70">
+            <Link to="/app/analytics/skills">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Analytics
+            </Link>
+          </Button>
         </div>
-        <Button asChild variant="outline">
-          <Link to="/app/analytics/skills">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Analytics
-          </Link>
-        </Button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -108,7 +112,7 @@ export function CareerPathDetail() {
 
       <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-[#1E3A8A]" />
+          <Sparkles className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
           <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Recommended Resources</h3>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">

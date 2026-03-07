@@ -7,10 +7,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Shield, Users, Briefcase, Database, Sparkles, RefreshCw } from "lucide-react";
 import { api, type AdminJob, type AdminSummary, type AdminUserRecord } from "../services/api";
 import { toast } from "sonner";
+import { useHeaderTheme } from "../lib/headerTheme";
 
 const ADMIN_ROLES = ["user", "team", "admin", "owner"];
 
 export function Admin() {
+  const { activeHeaderTheme } = useHeaderTheme();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
@@ -90,11 +92,11 @@ export function Admin() {
   return (
     <div className="space-y-6">
       <Card className="overflow-hidden border-slate-200 p-0 dark:border-slate-800 dark:bg-slate-950">
-        <div className="bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.18),_transparent_38%),linear-gradient(135deg,_#ffffff,_#f8fafc)] px-8 py-8 dark:bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.14),_transparent_34%),linear-gradient(135deg,_#0f1b2d,_#08111f)]">
+        <div className={`${activeHeaderTheme.heroClass} px-8 py-8`}>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-                <Shield className="h-3.5 w-3.5 text-[#1E3A8A]" />
+                <Shield className={`h-3.5 w-3.5 ${activeHeaderTheme.accentTextClass}`} />
                 Admin Workspace
               </div>
               <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Owner and team control center</h1>
@@ -121,7 +123,7 @@ export function Admin() {
               <p className="text-sm text-gray-500 dark:text-slate-400">Users</p>
               <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{summary?.total_users ?? 0}</p>
             </div>
-            <Users className="h-5 w-5 text-[#1E3A8A]" />
+            <Users className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
           </div>
         </Card>
         <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
@@ -130,7 +132,7 @@ export function Admin() {
               <p className="text-sm text-gray-500 dark:text-slate-400">Team Members</p>
               <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{summary?.team_members ?? 0}</p>
             </div>
-            <Shield className="h-5 w-5 text-[#1E3A8A]" />
+            <Shield className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
           </div>
         </Card>
         <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
@@ -139,7 +141,7 @@ export function Admin() {
               <p className="text-sm text-gray-500 dark:text-slate-400">Pending Jobs</p>
               <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{summary?.pending_jobs ?? 0}</p>
             </div>
-            <Briefcase className="h-5 w-5 text-[#1E3A8A]" />
+            <Briefcase className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
           </div>
         </Card>
         <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
@@ -148,7 +150,7 @@ export function Admin() {
               <p className="text-sm text-gray-500 dark:text-slate-400">AI Mode</p>
               <p className="mt-2 text-lg font-semibold text-gray-900 dark:text-slate-100">{summary?.provider_mode ?? "Unknown"}</p>
             </div>
-            <Sparkles className="h-5 w-5 text-[#1E3A8A]" />
+            <Sparkles className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
           </div>
         </Card>
       </div>
@@ -209,7 +211,7 @@ export function Admin() {
               <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">System Snapshot</h2>
               <p className="text-sm text-gray-600 dark:text-slate-300">Live collection totals for quick operator visibility.</p>
             </div>
-            <Database className="h-5 w-5 text-[#1E3A8A]" />
+            <Database className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
           </div>
           <div className="space-y-3">
             {collectionRows.map(([name, count]) => (
