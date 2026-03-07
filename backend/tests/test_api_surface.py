@@ -12,6 +12,7 @@ def test_openapi_includes_expected_route_surface():
         "/auth/register",
         "/auth/login",
         "/auth/me",
+        "/auth/me/avatar",
         "/auth/logout",
         "/skills/",
         "/skills/{skill_id}",

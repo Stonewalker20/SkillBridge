@@ -15,13 +15,14 @@ import {
 } from "lucide-react";
 import { cn } from "./ui/utils";
 import { Button } from "./ui/button";
-import { Avatar, AvatarFallback } from "./ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Switch } from "./ui/switch";
 import LogoImage from "../../imports/skillbridge_logo.png";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useHeaderTheme } from "../lib/headerTheme";
+import { avatarPresetClass } from "../lib/avatarPresets";
 
 const baseNavigation = [
   { name: "Dashboard", href: "/app", icon: LayoutDashboard },
@@ -244,7 +245,8 @@ export function RootLayout() {
               <Button asChild variant="ghost" className="relative h-11 w-11 rounded-full border border-slate-200/80 bg-white/80 p-0 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
                 <Link to="/app/account" aria-label="Open account settings" title="Account Settings">
                   <Avatar>
-                    <AvatarFallback className={`${activeHeaderTheme.avatarClass} text-white`}>
+                    {user?.avatar_url ? <AvatarImage src={user.avatar_url} alt={`${displayName} avatar`} /> : null}
+                    <AvatarFallback className={`${avatarPresetClass(user?.avatar_preset) ?? activeHeaderTheme.avatarClass} text-white`}>
                       {initials}
                     </AvatarFallback>
                   </Avatar>

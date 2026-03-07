@@ -154,9 +154,9 @@ function normalizeEvidence(raw: any): Evidence {
   };
 }
 
-export type AuthUser = { id: string; email: string; username: string; role: string };
+export type AuthUser = { id: string; email: string; username: string; role: string; avatar_url?: string | null; avatar_preset?: string | null };
 export type AuthOut = { token: string; user: AuthUser };
-export type UserPatch = { email?: string; username?: string; password?: string };
+export type UserPatch = { email?: string; username?: string; password?: string; avatar_preset?: string | null };
 
 export type Skill = {
   id: string;
@@ -547,6 +547,11 @@ export const api = {
 
   me: () => request<AuthUser | null>("/auth/me", "GET", undefined, {}, { allow401: true, returnOn401: null }),
   patchMe: (payload: UserPatch) => request<AuthUser>("/auth/me", "PATCH", payload),
+  uploadMyAvatar: async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<AuthUser>("/auth/me/avatar", "POST", undefined, {}, { body: form });
+  },
   deleteAccount: () => request<{ ok: boolean }>("/auth/me", "DELETE"),
   logout: async () => {
     try {

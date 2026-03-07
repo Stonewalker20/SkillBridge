@@ -1,6 +1,7 @@
 """Centralized application settings loaded from environment variables for database, auth, and local ML behavior."""
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     local_model_prewarm: bool  = True
     admin_owner_emails: str = ""
     admin_team_emails: str = ""
+    user_avatar_upload_dir: str = "data/uploads/avatars"
 
     @property
     def admin_owner_emails_set(self) -> set[str]:
@@ -49,5 +51,9 @@ class Settings(BaseSettings):
         if self.local_rewrite_model not in options:
             options.insert(0, self.local_rewrite_model)
         return list(dict.fromkeys(options))
+
+    @property
+    def user_avatar_upload_path(self) -> Path:
+        return Path(self.user_avatar_upload_dir).expanduser()
 
 settings = Settings()

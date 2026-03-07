@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 from app.main import app
 from app.core import db as core_db
 from app.core.auth import hash_password, now_utc
+from app.core.config import settings
 from app.routers import evidence as evidence_router
 from app.routers import tailor as tailor_router
 from app.routers import taxonomy as taxonomy_router
@@ -147,6 +148,9 @@ def test_context(monkeypatch):
     fake_db = FakeDatabase()
     seeded = _seed(fake_db)
     core_db._client = FakeMongoClient(fake_db)
+    avatar_dir = Path(__file__).resolve().parent / ".tmp_avatars"
+    avatar_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(settings, "user_avatar_upload_dir", str(avatar_dir))
 
     async def _noop():
         return None
