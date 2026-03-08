@@ -320,7 +320,7 @@ export function SkillAnalytics() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
         <div className="px-6 py-7 md:px-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -331,7 +331,7 @@ export function SkillAnalytics() {
               </div>
               <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Understand how your skill profile is supported.</h1>
               <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                Explore category coverage, evidence support, proficiency distribution, and which skills are driving your portfolio depth.
+                Explore category coverage, evidence support, proficiency distribution, and which skills are driving your evidence depth.
               </p>
             </div>
             <Button asChild variant="outline" className="border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/70">
@@ -344,78 +344,95 @@ export function SkillAnalytics() {
         </div>
       </div>
 
-      <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="mb-4">
+      <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex flex-wrap gap-2">
+          {[
+            ["#overview", "Overview"],
+            ["#support", "Support"],
+            ["#trajectory", "Trajectory"],
+            ["#learning", "Learning Path"],
+          ].map(([href, label]) => (
+            <Button key={href} asChild variant="outline" size="sm" className="h-8 rounded-full border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-900/70">
+              <a href={href}>{label}</a>
+            </Button>
+          ))}
+        </div>
+      </Card>
+
+      <div id="overview" className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr] scroll-mt-24">
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="mb-4">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Personal Skill Vector Drift</h3>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
             Tracks how your aggregate user embedding evolves as you confirm skills and add proof.
           </p>
-        </div>
-        {analytics.vectorHistory.length === 0 ? (
-          <div className="text-sm text-slate-500 dark:text-slate-400">No vector history yet. Analyze jobs or open the job match page to generate one.</div>
-        ) : (
-          <div className="h-56 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={analytics.vectorHistory}>
-                <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(value: number) => [`${Math.round(Number(value) || 0)}%`, "Vector score"]} />
-                <Line type="monotone" dataKey="score" stroke="#1E3A8A" strokeWidth={2.5} dot={{ r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
           </div>
-        )}
-      </Card>
+          {analytics.vectorHistory.length === 0 ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">No vector history yet. Analyze jobs or open the job match page to generate one.</div>
+          ) : (
+            <div className="h-56 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={analytics.vectorHistory}>
+                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(value: number) => [`${Math.round(Number(value) || 0)}%`, "Vector score"]} />
+                  <Line type="monotone" dataKey="score" stroke="#1E3A8A" strokeWidth={2.5} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-blue-50 p-3 dark:bg-blue-500/10">
-              <Target className="h-5 w-5 text-[#1E3A8A] dark:text-blue-300" />
+        <div className="grid grid-cols-2 gap-4">
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-blue-50 p-3 dark:bg-blue-500/10">
+                <Target className="h-5 w-5 text-[#1E3A8A] dark:text-blue-300" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Confirmed Skills</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.confirmedCount}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Confirmed Skills</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.confirmedCount}</p>
+          </Card>
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-teal-50 p-3 dark:bg-teal-500/10">
+                <FolderOpen className="h-5 w-5 text-[#0F766E] dark:text-teal-300" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Evidence-Backed</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.evidenceBackedConfirmed}</p>
+              </div>
             </div>
-          </div>
-        </Card>
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-teal-50 p-3 dark:bg-teal-500/10">
-              <FolderOpen className="h-5 w-5 text-[#0F766E] dark:text-teal-300" />
+          </Card>
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-amber-50 p-3 dark:bg-amber-500/10">
+                <Layers3 className="h-5 w-5 text-amber-600 dark:text-amber-300" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Without Evidence</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.unsupportedConfirmed}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Evidence-Backed</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.evidenceBackedConfirmed}</p>
+          </Card>
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-slate-100 p-3 dark:bg-slate-800">
+                <FolderOpen className="h-5 w-5 text-slate-700 dark:text-slate-200" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Evidence Items</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.totalEvidence}</p>
+              </div>
             </div>
-          </div>
-        </Card>
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-amber-50 p-3 dark:bg-amber-500/10">
-              <Layers3 className="h-5 w-5 text-amber-600 dark:text-amber-300" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Without Evidence</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.unsupportedConfirmed}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-slate-100 p-3 dark:bg-slate-800">
-              <FolderOpen className="h-5 w-5 text-slate-700 dark:text-slate-200" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Evidence Items</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.totalEvidence}</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <div id="support" className="grid grid-cols-1 gap-6 xl:grid-cols-2 scroll-mt-24">
         <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Confirmed Skill Categories</h3>
@@ -468,7 +485,7 @@ export function SkillAnalytics() {
           {analytics.topEvidenceSkills.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">Add evidence to see which skills are most documented.</div>
           ) : (
-            <div className="space-y-4">
+            <div className="max-h-[22rem] space-y-4 overflow-y-auto pr-1">
               {analytics.topEvidenceSkills.map((skill, index) => {
                 const maxCount = analytics.topEvidenceSkills[0]?.count || 1;
                 const width = Math.max(8, (skill.count / maxCount) * 100);
@@ -515,7 +532,7 @@ export function SkillAnalytics() {
             </ChartContainer>
           )}
           {analytics.proficiencyData.length > 0 ? (
-            <div className="mt-5 space-y-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+            <div className="mt-5 max-h-[16rem] space-y-3 overflow-y-auto border-t border-slate-200 pt-4 pr-1 dark:border-slate-800">
               {analytics.proficiencyData.map((bucket) => (
                 <div key={bucket.level} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-800/60">
                   <div className="flex items-center justify-between gap-3">
@@ -542,7 +559,7 @@ export function SkillAnalytics() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+      <div id="trajectory" className="grid grid-cols-1 gap-6 xl:grid-cols-[0.92fr_1.08fr] scroll-mt-24">
         <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Skill Clusters</h3>
@@ -551,7 +568,7 @@ export function SkillAnalytics() {
           {analytics.trajectoryClusters.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">Confirm more skills to generate cluster-level trajectory signals.</div>
           ) : (
-            <div className="space-y-4">
+            <div className="max-h-[24rem] space-y-4 overflow-y-auto pr-1">
               {analytics.trajectoryClusters.map((cluster) => (
                 <div key={cluster.category} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
                   <div className="flex items-center justify-between gap-3">
@@ -586,7 +603,7 @@ export function SkillAnalytics() {
           {analytics.careerPaths.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">Add roles and analyze jobs to unlock career path predictions.</div>
           ) : (
-            <div className="space-y-4">
+            <div className="max-h-[24rem] space-y-4 overflow-y-auto pr-1">
               {analytics.careerPaths.map((path) => (
                 <button
                   type="button"
@@ -692,7 +709,7 @@ export function SkillAnalytics() {
         </Card>
       ) : null}
 
-      <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card id="learning" className="border-slate-200 p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Learning Path Recommendation</h3>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
@@ -703,7 +720,7 @@ export function SkillAnalytics() {
           <div className="text-sm text-slate-500 dark:text-slate-400">Confirm more skills and analyze target roles to generate a learning path.</div>
         ) : (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div className="grid max-h-[28rem] grid-cols-1 gap-4 overflow-y-auto pr-1 xl:grid-cols-3">
             {analytics.learningPath.map((step) => (
               <div key={`${step.phase}:${step.title}`} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-800/60">
                 <div className="flex items-center justify-between gap-3">

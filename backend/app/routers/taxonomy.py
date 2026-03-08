@@ -85,10 +85,6 @@ async def _build_personal_vector_score(
         {"user_id": user_oid, "origin": "user"},
         {"text_excerpt": 1, "title": 1},
     ).to_list(length=100)
-    portfolio_docs = await db["portfolio_items"].find(
-        {"user_id": user_oid},
-        {"title": 1, "summary": 1, "bullets": 1},
-    ).to_list(length=100)
     resume_doc = await db["resume_snapshots"].find_one(
         {"user_id": user_oid},
         {"raw_text": 1},
@@ -100,10 +96,6 @@ async def _build_personal_vector_score(
     for evidence in evidence_docs[:8]:
         source_parts.append(str(evidence.get("title") or ""))
         source_parts.append(str(evidence.get("text_excerpt") or "")[:300])
-    for item in portfolio_docs[:6]:
-        source_parts.append(str(item.get("title") or ""))
-        source_parts.append(str(item.get("summary") or "")[:240])
-        source_parts.extend(str(line or "")[:160] for line in (item.get("bullets") or [])[:3])
     if resume_doc:
         source_parts.append(str(resume_doc.get("raw_text") or "")[:1200])
     profile_text = "\n".join(part for part in source_parts if str(part or "").strip()).strip()
@@ -190,19 +182,19 @@ def _build_learning_path(
                 rationale=(
                     "You already have traction in these skills. Strengthening them with measurable outcomes will increase both role alignment and resume quality."
                 ),
-                evidence_action="Add quantified project bullets, portfolio items, or work samples that demonstrate production-level use of these skills.",
+                evidence_action="Add quantified project bullets, evidence entries, or work samples that demonstrate production-level use of these skills.",
             )
         )
     if prioritized_missing or matched_anchor_skills:
         recommendations.append(
             LearningPathRecommendation(
                 phase="Phase 3",
-                title="Turn learning into portfolio evidence",
+                title="Turn learning into stronger evidence",
                 target_skills=(prioritized_missing[:2] + matched_anchor_skills[:2])[:4],
                 rationale=(
-                    "Learning path progress only improves matching if it becomes visible in your portfolio, evidence library, and tailored resumes."
+                    "Learning path progress only improves matching if it becomes visible in your evidence library and tailored resumes."
                 ),
-                evidence_action="After each learning milestone, upload evidence, confirm extracted skills, and attach the result to a portfolio item tied to your target path.",
+                evidence_action="After each learning milestone, upload evidence, confirm extracted skills, and attach the result to a concrete artifact tied to your target path.",
             )
         )
     return recommendations[:3]

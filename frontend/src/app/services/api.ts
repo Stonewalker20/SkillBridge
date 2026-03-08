@@ -57,7 +57,6 @@ async function request<T>(
   });
 
   if (response.status === 401) {
-    clearToken();
     if (options.allow401) return options.returnOn401 as T;
   }
 
@@ -353,7 +352,7 @@ export type ResumeSnapshotListEntry = {
 
 export type DashboardSummary = {
   totalSkills: number;
-  portfolioItems: number;
+  evidenceCount: number;
   averageMatchScore: number;
   tailoredResumes: number;
   recentActivity: Array<{
@@ -579,13 +578,10 @@ export const api = {
 
   promoteResumeSnapshot: async (snapshotId: string, userId?: string) => {
     const form = new FormData();
-    form.append("user_id", userId ?? (await getUserIdOrThrow()));
+    if (userId) form.append("user_id", userId);
     return request<any>(`/ingest/resume/${snapshotId}/promote`, "POST", undefined, {}, { body: form });
   },
-  listResumeSnapshots: async () => {
-    const userId = await getUserIdOrThrow();
-    return request<ResumeSnapshotListEntry[]>(`/ingest/resume?user_id=${encodeURIComponent(userId)}`, "GET");
-  },
+  listResumeSnapshots: async () => request<ResumeSnapshotListEntry[]>("/ingest/resume", "GET"),
 
   listSkills: async (params?: { q?: string; category?: string; limit?: number; skip?: number }) => {
     const search = new URLSearchParams();
@@ -815,7 +811,7 @@ export const api = {
     const raw = await request<any>("/dashboard/summary", "GET");
     return {
       totalSkills: Number(raw?.totals?.confirmed_skills ?? 0) || 0,
-      portfolioItems: Number(raw?.totals?.evidence ?? 0) || 0,
+      evidenceCount: Number(raw?.totals?.evidence ?? 0) || 0,
       averageMatchScore: Number(raw?.average_match_score ?? 0) || 0,
       tailoredResumes: Number(raw?.tailored_resumes ?? 0) || 0,
       recentActivity: Array.isArray(raw?.recent_activity)
@@ -884,57 +880,37 @@ export const api = {
   getUserSkillVectorHistory: (limit = 12) => request<UserSkillVectorHistoryPoint[]>(`/tailor/user-vector/history?limit=${encodeURIComponent(String(limit))}`, "GET"),
 
   ingestJob: async (payload: { user_id?: string; title?: string; company?: string; location?: string; text: string }) => {
-    const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
-    return request<any>("/tailor/job/ingest", "POST", body);
+    return request<any>("/tailor/job/ingest", "POST", payload);
   },
 
   matchJob: async (payload: { user_id?: string; job_id: string; history_id?: string; resume_snapshot_id?: string | null; ignored_skill_names?: string[]; added_from_missing_skills?: Array<{ skill_id: string; skill_name: string }>; persist_history?: boolean }) => {
-    const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
-    return request<any>("/tailor/match", "POST", body);
+    return request<any>("/tailor/match", "POST", payload);
   },
 
   listJobMatchHistory: async (limit?: number) => {
-    const userId = await getUserIdOrThrow();
-    const suffix = limit != null ? `?user_id=${encodeURIComponent(userId)}&limit=${encodeURIComponent(String(limit))}` : `?user_id=${encodeURIComponent(userId)}`;
+    const suffix = limit != null ? `?limit=${encodeURIComponent(String(limit))}` : "";
     return request<JobMatchHistoryEntry[]>("/tailor/history" + suffix, "GET");
   },
 
   listTailoredResumes: async (limit?: number) => {
-    const userId = await getUserIdOrThrow();
-    const suffix = limit != null ? `?user_id=${encodeURIComponent(userId)}&limit=${encodeURIComponent(String(limit))}` : `?user_id=${encodeURIComponent(userId)}`;
+    const suffix = limit != null ? `?limit=${encodeURIComponent(String(limit))}` : "";
     return request<TailoredResumeListEntry[]>("/tailor/resumes" + suffix, "GET");
   },
-  getTailoredResumeDetail: async (tailoredId: string) => {
-    const userId = await getUserIdOrThrow();
-    return request<TailoredResumeDetail>(`/tailor/resumes/${tailoredId}?user_id=${encodeURIComponent(userId)}`, "GET");
-  },
-  deleteTailoredResume: async (tailoredId: string) => {
-    const userId = await getUserIdOrThrow();
-    return request<{ ok: boolean; id: string }>(`/tailor/resumes/${tailoredId}?user_id=${encodeURIComponent(userId)}`, "DELETE");
-  },
+  getTailoredResumeDetail: async (tailoredId: string) => request<TailoredResumeDetail>(`/tailor/resumes/${tailoredId}`, "GET"),
+  deleteTailoredResume: async (tailoredId: string) => request<{ ok: boolean; id: string }>(`/tailor/resumes/${tailoredId}`, "DELETE"),
 
   compareJobMatchHistory: async (leftId: string, rightId: string) => {
-    const userId = await getUserIdOrThrow();
     const params = new URLSearchParams({
-      user_id: userId,
       left_id: leftId,
       right_id: rightId,
     });
     return request<JobMatchComparison>("/tailor/history/compare?" + params.toString(), "GET");
   },
 
-  getJobMatchHistoryDetail: async (historyId: string) => {
-    const userId = await getUserIdOrThrow();
-    return request<JobMatchHistoryDetail>(`/tailor/history/${historyId}?user_id=${encodeURIComponent(userId)}`, "GET");
-  },
+  getJobMatchHistoryDetail: async (historyId: string) => request<JobMatchHistoryDetail>(`/tailor/history/${historyId}`, "GET"),
 
-  deleteJobMatchHistory: async (historyId: string) => {
-    const userId = await getUserIdOrThrow();
-    return request<{ ok: boolean; id: string; title?: string }>(
-      `/tailor/history/${historyId}?user_id=${encodeURIComponent(userId)}`,
-      "DELETE"
-    );
-  },
+  deleteJobMatchHistory: async (historyId: string) =>
+    request<{ ok: boolean; id: string; title?: string }>(`/tailor/history/${historyId}`, "DELETE"),
 
   getAISettingsStatus: () => request<AISettingsStatus>("/tailor/settings/status", "GET"),
   getAIPreferences: () => request<AISettingsDetail>("/tailor/settings/preferences", "GET"),
@@ -953,8 +929,7 @@ export const api = {
     request<AdminJob>(`/admin/jobs/${jobId}/moderation`, "PATCH", payload),
 
   previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; resume_snapshot_id?: string | null; ignored_skill_names?: string[]; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
-    const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
-    return request<any>("/tailor/preview", "POST", body);
+    return request<any>("/tailor/preview", "POST", payload);
   },
 
   rewriteTailoredResume: (tailoredId: string, payload?: { focus?: string }) =>
@@ -963,13 +938,44 @@ export const api = {
   downloadTailoredDocx: (tailoredId: string) => requestBlob(`/tailor/${tailoredId}/export/docx`),
   downloadTailoredPdf: (tailoredId: string) => requestBlob(`/tailor/${tailoredId}/export/pdf`),
 
-  createPortfolioItem: (payload: any) => request<any>("/portfolio/items", "POST", payload),
-  listPortfolioItems: (userId: string, params?: { type?: string; visibility?: string }) => {
-    const search = new URLSearchParams({ user_id: userId });
-    if (params?.type) search.set("type", params.type);
-    if (params?.visibility) search.set("visibility", params.visibility);
-    return request<any[]>(`/portfolio/items?${search.toString()}`, "GET");
+  createPortfolioItem: async (payload: any) => {
+    const links = asArray<string>(payload?.links).map((value) => String(value || "").trim()).filter(Boolean);
+    const summary = String(payload?.summary ?? "").trim();
+    const bullets = asArray<string>(payload?.bullets).map((value) => String(value || "").trim()).filter(Boolean);
+    return normalizeEvidence(
+      await request<any>("/evidence/", "POST", {
+        user_id: payload?.user_id,
+        user_email: payload?.user_email,
+        type: ["project", "paper", "cert", "other"].includes(String(payload?.type ?? "")) ? payload.type : "other",
+        title: payload?.title ?? "",
+        source: links[0] ?? payload?.org ?? "structured-evidence",
+        text_excerpt: [summary, ...bullets].filter(Boolean).join("\n") || payload?.title || "",
+        skill_ids: asArray<string>(payload?.skill_ids),
+        tags: asArray<string>(payload?.tags),
+        origin: "user",
+      })
+    );
   },
-  patchPortfolioItem: (itemId: string, payload: any) => request<any>(`/portfolio/items/${itemId}`, "PATCH", payload),
-  deletePortfolioItem: (itemId: string) => request<any>(`/portfolio/items/${itemId}`, "DELETE"),
+  listPortfolioItems: async (userId: string, params?: { type?: string; visibility?: string }) => {
+    const evidence = await api.listEvidence({ user_id: userId, origin: "user" });
+    return evidence.filter((item) => {
+      if (params?.type && String(item.type || "") !== params.type) return false;
+      return true;
+    });
+  },
+  patchPortfolioItem: (itemId: string, payload: any) =>
+    request<any>(EVIDENCE_UPDATE_ROUTE.replace("{evidence_id}", itemId), "PATCH", {
+      type: ["project", "paper", "cert", "other"].includes(String(payload?.type ?? "")) ? payload?.type : payload?.type ? "other" : undefined,
+      title: payload?.title,
+      source: asArray<string>(payload?.links).map((value) => String(value || "").trim()).filter(Boolean)[0] ?? payload?.source,
+      text_excerpt:
+        payload?.summary != null || payload?.bullets != null
+          ? [String(payload?.summary ?? "").trim(), ...asArray<string>(payload?.bullets).map((value) => String(value || "").trim()).filter(Boolean)]
+              .filter(Boolean)
+              .join("\n")
+          : undefined,
+      skill_ids: payload?.skill_ids,
+      tags: payload?.tags,
+    }),
+  deletePortfolioItem: (itemId: string) => request<any>(EVIDENCE_UPDATE_ROUTE.replace("{evidence_id}", itemId), "DELETE"),
 };

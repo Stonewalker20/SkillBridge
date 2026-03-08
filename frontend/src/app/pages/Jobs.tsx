@@ -229,15 +229,19 @@ export function Jobs() {
     const loadHistoryAndTemplates = async () => {
       setHistoryLoading(true);
       try {
-        const [entries, snapshots] = await Promise.all([api.listJobMatchHistory(8), api.listResumeSnapshots()]);
-        if (active) {
-          setHistory(entries);
-          setResumeSnapshots(snapshots);
-        }
+        const entries = await api.listJobMatchHistory(8);
+        if (active) setHistory(entries);
       } catch (error) {
         console.error("Failed to load job match history:", error);
       } finally {
         if (active) setHistoryLoading(false);
+      }
+
+      try {
+        const snapshots = await api.listResumeSnapshots();
+        if (active) setResumeSnapshots(snapshots);
+      } catch (error) {
+        console.error("Failed to load resume snapshots:", error);
       }
     };
     loadHistoryAndTemplates();
@@ -638,8 +642,9 @@ export function Jobs() {
           <p className="text-gray-600 dark:text-slate-300">Paste a job description to get a detailed job match breakdown and generate a tailored resume</p>
         </div>
 
-        <Card className="p-8 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="job-title">Job Title (Optional)</Label>
@@ -673,7 +678,7 @@ export function Jobs() {
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
                 placeholder="Paste the full job description here..."
-                rows={12}
+                rows={9}
                 className="font-mono text-sm"
               />
               <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">Include requirements, qualifications, and responsibilities for best results.</p>
@@ -709,7 +714,7 @@ export function Jobs() {
           ) : history.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-slate-400">No prior analyses yet.</p>
           ) : (
-            <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-2">
+            <div className="max-h-[34rem] space-y-3 overflow-y-auto pr-2">
               {history.map((entry) => (
                 <div key={entry.id} className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 md:flex-row md:items-center md:justify-between dark:border-slate-800 dark:bg-slate-950/60">
                   <div>
@@ -752,6 +757,7 @@ export function Jobs() {
             </div>
           )}
         </Card>
+        </div>
       </div>
     );
   }
@@ -774,7 +780,23 @@ export function Jobs() {
         </div>
       </div>
 
-      <Card className="p-8 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card className="p-4 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex flex-wrap gap-2">
+          {[
+            ["#job-summary", "Summary"],
+            ["#job-skills", "Skills"],
+            ["#job-reasoning", "Reasoning"],
+            ["#job-resume", "Resume"],
+            ["#job-history", "History"],
+          ].map(([href, label]) => (
+            <Button key={href} asChild variant="outline" size="sm" className="h-8 rounded-full border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-900/70">
+              <a href={href}>{label}</a>
+            </Button>
+          ))}
+        </div>
+      </Card>
+
+      <Card id="job-summary" className="p-8 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="grid gap-6 lg:grid-cols-[220px_1fr] lg:items-center">
           <div className="flex flex-col items-center rounded-2xl bg-slate-50 p-6 text-center dark:bg-slate-950/70">
             <span className={`text-5xl font-bold ${getScoreColor(normalized.matchScore)}`}>{normalized.matchScore}%</span>
@@ -826,7 +848,7 @@ export function Jobs() {
           <p className="text-sm text-gray-500 dark:text-slate-400">Personal Skill Vector</p>
           <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.personalSkillVectorScore}%</p>
           <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
-            {normalized.personalSkillVectorExplanation || "This compares the job vector against your combined user profile vector built from confirmed skills, evidence, portfolio items, and resume context."}
+            {normalized.personalSkillVectorExplanation || "This compares the job vector against your combined user profile vector built from confirmed skills, evidence, and resume context."}
           </p>
         </Card>
         <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
@@ -871,7 +893,7 @@ export function Jobs() {
             No retrieval context was available. Add resume or evidence text to strengthen grounded matching.
           </p>
         ) : (
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="mt-4 grid max-h-[22rem] gap-3 overflow-y-auto pr-1 md:grid-cols-2">
             {normalized.retrievedContext.map((context) => (
               <div key={`${context.source_type}:${context.source_id}:${context.chunk_index ?? 0}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
                 <div className="flex items-start justify-between gap-3">
@@ -897,7 +919,7 @@ export function Jobs() {
         {normalized.semanticAlignmentExamples.length === 0 ? (
           <p className="mt-3 text-sm text-gray-600 dark:text-slate-300">No concrete examples yet. Add more evidence or projects tied to your confirmed skills to strengthen semantic matching.</p>
         ) : (
-          <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-slate-200">
+          <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1 text-sm text-gray-700 dark:text-slate-200">
             {normalized.semanticAlignmentExamples.map((example) => (
               <li key={example} className="rounded-md bg-slate-50 px-3 py-2 dark:bg-slate-950/70">
                 {example}
@@ -907,7 +929,7 @@ export function Jobs() {
         )}
       </Card>
 
-      <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card id="job-reasoning" className="p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Score Breakdown</h3>
           <p className="text-sm text-gray-600 dark:text-slate-300">The overall score weighs coverage of required skills, supporting evidence, and overlap with job language.</p>
@@ -937,12 +959,13 @@ export function Jobs() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div id="job-skills" className="grid grid-cols-1 md:grid-cols-3 gap-6 scroll-mt-24">
         <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
             <h3 className="font-semibold text-gray-900 dark:text-slate-100">Matched Skills</h3>
           </div>
+          <div className="max-h-[18rem] overflow-y-auto">
           <div className="flex flex-wrap gap-2">
             {normalized.matchedSkills.length === 0 ? (
               <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
@@ -967,6 +990,7 @@ export function Jobs() {
               ))
             )}
           </div>
+          </div>
         </Card>
 
         <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
@@ -974,6 +998,7 @@ export function Jobs() {
             <AlertCircle className="h-5 w-5 text-orange-600" />
             <h3 className="font-semibold text-gray-900 dark:text-slate-100">Missing Skills</h3>
           </div>
+          <div className="max-h-[18rem] overflow-y-auto">
           <div className="flex flex-wrap gap-2">
             {normalized.missingSkills.length === 0 ? (
               <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
@@ -1006,6 +1031,7 @@ export function Jobs() {
               ))
             )}
           </div>
+          </div>
         </Card>
 
         <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
@@ -1013,6 +1039,7 @@ export function Jobs() {
             <Sparkles className="h-5 w-5 text-[#1E3A8A]" />
             <h3 className="font-semibold text-gray-900 dark:text-slate-100">Strength Areas</h3>
           </div>
+          <div className="max-h-[18rem] overflow-y-auto">
           <div className="flex flex-wrap gap-2">
             {normalized.strengthAreas.length === 0 ? (
               <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
@@ -1023,6 +1050,7 @@ export function Jobs() {
                 </Badge>
               ))
             )}
+          </div>
           </div>
         </Card>
       </div>
@@ -1099,7 +1127,7 @@ export function Jobs() {
         {normalized.gapInsights.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-slate-400">No individual gap insights were returned.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
             {normalized.gapInsights.map((insight) => (
               <div key={`${insight.skill_id}:${insight.gap_type}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1125,7 +1153,7 @@ export function Jobs() {
         )}
       </Card>
 
-      <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card id="job-resume" className="p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Tailored Resume</h3>
@@ -1174,7 +1202,7 @@ export function Jobs() {
         )}
       </Card>
 
-      <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card id="job-history" className="p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -1185,7 +1213,7 @@ export function Jobs() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="mt-4 grid max-h-[28rem] grid-cols-1 gap-4 overflow-y-auto pr-1 lg:grid-cols-2">
           {historyLoading ? (
             <p className="text-sm text-gray-500 dark:text-slate-400">Loading saved analyses...</p>
           ) : history.length === 0 ? (

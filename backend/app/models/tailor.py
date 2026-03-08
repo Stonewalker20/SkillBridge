@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class JobIngestIn(BaseModel):
-    user_id: str
+    user_id: str | None = None
     title: str | None = None
     company: str | None = None
     location: str | None = None
@@ -119,7 +119,7 @@ class UserSkillVectorHistoryPoint(BaseModel):
 
 
 class TailorPreviewIn(BaseModel):
-    user_id: str
+    user_id: str | None = None
     job_id: str | None = Field(default=None, description="Job ingest id")
     job_text: str | None = Field(default=None, description="Optional job text if job_id not provided")
     resume_snapshot_id: str | None = Field(default=None, description="Optional resume snapshot to use as the tailoring template")

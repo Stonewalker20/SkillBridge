@@ -59,6 +59,14 @@ def now_utc():
     return datetime.now(timezone.utc)
 
 
+def _scoped_user_id(user: dict, requested_user_id: str | None = None) -> str:
+    effective_user_id = oid_str(user["_id"])
+    candidate = str(requested_user_id or "").strip()
+    if candidate and candidate != effective_user_id:
+        raise HTTPException(status_code=403, detail="Forbidden for requested user_id")
+    return effective_user_id
+
+
 def _serialize_ai_preferences(user_doc: dict | None) -> AIPreferencesOut:
     prefs = normalize_ai_preferences((user_doc or {}).get("ai_preferences"))
     return AIPreferencesOut(
@@ -259,7 +267,6 @@ def _build_user_vector_source_text(
     confirmed_skill_names = [name for name in _dedupe_preserve_order(confirmed_skill_names) if name]
 
     evidence_items = [item for item in items if str(item.get("_source_collection") or "") == "evidence"]
-    portfolio_items = [item for item in items if str(item.get("_source_collection") or "") == "portfolio_items"]
 
     sections: list[str] = []
     if confirmed_skill_names:
@@ -275,7 +282,7 @@ def _build_user_vector_source_text(
     return source_text, {
         "confirmed_skill_count": len(confirmed_skill_names),
         "evidence_item_count": len(evidence_items),
-        "portfolio_item_count": len(portfolio_items),
+        "portfolio_item_count": 0,
     }
 
 
@@ -308,7 +315,7 @@ async def _compute_and_store_user_skill_vector(db, user_id: str, ai_preferences:
         {
             "user_id": to_object_id(user_id),
             "score": round(min(100.0, len(vector) * 5.0), 2),
-            "label": f"{stats['confirmed_skill_count']} skills / {stats['evidence_item_count']} evidence / {stats['portfolio_item_count']} portfolio",
+            "label": f"{stats['confirmed_skill_count']} skills / {stats['evidence_item_count']} evidence",
             "updated_at": doc["updated_at"],
         }
     )
@@ -364,9 +371,7 @@ def _match_skills(job_text: str, skills: Iterable[dict]) -> list[ExtractedSkill]
 
 async def _load_user_items(db, user_id: str) -> list[dict]:
     user_filter = ref_query("user_id", user_id)
-    # prefer unified portfolio_items
-    items = await db["portfolio_items"].find(user_filter).to_list(length=2000)
-    has_portfolio_items = bool(items)
+    items: list[dict] = []
     evidence_docs = await db["evidence"].find(user_filter).sort("updated_at", -1).to_list(length=1000)
     for evidence in evidence_docs:
         items.append(
@@ -374,33 +379,17 @@ async def _load_user_items(db, user_id: str) -> list[dict]:
                 "_id": evidence["_id"],
                 "type": f"evidence:{evidence.get('type', 'other')}",
                 "title": evidence.get("title", "") or "Evidence",
-                "org": None,
-                "summary": evidence.get("text_excerpt") or "",
-                "bullets": [],
-                "links": [evidence.get("source")] if evidence.get("source") else [],
+                "org": evidence.get("org"),
+                "summary": evidence.get("summary") or evidence.get("text_excerpt") or "",
+                "bullets": evidence.get("bullets", []) or [],
+                "links": evidence.get("links", []) or ([evidence.get("source")] if evidence.get("source") else []),
                 "skill_ids": evidence.get("skill_ids", []) or [],
-                "priority": 1,
+                "priority": evidence.get("priority", 1),
                 "updated_at": evidence.get("updated_at"),
                 "created_at": evidence.get("created_at"),
+                "_source_collection": "evidence",
             }
         )
-    # fallback: projects as items (if you haven't migrated yet)
-    if not has_portfolio_items:
-        projs = await db["projects"].find(user_filter).to_list(length=500)
-        for p in projs:
-            items.append({
-                "_id": p["_id"],
-                "type": "project",
-                "title": p.get("title", ""),
-                "org": None,
-                "summary": p.get("description"),
-                "bullets": [],
-                "links": [],
-                "skill_ids": [],
-                "priority": 0,
-                "updated_at": p.get("updated_at"),
-                "created_at": p.get("created_at"),
-            })
     return items
 
 def _score_item(item: dict, job_skill_ids: set[str], keywords: set[str]) -> float:
@@ -1388,15 +1377,16 @@ def _render_plain_text(sections: list[ResumeSection]) -> str:
     return "\n".join(lines).strip() + "\n"
 
 @router.post("/job/ingest", response_model=JobIngestOut)
-async def ingest_job(payload: JobIngestIn):
+async def ingest_job(payload: JobIngestIn, user=Depends(require_user)):
     db = get_db()
+    user_id = _scoped_user_id(user, payload.user_id)
     skills = await _load_skill_catalog(db)
     extracted = _match_skills(payload.text, skills)
     keywords = _tokenize_keywords(payload.text, extracted)
 
     now = now_utc()
     doc = payload.model_dump()
-    doc["user_id"] = to_object_id(payload.user_id)
+    doc["user_id"] = to_object_id(user_id)
     doc["extracted_skills"] = [e.model_dump() for e in extracted[:200]]
     doc["keywords"] = keywords
     doc["created_at"] = now
@@ -1409,7 +1399,7 @@ async def ingest_job(payload: JobIngestIn):
 
     return JobIngestOut(
         id=oid_str(res.inserted_id),
-        user_id=payload.user_id,
+        user_id=user_id,
         title=payload.title,
         company=payload.company,
         location=payload.location,
@@ -1420,7 +1410,7 @@ async def ingest_job(payload: JobIngestIn):
     )
 
 @router.post("/match", response_model=JobMatchOut)
-async def match_job(payload: dict):
+async def match_job(payload: dict, user=Depends(require_user)):
     """
     Expects:
     {
@@ -1429,7 +1419,8 @@ async def match_job(payload: dict):
     }
     """
     db = get_db()
-    user_doc = await db["users"].find_one(ref_query("_id", payload.get("user_id")), {"ai_preferences": 1})
+    user_id = _scoped_user_id(user, payload.get("user_id"))
+    user_doc = await db["users"].find_one(ref_query("_id", user_id), {"ai_preferences": 1})
     ai_preferences = normalize_ai_preferences((user_doc or {}).get("ai_preferences"))
 
     try:
@@ -1437,7 +1428,7 @@ async def match_job(payload: dict):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid job_id")
 
-    job_doc = await db["job_ingests"].find_one({"_id": job_oid, **ref_query("user_id", payload["user_id"])})
+    job_doc = await db["job_ingests"].find_one({"_id": job_oid, **ref_query("user_id", user_id)})
     if not job_doc:
         raise HTTPException(status_code=404, detail="Job ingest not found for user_id")
 
@@ -1457,18 +1448,18 @@ async def match_job(payload: dict):
     requested_resume_snapshot_id = str(payload.get("resume_snapshot_id") or "").strip() or None
     raw_extracted_skill_ids = _dedupe_preserve_order(str(e.get("skill_id")) for e in extracted if e.get("skill_id"))
 
-    conf = await _load_profile_confirmation(db, payload["user_id"])
+    conf = await _load_profile_confirmation(db, user_id)
     user_skill_ids = {
         str(entry.get("skill_id"))
         for entry in (conf or {}).get("confirmed", [])
         if entry.get("skill_id") is not None
     }
-    items = await _load_user_items(db, payload["user_id"])
+    items = await _load_user_items(db, user_id)
     # Pull the most relevant evidence/resume chunks first, then let the existing job
     # analysis logic incorporate that grounded context into semantic examples and item hits.
     retrieved_context = await retrieve_rag_context(
         db,
-        user_id=payload["user_id"],
+        user_id=user_id,
         query_text=job_doc.get("text", ""),
         preferences=ai_preferences,
         limit=6,
@@ -1624,7 +1615,7 @@ async def match_job(payload: dict):
         semantic_examples = []
 
     if job_doc.get("text"):
-        user_vector_doc = await _compute_and_store_user_skill_vector(db, payload["user_id"], ai_preferences=ai_preferences)
+        user_vector_doc = await _compute_and_store_user_skill_vector(db, user_id, ai_preferences=ai_preferences)
         user_vector = list(user_vector_doc.get("vector") or [])
         job_vectors, _provider = await embed_texts([job_doc.get("text", "")], preferences=ai_preferences)
         if user_vector and job_vectors and len(user_vector) == len(job_vectors[0]):
@@ -1685,7 +1676,7 @@ async def match_job(payload: dict):
         MatchScoreBreakdown(
             label="Personal skill vector",
             score=personal_skill_vector_score,
-            detail="Embedding similarity between the job posting and your aggregated user profile built from confirmed skills, evidence, portfolio items, and resume context",
+            detail="Embedding similarity between the job posting and your aggregated user profile built from confirmed skills, evidence, and resume context",
         ),
     ]
 
@@ -1713,7 +1704,7 @@ async def match_job(payload: dict):
         "Semantic alignment estimates how closely your saved evidence, projects, and confirmed skills resemble the responsibilities and tools in the job posting, even when the wording is different."
     )
     personal_skill_vector_explanation = (
-        "Your personal skill vector is a single embedding built from confirmed skills, evidence, portfolio items, and resume context, then compared directly against the job vector."
+        "Your personal skill vector is a single embedding built from confirmed skills, evidence, and resume context, then compared directly against the job vector."
     )
     analysis_summary_parts = [
         f"{confidence_label} fit based on {len(matched_ids)} matched skills out of {len(extracted_skill_ids)} extracted job skills."
@@ -1786,7 +1777,7 @@ async def match_job(payload: dict):
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid history_id")
 
-        existing_history = await db["job_match_runs"].find_one({"_id": history_oid, **ref_query("user_id", payload["user_id"])}, {"job_id": 1})
+        existing_history = await db["job_match_runs"].find_one({"_id": history_oid, **ref_query("user_id", user_id)}, {"job_id": 1})
         if not existing_history:
             raise HTTPException(status_code=404, detail="Saved job analysis not found")
         if oid_str(existing_history.get("job_id")) != oid_str(job_doc.get("_id")):
@@ -1810,7 +1801,7 @@ async def match_job(payload: dict):
         return result
 
     history_doc = {
-        "user_id": to_object_id(payload["user_id"]),
+        "user_id": to_object_id(user_id),
         "job_id": job_oid,
         "title": job_doc.get("title"),
         "company": job_doc.get("company"),
@@ -1826,9 +1817,10 @@ async def match_job(payload: dict):
     return result
 
 @router.post("/preview", response_model=TailoredResumeOut)
-async def preview_tailored_resume(payload: TailorPreviewIn):
+async def preview_tailored_resume(payload: TailorPreviewIn, user=Depends(require_user)):
     db = get_db()
-    user_doc = await db["users"].find_one(ref_query("_id", payload.user_id), {"username": 1, "email": 1, "ai_preferences": 1})
+    user_id = _scoped_user_id(user, payload.user_id)
+    user_doc = await db["users"].find_one(ref_query("_id", user_id), {"username": 1, "email": 1, "ai_preferences": 1})
     ai_preferences = normalize_ai_preferences((user_doc or {}).get("ai_preferences"))
 
     job_text = payload.job_text
@@ -1843,7 +1835,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid job_id")
 
-        job_doc = await db["job_ingests"].find_one({"_id": job_oid, **ref_query("user_id", payload.user_id)})
+        job_doc = await db["job_ingests"].find_one({"_id": job_oid, **ref_query("user_id", user_id)})
         if not job_doc:
             raise HTTPException(status_code=404, detail="Job ingest not found for user_id")
         job_text = job_doc.get("text", "")
@@ -1871,12 +1863,12 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
     keyword_set = set(keywords)
 
     # load user portfolio items and user evidence-backed items
-    items = await _load_user_items(db, payload.user_id)
+    items = await _load_user_items(db, user_id)
     # Tailoring works better when item ranking can see which evidence chunks were
     # actually closest to the target role, not just which items happened to share tags.
     retrieved_context = await retrieve_rag_context(
         db,
-        user_id=payload.user_id,
+        user_id=user_id,
         query_text=job_text or "",
         preferences=ai_preferences,
         limit=8,
@@ -1895,7 +1887,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
 
     # Select skills: prioritize skills that appear in both job and user's confirmed skills if available
     confirmed_skill_ids: set[str] = set()
-    conf = await db["resume_skill_confirmations"].find_one({"user_id": {"$in": ref_values(payload.user_id)}}, sort=[("created_at", -1)])
+    conf = await db["resume_skill_confirmations"].find_one({"user_id": {"$in": ref_values(user_id)}}, sort=[("created_at", -1)])
     if conf:
         for c in conf.get("confirmed", []) or []:
             sid = c.get("skill_id")
@@ -1923,7 +1915,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
     company = (job_doc.get("company") or "").strip() if job_id else ""
     target_label = " ".join(part for part in [job_title, f"at {company}" if company else ""] if part).strip() or "this role"
 
-    resume_snapshot = await _load_resume_template_snapshot(db, payload.user_id, payload.resume_snapshot_id)
+    resume_snapshot = await _load_resume_template_snapshot(db, user_id, payload.resume_snapshot_id)
     if resume_snapshot:
         resume_raw_text = str(resume_snapshot.get("raw_text") or "")
         template_sections = _parse_resume_sections(resume_raw_text)
@@ -1971,7 +1963,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
     # Store tailored resume record
     now = now_utc()
     record = {
-        "user_id": to_object_id(payload.user_id),
+        "user_id": to_object_id(user_id),
         "job_id": job_id,
         "resume_snapshot_id": resume_snapshot.get("_id") if resume_snapshot else None,
         "template_source": template_source,
@@ -1989,7 +1981,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
 
     if job_id and ObjectId.is_valid(job_id):
         latest_history = await db["job_match_runs"].find_one(
-            {"user_id": {"$in": ref_values(payload.user_id)}, "job_id": ObjectId(job_id)},
+            {"user_id": {"$in": ref_values(user_id)}, "job_id": ObjectId(job_id)},
             sort=[("created_at", -1)],
         )
         if latest_history:
@@ -2009,12 +2001,13 @@ async def preview_tailored_resume(payload: TailorPreviewIn):
 
 
 @router.get("/resumes", response_model=list[TailoredResumeListEntryOut])
-async def list_tailored_resumes(user_id: str, limit: int = 100):
+async def list_tailored_resumes(user_id: str | None = None, limit: int = 100, user=Depends(require_user)):
     db = get_db()
+    scoped_user_id = _scoped_user_id(user, user_id)
     capped_limit = max(1, min(limit, 200))
     docs = await (
         db["tailored_resumes"]
-        .find(ref_query("user_id", user_id))
+        .find(ref_query("user_id", scoped_user_id))
         .sort("created_at", -1)
         .limit(capped_limit)
         .to_list(length=capped_limit)
@@ -2041,34 +2034,36 @@ async def list_tailored_resumes(user_id: str, limit: int = 100):
 
 
 @router.delete("/resumes/{tailored_id}")
-async def delete_tailored_resume(tailored_id: str, user_id: str):
+async def delete_tailored_resume(tailored_id: str, user_id: str | None = None, user=Depends(require_user)):
     db = get_db()
+    scoped_user_id = _scoped_user_id(user, user_id)
     try:
         oid = ObjectId(tailored_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid tailored_id")
 
-    doc = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", user_id)})
+    doc = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", scoped_user_id)})
     if not doc:
         raise HTTPException(status_code=404, detail="Tailored resume not found")
 
     await db["tailored_resumes"].delete_one({"_id": oid})
     await db["job_match_runs"].update_many(
-        {"user_id": {"$in": ref_values(user_id)}, "tailored_resume_id": oid},
+        {"user_id": {"$in": ref_values(scoped_user_id)}, "tailored_resume_id": oid},
         {"$unset": {"tailored_resume_id": ""}, "$set": {"updated_at": now_utc()}},
     )
     return {"ok": True, "id": tailored_id}
 
 
 @router.get("/resumes/{tailored_id}", response_model=TailoredResumeDetailOut)
-async def get_tailored_resume_detail(tailored_id: str, user_id: str):
+async def get_tailored_resume_detail(tailored_id: str, user_id: str | None = None, user=Depends(require_user)):
     db = get_db()
+    scoped_user_id = _scoped_user_id(user, user_id)
     try:
         oid = ObjectId(tailored_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid tailored_id")
 
-    doc = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", user_id)})
+    doc = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", scoped_user_id)})
     if not doc:
         raise HTTPException(status_code=404, detail="Tailored resume not found")
 
@@ -2082,25 +2077,27 @@ async def get_tailored_resume_detail(tailored_id: str, user_id: str):
     return _serialize_tailored_resume_detail(doc, job_doc)
 
 @router.get("/history", response_model=list[JobMatchHistoryEntryOut])
-async def list_job_match_history(user_id: str, limit: int = 12):
+async def list_job_match_history(user_id: str | None = None, limit: int = 12, user=Depends(require_user)):
     db = get_db()
-    cursor = db["job_match_runs"].find(ref_query("user_id", user_id)).sort("created_at", -1).limit(max(1, min(limit, 30)))
+    scoped_user_id = _scoped_user_id(user, user_id)
+    cursor = db["job_match_runs"].find(ref_query("user_id", scoped_user_id)).sort("created_at", -1).limit(max(1, min(limit, 30)))
     docs = await cursor.to_list(length=max(1, min(limit, 30)))
     return [_serialize_history(doc) for doc in docs]
 
 @router.get("/history/{history_id}", response_model=JobMatchHistoryDetailOut | JobMatchCompareOut)
-async def get_job_match_history_detail(history_id: str, user_id: str, left_id: str | None = None, right_id: str | None = None):
+async def get_job_match_history_detail(history_id: str, user_id: str | None = None, left_id: str | None = None, right_id: str | None = None, user=Depends(require_user)):
     db = get_db()
+    scoped_user_id = _scoped_user_id(user, user_id)
     if history_id == "compare":
         if not left_id or not right_id:
             raise HTTPException(status_code=400, detail="left_id and right_id are required")
-        return await compare_job_match_history(user_id=user_id, left_id=left_id, right_id=right_id)
+        return await compare_job_match_history(user_id=scoped_user_id, left_id=left_id, right_id=right_id, user=user)
     try:
         oid = ObjectId(history_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid history id")
 
-    doc = await db["job_match_runs"].find_one({"_id": oid, **ref_query("user_id", user_id)})
+    doc = await db["job_match_runs"].find_one({"_id": oid, **ref_query("user_id", scoped_user_id)})
     if not doc:
         raise HTTPException(status_code=404, detail="History entry not found")
 
@@ -2108,7 +2105,7 @@ async def get_job_match_history_detail(history_id: str, user_id: str, left_id: s
     job_text = None
     job_id = doc.get("job_id")
     if job_id is not None and ObjectId.is_valid(str(job_id)):
-        job_doc = await db["job_ingests"].find_one({"_id": ObjectId(str(job_id)), **ref_query("user_id", user_id)})
+        job_doc = await db["job_ingests"].find_one({"_id": ObjectId(str(job_id)), **ref_query("user_id", scoped_user_id)})
         if job_doc:
             job_text = job_doc.get("text")
 
@@ -2121,14 +2118,15 @@ async def get_job_match_history_detail(history_id: str, user_id: str, left_id: s
     )
 
 @router.delete("/history/{history_id}")
-async def delete_job_match_history(history_id: str, user_id: str):
+async def delete_job_match_history(history_id: str, user_id: str | None = None, user=Depends(require_user)):
     db = get_db()
+    scoped_user_id = _scoped_user_id(user, user_id)
     try:
         oid = ObjectId(history_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid history id")
 
-    doc = await db["job_match_runs"].find_one({"_id": oid, **ref_query("user_id", user_id)}, {"title": 1, "company": 1})
+    doc = await db["job_match_runs"].find_one({"_id": oid, **ref_query("user_id", scoped_user_id)}, {"title": 1, "company": 1})
     if not doc:
         raise HTTPException(status_code=404, detail="History entry not found")
 
@@ -2140,8 +2138,9 @@ async def delete_job_match_history(history_id: str, user_id: str):
     }
 
 @router.get("/history/compare", response_model=JobMatchCompareOut)
-async def compare_job_match_history(user_id: str, left_id: str, right_id: str):
+async def compare_job_match_history(user_id: str | None = None, left_id: str = "", right_id: str = "", user=Depends(require_user)):
     db = get_db()
+    scoped_user_id = _scoped_user_id(user, user_id)
     try:
         left_oid = ObjectId(left_id)
         right_oid = ObjectId(right_id)
@@ -2149,7 +2148,7 @@ async def compare_job_match_history(user_id: str, left_id: str, right_id: str):
         raise HTTPException(status_code=400, detail="Invalid history id")
 
     docs = await db["job_match_runs"].find(
-        {"_id": {"$in": [left_oid, right_oid]}, **ref_query("user_id", user_id)}
+        {"_id": {"$in": [left_oid, right_oid]}, **ref_query("user_id", scoped_user_id)}
     ).to_list(length=2)
     by_id = {oid_str(doc["_id"]): doc for doc in docs}
     if left_id not in by_id or right_id not in by_id:

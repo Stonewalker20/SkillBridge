@@ -110,6 +110,7 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
 
     ingest = client.post(
         "/tailor/job/ingest",
+        headers=headers,
         json={
             "user_id": user_id,
             "title": "ML Engineer",
@@ -121,7 +122,7 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     assert ingest.status_code == 200
     job_id = ingest.json()["id"]
 
-    match = client.post("/tailor/match", json={"user_id": user_id, "job_id": job_id})
+    match = client.post("/tailor/match", headers=headers, json={"user_id": user_id, "job_id": job_id})
     assert match.status_code == 200
     history_id = match.json()["history_id"]
     assert "gap_reasoning_summary" in match.json()
@@ -143,7 +144,7 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     assert isinstance(dashboard_payload["portfolio_to_job_analytics"]["matched_skill_rate_pct"], float)
     assert dashboard_payload["recent_match_trend"]
 
-    preview = client.post("/tailor/preview", json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id})
+    preview = client.post("/tailor/preview", headers=headers, json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id})
     assert preview.status_code == 200
     tailored_id = preview.json()["id"]
     assert preview.json()["retrieved_context"]
@@ -152,21 +153,21 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     assert rag_search.status_code == 200
     assert rag_search.json()
 
-    resumes = client.get("/tailor/resumes", params={"user_id": user_id})
+    resumes = client.get("/tailor/resumes", headers=headers, params={"user_id": user_id})
     assert resumes.status_code == 200
     assert any(item["id"] == tailored_id for item in resumes.json())
 
-    resume_detail = client.get(f"/tailor/resumes/{tailored_id}", params={"user_id": user_id})
+    resume_detail = client.get(f"/tailor/resumes/{tailored_id}", headers=headers, params={"user_id": user_id})
     assert resume_detail.status_code == 200
 
-    history = client.get("/tailor/history", params={"user_id": user_id})
+    history = client.get("/tailor/history", headers=headers, params={"user_id": user_id})
     assert history.status_code == 200
     assert any(item["id"] == history_id for item in history.json())
 
-    history_detail = client.get(f"/tailor/history/{history_id}", params={"user_id": user_id})
+    history_detail = client.get(f"/tailor/history/{history_id}", headers=headers, params={"user_id": user_id})
     assert history_detail.status_code == 200
 
-    compare = client.get("/tailor/history/compare", params={"user_id": user_id, "left_id": history_id, "right_id": history_id})
+    compare = client.get("/tailor/history/compare", headers=headers, params={"user_id": user_id, "left_id": history_id, "right_id": history_id})
     assert compare.status_code == 200
 
     settings = client.get("/tailor/settings/status")
@@ -182,10 +183,10 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     pdf = client.get(f"/tailor/{tailored_id}/export/pdf")
     assert pdf.status_code == 200
 
-    delete_history = client.delete(f"/tailor/history/{history_id}", params={"user_id": user_id})
+    delete_history = client.delete(f"/tailor/history/{history_id}", headers=headers, params={"user_id": user_id})
     assert delete_history.status_code == 200
 
-    delete_resume = client.delete(f"/tailor/resumes/{tailored_id}", params={"user_id": user_id})
+    delete_resume = client.delete(f"/tailor/resumes/{tailored_id}", headers=headers, params={"user_id": user_id})
     assert delete_resume.status_code == 200
 
 
@@ -258,6 +259,7 @@ def test_tailored_resume_uses_user_resume_template_and_ai_preferences(test_conte
 
     job = client.post(
         "/tailor/job/ingest",
+        headers=headers,
         json={
             "user_id": user_id,
             "title": "Analytics Engineer",
@@ -271,6 +273,7 @@ def test_tailored_resume_uses_user_resume_template_and_ai_preferences(test_conte
 
     preview = client.post(
         "/tailor/preview",
+        headers=headers,
         json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id},
     )
     assert preview.status_code == 200

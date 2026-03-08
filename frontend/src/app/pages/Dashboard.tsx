@@ -12,7 +12,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 interface DashboardSummary {
   totalSkills: number;
-  portfolioItems: number;
+  evidenceCount: number;
   averageMatchScore: number;
   tailoredResumes: number;
   recentActivity: Array<{
@@ -38,7 +38,7 @@ interface DashboardSummary {
 
 const EMPTY_SUMMARY: DashboardSummary = {
   totalSkills: 0,
-  portfolioItems: 0,
+  evidenceCount: 0,
   averageMatchScore: 0,
   tailoredResumes: 0,
   recentActivity: [],
@@ -180,7 +180,7 @@ export function Dashboard() {
 
         const normalizedBase: DashboardSummary = {
           totalSkills: safeNum(base?.totalSkills ?? base?.total_skills ?? 0),
-          portfolioItems: safeNum(base?.portfolioItems ?? base?.portfolio_items ?? 0),
+          evidenceCount: safeNum(base?.evidenceCount ?? base?.evidence_count ?? base?.totals?.evidence ?? 0),
           averageMatchScore: safeNum(base?.averageMatchScore ?? base?.average_match_score ?? 0),
           tailoredResumes: safeNum(base?.tailoredResumes ?? base?.tailored_resumes ?? 0),
           recentActivity: Array.isArray(base?.recentActivity)
@@ -280,8 +280,8 @@ export function Dashboard() {
         bgColor: "bg-blue-50",
       },
       {
-        name: "Portfolio Items",
-        value: summary.portfolioItems,
+        name: "Evidence",
+        value: summary.evidenceCount,
         icon: FolderOpen,
         color: "text-[#0D9488]",
         bgColor: "bg-teal-50",
@@ -319,9 +319,9 @@ export function Dashboard() {
   const portfolioVisualMetrics = useMemo(
     () => [
       {
-        label: "Portfolio Coverage",
+        label: "Evidence Coverage",
         value: `${Math.round(summary.portfolioToJobAnalytics.job_skill_coverage_pct)}%`,
-        detail: `${summary.portfolioToJobAnalytics.portfolio_skill_count} portfolio skills across ${summary.portfolioToJobAnalytics.job_skill_count} recent job skills`,
+        detail: `${summary.portfolioToJobAnalytics.portfolio_skill_count} evidence-linked skills across ${summary.portfolioToJobAnalytics.job_skill_count} recent job skills`,
       },
       {
         label: "Matched Skills",
@@ -334,9 +334,9 @@ export function Dashboard() {
         detail: "Matched skills already supported by evidence",
       },
       {
-        label: "Portfolio-Backed",
+        label: "Evidence-Mapped",
         value: `${Math.round(summary.portfolioToJobAnalytics.portfolio_backed_match_pct)}%`,
-        detail: "Matched skills already represented in portfolio items",
+        detail: "Matched skills already represented in your saved evidence",
       },
     ],
     [summary.portfolioToJobAnalytics]
@@ -362,9 +362,9 @@ export function Dashboard() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
-        <div className="px-6 py-7 md:px-8">
+        <div className="px-6 py-6 md:px-8">
           <div className="max-w-2xl">
             <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
               Career Overview
@@ -379,17 +379,17 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {stats.map((stat) => (
           <Card key={stat.name} className="border-slate-200 p-0 transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/80">
-            <Link to={stat.href ?? "/app"} className="block p-6">
-              <div className="flex items-center gap-4">
-                <div className={`rounded-2xl p-3 ${stat.bgColor}`}>
-                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
+            <Link to={stat.href ?? "/app"} className="block p-4">
+              <div className="flex items-center gap-3">
+                <div className={`rounded-2xl p-2.5 ${stat.bgColor}`}>
+                  <stat.icon className={`h-5 w-5 ${stat.color}`} />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-slate-300">{stat.name}</p>
-                  <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-slate-100">{stat.value}</p>
+                  <p className="mt-1 text-xl font-bold text-gray-900 dark:text-slate-100">{stat.value}</p>
                 </div>
               </div>
             </Link>
@@ -399,7 +399,7 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity */}
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Recent Activity</h3>
             <div className="flex items-center gap-2">
@@ -417,7 +417,7 @@ export function Dashboard() {
           {visibleRecentActivity.length === 0 ? (
             <div className="text-sm text-gray-500 dark:text-slate-400">No recent activity yet.</div>
           ) : (
-            <div className="max-h-[26rem] space-y-3 overflow-y-auto pr-1">
+            <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
               {visibleRecentActivity.map((activity) => (
                 <div
                   key={activity.id}
@@ -454,7 +454,7 @@ export function Dashboard() {
         </Card>
 
         {/* Top Skill Categories */}
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Top Skill Categories</h3>
             <div className="flex items-center gap-2">
@@ -468,7 +468,7 @@ export function Dashboard() {
           {summary.topSkillCategories.length === 0 ? (
             <div className="text-sm text-gray-500 dark:text-slate-400">No categories yet. Confirm skills to populate this chart.</div>
           ) : (
-            <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
+            <div className="max-h-[22rem] space-y-4 overflow-y-auto pr-1">
               {summary.topSkillCategories.map((category) => {
                 const denom = summary.topSkillCategories.reduce((acc, c) => acc + (c.count || 0), 0) || 1;
                 const pct = Math.min(100, Math.max(0, (category.count / denom) * 100));
@@ -490,11 +490,11 @@ export function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-5 flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Portfolio to Job Match</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Evidence to Job Match</h3>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
                 How strongly your saved work history supports the skills showing up in recent job analyses.
               </p>
@@ -503,17 +503,17 @@ export function Dashboard() {
               <Link to="/app/analytics/skills">Open analytics</Link>
             </Button>
           </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {portfolioVisualMetrics.map((metric) => (
-              <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
+              <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/60">
                 <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{metric.label}</p>
-                <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">{metric.value}</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">{metric.value}</p>
                 <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{metric.detail}</p>
               </div>
             ))}
           </div>
           {summary.recentMatchTrend.length > 0 ? (
-            <div className="mt-6 h-64 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
+            <div className="mt-5 h-52 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={summary.recentMatchTrend} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
@@ -535,19 +535,19 @@ export function Dashboard() {
           )}
         </Card>
 
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-5">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Portfolio Signal Mix</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Evidence Signal Mix</h3>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              The types of portfolio entries currently contributing to your profile depth.
+              The types of evidence currently contributing to your profile depth.
             </p>
           </div>
           {summary.portfolioTypeDistribution.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
-              Add portfolio items to start visualizing how your work history is distributed.
+              Add evidence to start visualizing how your work history is distributed.
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="max-h-[22rem] space-y-4 overflow-y-auto pr-1">
               {summary.portfolioTypeDistribution.map((entry) => {
                 const maxCount = Math.max(...summary.portfolioTypeDistribution.map((item) => item.count), 1);
                 const width = (entry.count / maxCount) * 100;

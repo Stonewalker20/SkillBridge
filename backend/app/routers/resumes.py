@@ -19,6 +19,14 @@ router = APIRouter()
 def now_utc():
     return datetime.now(timezone.utc)
 
+
+def _scoped_user_id(user: dict, requested_user_id: str | None = None) -> str:
+    effective_user_id = oid_str(user["_id"])
+    candidate = str(requested_user_id or "").strip()
+    if candidate and candidate != effective_user_id:
+        raise HTTPException(status_code=403, detail="user_id must match authenticated user")
+    return effective_user_id
+
 def extract_pdf_text(file_bytes: bytes) -> str:
     try:
         reader = PdfReader(io.BytesIO(file_bytes))
@@ -38,8 +46,7 @@ async def ingest_resume_text(payload: ResumeSnapshotIn, user=Depends(require_use
     raw_text = payload.text.strip()
     if len(raw_text) < 10:
         raise HTTPException(status_code=400, detail="Resume text too short.")
-    if oid_str(payload.user_id) != oid_str(user.get("_id")):
-        raise HTTPException(status_code=403, detail="user_id must match authenticated user")
+    _scoped_user_id(user, oid_str(payload.user_id))
 
     doc = {
         "user_id": user["_id"],
@@ -69,8 +76,7 @@ async def ingest_resume_text(payload: ResumeSnapshotIn, user=Depends(require_use
 async def ingest_resume_pdf(user_id: str = Form(...), file: UploadFile = File(...), user=Depends(require_user)):
     db = get_db()
     ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
-    if oid_str(user_id) != oid_str(user.get("_id")):
-        raise HTTPException(status_code=403, detail="user_id must match authenticated user")
+    user_id = _scoped_user_id(user, user_id)
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
     b = await file.read()
@@ -106,10 +112,9 @@ async def ingest_resume_pdf(user_id: str = Form(...), file: UploadFile = File(..
 
 
 @router.get("/", response_model=list[ResumeSnapshotListEntryOut])
-async def list_resume_snapshots(user_id: str, user=Depends(require_user)):
+async def list_resume_snapshots(user_id: str | None = None, user=Depends(require_user)):
     db = get_db()
-    if oid_str(user_id) != oid_str(user.get("_id")):
-        raise HTTPException(status_code=403, detail="user_id must match authenticated user")
+    user_id = _scoped_user_id(user, user_id)
     docs = await (
         db["resume_snapshots"]
         .find({"user_id": {"$in": ref_values(user_id)}})
@@ -132,10 +137,9 @@ async def list_resume_snapshots(user_id: str, user=Depends(require_user)):
 # Minimal implementation: converts confirmed skills into evidence records (type="resume") tied to user_id,
 # and optionally creates a "Resume: <date>" project to anchor evidence.
 @router.post("/{snapshot_id}/promote")
-async def promote_confirmed_skills(snapshot_id: str, user_id: str = Form(...), user=Depends(require_user)):
+async def promote_confirmed_skills(snapshot_id: str, user_id: str | None = Form(None), user=Depends(require_user)):
     db = get_db()
-    if oid_str(user_id) != oid_str(user.get("_id")):
-        raise HTTPException(status_code=403, detail="user_id must match authenticated user")
+    user_id = _scoped_user_id(user, user_id)
     try:
         snap_oid = ObjectId(snapshot_id)
     except Exception:
