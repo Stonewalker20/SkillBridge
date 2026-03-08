@@ -17,6 +17,13 @@ def _score_percent(numerator: int, denominator: int) -> float:
     return round((numerator / denominator) * 100.0, 2)
 
 
+def _safe_count(value) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 # UC 1.4 – Dashboard Summary (user-specific)
 @router.get("/summary")
 async def dashboard_summary(
@@ -196,11 +203,11 @@ async def dashboard_summary(
     }
 
     recent_job_skill_ids: set[str] = set()
-    matched_recent_skill_ids: set[str] = set()
-    evidence_backed_recent_skill_ids: set[str] = set()
-    portfolio_backed_recent_skill_ids: set[str] = set()
     recent_match_trend: list[dict] = []
     recent_job_ids: list[ObjectId] = []
+    total_recent_job_skill_count = 0
+    total_recent_matched_skill_count = 0
+    total_recent_evidence_backed_skill_count = 0
 
     for run in recent_match_runs:
         job_id = run.get("job_id")
@@ -231,10 +238,27 @@ async def dashboard_summary(
             for skill_id in (analysis.get("matched_skill_ids") or [])
             if str(skill_id).strip()
         }
+        matched_names = {
+            str(skill_name).strip()
+            for skill_name in (analysis.get("matched_skills") or [])
+            if str(skill_name).strip()
+        }
+        extracted_count = len(extracted_ids) or _safe_count(analysis.get("extracted_skill_count"))
+        matched_count = (
+            len(matched_ids)
+            or _safe_count(analysis.get("matched_skill_count"))
+            or len(matched_names)
+        )
+        evidence_backed_count = len(matched_ids & evidence_skill_ids)
+        if matched_count > 0 and evidence_backed_count == 0:
+            evidence_backed_count = min(
+                matched_count,
+                _safe_count(analysis.get("evidence_aligned_count")),
+            )
         recent_job_skill_ids.update(extracted_ids)
-        matched_recent_skill_ids.update(matched_ids)
-        evidence_backed_recent_skill_ids.update(matched_ids & evidence_skill_ids)
-        portfolio_backed_recent_skill_ids.update(matched_ids & structured_evidence_skill_ids)
+        total_recent_job_skill_count += extracted_count
+        total_recent_matched_skill_count += matched_count
+        total_recent_evidence_backed_skill_count += evidence_backed_count
         recent_match_trend.append(
             {
                 "label": f"Run {index}",
@@ -245,9 +269,9 @@ async def dashboard_summary(
 
     portfolio_to_job_analytics = {
         "job_skill_coverage_pct": _score_percent(len(portfolio_skill_ids & recent_job_skill_ids), len(recent_job_skill_ids)),
-        "matched_skill_rate_pct": _score_percent(len(matched_recent_skill_ids), len(recent_job_skill_ids)),
-        "evidence_backed_match_pct": _score_percent(len(evidence_backed_recent_skill_ids), len(matched_recent_skill_ids)),
-        "portfolio_backed_match_pct": _score_percent(len(portfolio_backed_recent_skill_ids), len(matched_recent_skill_ids)),
+        "matched_skill_rate_pct": _score_percent(total_recent_matched_skill_count, total_recent_job_skill_count),
+        "evidence_backed_match_pct": _score_percent(total_recent_evidence_backed_skill_count, total_recent_matched_skill_count),
+        "portfolio_backed_match_pct": _score_percent(total_recent_evidence_backed_skill_count, total_recent_matched_skill_count),
         "portfolio_skill_count": len(portfolio_skill_ids),
         "job_skill_count": len(recent_job_skill_ids),
     }

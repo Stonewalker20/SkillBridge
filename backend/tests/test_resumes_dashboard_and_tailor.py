@@ -142,7 +142,18 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     assert refreshed_summary.status_code == 200
     dashboard_payload = refreshed_summary.json()
     assert isinstance(dashboard_payload["portfolio_to_job_analytics"]["matched_skill_rate_pct"], float)
+    assert dashboard_payload["portfolio_to_job_analytics"]["matched_skill_rate_pct"] > 0
     assert dashboard_payload["recent_match_trend"]
+
+    # Older saved runs may have counts persisted without the full matched_skill_ids array.
+    # The dashboard metric should still be driven by the stored counts in that case.
+    job_match_docs = test_context["db"]["job_match_runs"].docs
+    assert job_match_docs
+    job_match_docs[0]["analysis"]["matched_skill_ids"] = []
+
+    fallback_summary = client.get("/dashboard/summary", headers=headers)
+    assert fallback_summary.status_code == 200
+    assert fallback_summary.json()["portfolio_to_job_analytics"]["matched_skill_rate_pct"] > 0
 
     preview = client.post("/tailor/preview", headers=headers, json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id})
     assert preview.status_code == 200
