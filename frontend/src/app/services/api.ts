@@ -57,7 +57,6 @@ async function request<T>(
   });
 
   if (response.status === 401) {
-    clearToken();
     if (options.allow401) return options.returnOn401 as T;
   }
 
@@ -154,9 +153,9 @@ function normalizeEvidence(raw: any): Evidence {
   };
 }
 
-export type AuthUser = { id: string; email: string; username: string; role: string };
+export type AuthUser = { id: string; email: string; username: string; role: string; avatar_url?: string | null; avatar_preset?: string | null };
 export type AuthOut = { token: string; user: AuthUser };
-export type UserPatch = { email?: string; username?: string; password?: string };
+export type UserPatch = { email?: string; username?: string; password?: string; avatar_preset?: string | null };
 
 export type Skill = {
   id: string;
@@ -245,6 +244,89 @@ export type EvidenceAnalysis = {
   }>;
 };
 
+export type PortfolioToJobAnalytics = {
+  job_skill_coverage_pct: number;
+  matched_skill_rate_pct: number;
+  evidence_backed_match_pct: number;
+  portfolio_backed_match_pct: number;
+  portfolio_skill_count: number;
+  job_skill_count: number;
+};
+
+export type SkillTrajectoryCluster = {
+  category: string;
+  skill_count: number;
+  evidence_backed_count: number;
+  average_proficiency: number;
+  skill_names: string[];
+};
+
+export type SkillTrajectoryPath = {
+  role_id: string;
+  role_name: string;
+  score: number;
+  confidence_label: string;
+  cluster_category: string;
+  personal_vector_alignment_score: number;
+  progress_bonus_score: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  top_role_skills: string[];
+  reasoning: string;
+  next_steps: string[];
+};
+
+export type LearningPathRecommendation = {
+  phase: string;
+  title: string;
+  target_skills: string[];
+  rationale: string;
+  evidence_action: string;
+};
+
+export type LearningPathProgress = {
+  skill_name: string;
+  status: "not_started" | "in_progress" | "completed";
+  updated_at?: string;
+};
+
+export type LearningPathSkillDetail = {
+  skill_name: string;
+  skill_id?: string | null;
+  confirmed: boolean;
+  evidence_support_count: number;
+  graph_neighbors: string[];
+  related_career_paths: string[];
+  recommended_projects: string[];
+  recommended_resources: Array<{ title: string; provider: string; url: string }>;
+  progress_status: "not_started" | "in_progress" | "completed";
+};
+
+export type CareerPathDetail = {
+  role_id: string;
+  role_name: string;
+  score: number;
+  confidence_label: string;
+  cluster_category: string;
+  personal_vector_alignment_score: number;
+  progress_bonus_score: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  top_role_skills: string[];
+  graph_neighbor_skills: string[];
+  recommended_skills_to_add: string[];
+  recommended_project_ideas: string[];
+  recommended_resources: Array<{ title: string; provider: string; url: string }>;
+  reasoning: string;
+};
+
+export type SkillTrajectoryOut = {
+  generated_at?: string;
+  clusters: SkillTrajectoryCluster[];
+  career_paths: SkillTrajectoryPath[];
+  learning_path: LearningPathRecommendation[];
+};
+
 export type EvidenceAnalysisBatch = {
   items: EvidenceAnalysis[];
   user_id: string;
@@ -270,7 +352,7 @@ export type ResumeSnapshotListEntry = {
 
 export type DashboardSummary = {
   totalSkills: number;
-  portfolioItems: number;
+  evidenceCount: number;
   averageMatchScore: number;
   tailoredResumes: number;
   recentActivity: Array<{
@@ -283,12 +365,45 @@ export type DashboardSummary = {
   topSkillCategories: Array<{ category: string; count: number }>;
 };
 
+export type RAGContextItem = {
+  source_type: string;
+  source_id: string;
+  title: string;
+  snippet: string;
+  score: number;
+  chunk_index?: number;
+};
+
+export type SkillGraphNode = {
+  skill_id: string;
+  name: string;
+  category?: string;
+  aliases?: string[];
+  distance: number;
+  node_type: "seed" | "neighbor";
+};
+
+export type SkillGraphEdge = {
+  source_skill_id: string;
+  target_skill_id: string;
+  relation_type: string;
+  edge_type: "explicit" | "semantic" | "evidence_cooccurrence" | "job_cooccurrence";
+  weight: number;
+};
+
+export type SkillGraph = {
+  root_skill_id: string;
+  nodes: SkillGraphNode[];
+  edges: SkillGraphEdge[];
+};
+
 export type JobMatchHistoryEntry = {
   id: string;
   job_id: string;
   title?: string | null;
   company?: string | null;
   location?: string | null;
+  source_history_id?: string | null;
   match_score: number;
   semantic_alignment_score?: number;
   matched_skills?: string[];
@@ -332,6 +447,7 @@ export type TailoredResumeListEntry = {
 export type TailoredResumeDetail = TailoredResumeListEntry & {
   selected_skill_ids: string[];
   selected_item_ids: string[];
+  retrieved_context?: RAGContextItem[];
   sections: Array<{ title: string; lines: string[] }>;
   plain_text: string;
 };
@@ -355,6 +471,22 @@ export type AIPreferences = {
 
 export type AISettingsDetail = AISettingsStatus & {
   preferences: AIPreferences;
+};
+
+export type UserSkillVector = {
+  user_id: string;
+  embedding_dimensions: number;
+  confirmed_skill_count: number;
+  evidence_item_count: number;
+  portfolio_item_count: number;
+  source_preview: string;
+  updated_at?: string;
+};
+
+export type UserSkillVectorHistoryPoint = {
+  score: number;
+  label: string;
+  updated_at?: string;
 };
 
 export type AdminSummary = {
@@ -415,6 +547,11 @@ export const api = {
 
   me: () => request<AuthUser | null>("/auth/me", "GET", undefined, {}, { allow401: true, returnOn401: null }),
   patchMe: (payload: UserPatch) => request<AuthUser>("/auth/me", "PATCH", payload),
+  uploadMyAvatar: async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<AuthUser>("/auth/me/avatar", "POST", undefined, {}, { body: form });
+  },
   deleteAccount: () => request<{ ok: boolean }>("/auth/me", "DELETE"),
   logout: async () => {
     try {
@@ -442,13 +579,10 @@ export const api = {
 
   promoteResumeSnapshot: async (snapshotId: string, userId?: string) => {
     const form = new FormData();
-    form.append("user_id", userId ?? (await getUserIdOrThrow()));
+    if (userId) form.append("user_id", userId);
     return request<any>(`/ingest/resume/${snapshotId}/promote`, "POST", undefined, {}, { body: form });
   },
-  listResumeSnapshots: async () => {
-    const userId = await getUserIdOrThrow();
-    return request<ResumeSnapshotListEntry[]>(`/ingest/resume?user_id=${encodeURIComponent(userId)}`, "GET");
-  },
+  listResumeSnapshots: async () => request<ResumeSnapshotListEntry[]>("/ingest/resume", "GET"),
 
   listSkills: async (params?: { q?: string; category?: string; limit?: number; skip?: number }) => {
     const search = new URLSearchParams();
@@ -678,7 +812,7 @@ export const api = {
     const raw = await request<any>("/dashboard/summary", "GET");
     return {
       totalSkills: Number(raw?.totals?.confirmed_skills ?? 0) || 0,
-      portfolioItems: Number(raw?.totals?.evidence ?? 0) || 0,
+      evidenceCount: Number(raw?.totals?.evidence ?? 0) || 0,
       averageMatchScore: Number(raw?.average_match_score ?? 0) || 0,
       tailoredResumes: Number(raw?.tailored_resumes ?? 0) || 0,
       recentActivity: Array.isArray(raw?.recent_activity)
@@ -696,6 +830,23 @@ export const api = {
           count: Number(skill?.evidence_count ?? 0) || 0,
         }))
         .filter((skill) => skill.count > 0),
+      portfolioToJobAnalytics: {
+        job_skill_coverage_pct: Number(raw?.portfolio_to_job_analytics?.job_skill_coverage_pct ?? 0) || 0,
+        matched_skill_rate_pct: Number(raw?.portfolio_to_job_analytics?.matched_skill_rate_pct ?? 0) || 0,
+        evidence_backed_match_pct: Number(raw?.portfolio_to_job_analytics?.evidence_backed_match_pct ?? 0) || 0,
+        portfolio_backed_match_pct: Number(raw?.portfolio_to_job_analytics?.portfolio_backed_match_pct ?? 0) || 0,
+        portfolio_skill_count: Number(raw?.portfolio_to_job_analytics?.portfolio_skill_count ?? 0) || 0,
+        job_skill_count: Number(raw?.portfolio_to_job_analytics?.job_skill_count ?? 0) || 0,
+      },
+      portfolioTypeDistribution: asArray(raw?.portfolio_type_distribution).map((entry: any) => ({
+        type: String(entry?.type ?? "Other"),
+        count: Number(entry?.count ?? 0) || 0,
+      })),
+      recentMatchTrend: asArray(raw?.recent_match_trend).map((entry: any) => ({
+        label: String(entry?.label ?? ""),
+        score: Number(entry?.score ?? 0) || 0,
+        created_at: entry?.created_at,
+      })),
     };
   },
 
@@ -711,59 +862,59 @@ export const api = {
     const suffix = skillId ? `?skill_id=${encodeURIComponent(skillId)}` : "";
     return request<any[]>("/taxonomy/relations" + suffix, "GET");
   },
+  getSkillGraph: (skillId: string, params?: { depth?: number; limit?: number; include_inferred?: boolean }) => {
+    const search = new URLSearchParams();
+    if (params?.depth != null) search.set("depth", String(params.depth));
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    if (params?.include_inferred != null) search.set("include_inferred", String(params.include_inferred));
+    const suffix = search.size ? `?${search.toString()}` : "";
+    return request<SkillGraph>(`/taxonomy/graph/${skillId}${suffix}`, "GET");
+  },
+  getSkillTrajectory: () => request<SkillTrajectoryOut>("/taxonomy/trajectory", "GET"),
+  getCareerPathDetail: (roleId: string) => request<CareerPathDetail>(`/taxonomy/trajectory/path/${encodeURIComponent(roleId)}`, "GET"),
+  getLearningPathSkillDetail: (skillName: string) =>
+    request<LearningPathSkillDetail>(`/taxonomy/learning-path/skill/${encodeURIComponent(skillName)}`, "GET"),
+  listLearningPathProgress: () => request<LearningPathProgress[]>("/taxonomy/learning-path/progress", "GET"),
+  patchLearningPathProgress: (payload: { skill_name: string; status: "not_started" | "in_progress" | "completed" }) =>
+    request<LearningPathProgress>("/taxonomy/learning-path/progress", "PATCH", payload),
+  getUserSkillVector: () => request<UserSkillVector>("/tailor/user-vector", "GET"),
+  getUserSkillVectorHistory: (limit = 12) => request<UserSkillVectorHistoryPoint[]>(`/tailor/user-vector/history?limit=${encodeURIComponent(String(limit))}`, "GET"),
 
   ingestJob: async (payload: { user_id?: string; title?: string; company?: string; location?: string; text: string }) => {
-    const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
-    return request<any>("/tailor/job/ingest", "POST", body);
+    return request<any>("/tailor/job/ingest", "POST", payload);
   },
 
   matchJob: async (payload: { user_id?: string; job_id: string; history_id?: string; resume_snapshot_id?: string | null; ignored_skill_names?: string[]; added_from_missing_skills?: Array<{ skill_id: string; skill_name: string }>; persist_history?: boolean }) => {
-    const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
-    return request<any>("/tailor/match", "POST", body);
+    return request<any>("/tailor/match", "POST", payload);
   },
 
   listJobMatchHistory: async (limit?: number) => {
-    const userId = await getUserIdOrThrow();
-    const suffix = limit != null ? `?user_id=${encodeURIComponent(userId)}&limit=${encodeURIComponent(String(limit))}` : `?user_id=${encodeURIComponent(userId)}`;
+    const suffix = limit != null ? `?limit=${encodeURIComponent(String(limit))}` : "";
     return request<JobMatchHistoryEntry[]>("/tailor/history" + suffix, "GET");
   },
 
   listTailoredResumes: async (limit?: number) => {
-    const userId = await getUserIdOrThrow();
-    const suffix = limit != null ? `?user_id=${encodeURIComponent(userId)}&limit=${encodeURIComponent(String(limit))}` : `?user_id=${encodeURIComponent(userId)}`;
+    const suffix = limit != null ? `?limit=${encodeURIComponent(String(limit))}` : "";
     return request<TailoredResumeListEntry[]>("/tailor/resumes" + suffix, "GET");
   },
-  getTailoredResumeDetail: async (tailoredId: string) => {
-    const userId = await getUserIdOrThrow();
-    return request<TailoredResumeDetail>(`/tailor/resumes/${tailoredId}?user_id=${encodeURIComponent(userId)}`, "GET");
-  },
-  deleteTailoredResume: async (tailoredId: string) => {
-    const userId = await getUserIdOrThrow();
-    return request<{ ok: boolean; id: string }>(`/tailor/resumes/${tailoredId}?user_id=${encodeURIComponent(userId)}`, "DELETE");
-  },
+  getTailoredResumeDetail: async (tailoredId: string) => request<TailoredResumeDetail>(`/tailor/resumes/${tailoredId}`, "GET"),
+  deleteTailoredResume: async (tailoredId: string) => request<{ ok: boolean; id: string }>(`/tailor/resumes/${tailoredId}`, "DELETE"),
 
   compareJobMatchHistory: async (leftId: string, rightId: string) => {
-    const userId = await getUserIdOrThrow();
     const params = new URLSearchParams({
-      user_id: userId,
       left_id: leftId,
       right_id: rightId,
     });
     return request<JobMatchComparison>("/tailor/history/compare?" + params.toString(), "GET");
   },
 
-  getJobMatchHistoryDetail: async (historyId: string) => {
-    const userId = await getUserIdOrThrow();
-    return request<JobMatchHistoryDetail>(`/tailor/history/${historyId}?user_id=${encodeURIComponent(userId)}`, "GET");
-  },
+  getJobMatchHistoryDetail: async (historyId: string) => request<JobMatchHistoryDetail>(`/tailor/history/${historyId}`, "GET"),
 
-  deleteJobMatchHistory: async (historyId: string) => {
-    const userId = await getUserIdOrThrow();
-    return request<{ ok: boolean; id: string; title?: string }>(
-      `/tailor/history/${historyId}?user_id=${encodeURIComponent(userId)}`,
-      "DELETE"
-    );
-  },
+  reanalyzeJobMatchHistory: async (historyId: string) =>
+    request<any>(`/tailor/history/${encodeURIComponent(historyId)}/reanalyze`, "POST"),
+
+  deleteJobMatchHistory: async (historyId: string) =>
+    request<{ ok: boolean; id: string; title?: string }>(`/tailor/history/${historyId}`, "DELETE"),
 
   getAISettingsStatus: () => request<AISettingsStatus>("/tailor/settings/status", "GET"),
   getAIPreferences: () => request<AISettingsDetail>("/tailor/settings/preferences", "GET"),
@@ -782,8 +933,7 @@ export const api = {
     request<AdminJob>(`/admin/jobs/${jobId}/moderation`, "PATCH", payload),
 
   previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; resume_snapshot_id?: string | null; ignored_skill_names?: string[]; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
-    const body = { ...payload, user_id: payload.user_id ?? (await getUserIdOrThrow()) };
-    return request<any>("/tailor/preview", "POST", body);
+    return request<any>("/tailor/preview", "POST", payload);
   },
 
   rewriteTailoredResume: (tailoredId: string, payload?: { focus?: string }) =>
@@ -792,13 +942,44 @@ export const api = {
   downloadTailoredDocx: (tailoredId: string) => requestBlob(`/tailor/${tailoredId}/export/docx`),
   downloadTailoredPdf: (tailoredId: string) => requestBlob(`/tailor/${tailoredId}/export/pdf`),
 
-  createPortfolioItem: (payload: any) => request<any>("/portfolio/items", "POST", payload),
-  listPortfolioItems: (userId: string, params?: { type?: string; visibility?: string }) => {
-    const search = new URLSearchParams({ user_id: userId });
-    if (params?.type) search.set("type", params.type);
-    if (params?.visibility) search.set("visibility", params.visibility);
-    return request<any[]>(`/portfolio/items?${search.toString()}`, "GET");
+  createPortfolioItem: async (payload: any) => {
+    const links = asArray<string>(payload?.links).map((value) => String(value || "").trim()).filter(Boolean);
+    const summary = String(payload?.summary ?? "").trim();
+    const bullets = asArray<string>(payload?.bullets).map((value) => String(value || "").trim()).filter(Boolean);
+    return normalizeEvidence(
+      await request<any>("/evidence/", "POST", {
+        user_id: payload?.user_id,
+        user_email: payload?.user_email,
+        type: ["project", "paper", "cert", "other"].includes(String(payload?.type ?? "")) ? payload.type : "other",
+        title: payload?.title ?? "",
+        source: links[0] ?? payload?.org ?? "structured-evidence",
+        text_excerpt: [summary, ...bullets].filter(Boolean).join("\n") || payload?.title || "",
+        skill_ids: asArray<string>(payload?.skill_ids),
+        tags: asArray<string>(payload?.tags),
+        origin: "user",
+      })
+    );
   },
-  patchPortfolioItem: (itemId: string, payload: any) => request<any>(`/portfolio/items/${itemId}`, "PATCH", payload),
-  deletePortfolioItem: (itemId: string) => request<any>(`/portfolio/items/${itemId}`, "DELETE"),
+  listPortfolioItems: async (userId: string, params?: { type?: string; visibility?: string }) => {
+    const evidence = await api.listEvidence({ user_id: userId, origin: "user" });
+    return evidence.filter((item) => {
+      if (params?.type && String(item.type || "") !== params.type) return false;
+      return true;
+    });
+  },
+  patchPortfolioItem: (itemId: string, payload: any) =>
+    request<any>(EVIDENCE_UPDATE_ROUTE.replace("{evidence_id}", itemId), "PATCH", {
+      type: ["project", "paper", "cert", "other"].includes(String(payload?.type ?? "")) ? payload?.type : payload?.type ? "other" : undefined,
+      title: payload?.title,
+      source: asArray<string>(payload?.links).map((value) => String(value || "").trim()).filter(Boolean)[0] ?? payload?.source,
+      text_excerpt:
+        payload?.summary != null || payload?.bullets != null
+          ? [String(payload?.summary ?? "").trim(), ...asArray<string>(payload?.bullets).map((value) => String(value || "").trim()).filter(Boolean)]
+              .filter(Boolean)
+              .join("\n")
+          : undefined,
+      skill_ids: payload?.skill_ids,
+      tags: payload?.tags,
+    }),
+  deletePortfolioItem: (itemId: string) => request<any>(EVIDENCE_UPDATE_ROUTE.replace("{evidence_id}", itemId), "DELETE"),
 };

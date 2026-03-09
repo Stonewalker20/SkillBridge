@@ -1,3 +1,5 @@
+"""Dataset ingestion script for importing external resume or job data into local development collections."""
+
 import glob, json, re
 from pathlib import Path
 import pandas as pd

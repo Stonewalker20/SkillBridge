@@ -1,3 +1,5 @@
+"""OpenAPI surface tests that ensure the expected route contract remains registered."""
+
 from app.main import app
 
 
@@ -10,6 +12,7 @@ def test_openapi_includes_expected_route_surface():
         "/auth/register",
         "/auth/login",
         "/auth/me",
+        "/auth/me/avatar",
         "/auth/logout",
         "/skills/",
         "/skills/{skill_id}",
@@ -42,6 +45,11 @@ def test_openapi_includes_expected_route_surface():
         "/roles/{role_id}/weights",
         "/taxonomy/aliases/{skill_id}",
         "/taxonomy/relations",
+        "/taxonomy/graph/{skill_id}",
+        "/taxonomy/trajectory",
+        "/taxonomy/trajectory/path/{role_id}",
+        "/taxonomy/learning-path/progress",
+        "/taxonomy/learning-path/skill/{skill_name}",
         "/tailor/job/ingest",
         "/tailor/match",
         "/tailor/preview",
@@ -52,6 +60,9 @@ def test_openapi_includes_expected_route_surface():
         "/tailor/history/compare",
         "/tailor/settings/status",
         "/tailor/settings/preferences",
+        "/tailor/rag/search",
+        "/tailor/user-vector",
+        "/tailor/user-vector/history",
         "/tailor/{tailored_id}/rewrite",
         "/tailor/{tailored_id}/export/docx",
         "/tailor/{tailored_id}/export/pdf",

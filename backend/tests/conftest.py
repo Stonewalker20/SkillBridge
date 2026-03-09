@@ -1,3 +1,5 @@
+"""Shared pytest fixtures, fake services, and seeded backend state for contract and smoke tests."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,8 +17,10 @@ if str(ROOT) not in sys.path:
 from app.main import app
 from app.core import db as core_db
 from app.core.auth import hash_password, now_utc
+from app.core.config import settings
 from app.routers import evidence as evidence_router
 from app.routers import tailor as tailor_router
+from app.routers import taxonomy as taxonomy_router
 
 from .fake_mongo import FakeDatabase, FakeMongoClient
 
@@ -118,6 +122,18 @@ def _seed(fake_db: FakeDatabase):
             "updated_at": now_utc(),
         }
     ]
+    fake_db["role_skill_weights"].docs = [
+        {
+            "_id": ObjectId(),
+            "role_id": role_id,
+            "role_name": "ML Engineer",
+            "computed_at": now_utc(),
+            "weights": [
+                {"skill_id": str(skill_python), "skill_name": "Python", "weight": 0.9},
+                {"skill_id": str(skill_ml), "skill_name": "ML", "weight": 1.0},
+            ],
+        }
+    ]
     return {
         "user_id": str(user_id),
         "token": "test-token",
@@ -132,6 +148,9 @@ def test_context(monkeypatch):
     fake_db = FakeDatabase()
     seeded = _seed(fake_db)
     core_db._client = FakeMongoClient(fake_db)
+    avatar_dir = Path(__file__).resolve().parent / ".tmp_avatars"
+    avatar_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(settings, "user_avatar_upload_dir", str(avatar_dir))
 
     async def _noop():
         return None
@@ -154,6 +173,7 @@ def test_context(monkeypatch):
     monkeypatch.setattr(evidence_router, "extract_skill_candidates", _async_fake_extract_skill_candidates)
     monkeypatch.setattr(evidence_router, "embed_texts", _async_fake_embed_texts)
     monkeypatch.setattr(tailor_router, "embed_texts", _async_fake_embed_texts)
+    monkeypatch.setattr(taxonomy_router, "embed_texts", _async_fake_embed_texts)
     monkeypatch.setattr(tailor_router, "rewrite_resume_bullets", _async_fake_rewrite)
     monkeypatch.setattr(
         tailor_router,

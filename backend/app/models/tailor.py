@@ -1,3 +1,5 @@
+"""Pydantic schemas for job match analysis, retrieval context, tailoring requests, and saved resume outputs."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -5,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class JobIngestIn(BaseModel):
-    user_id: str
+    user_id: str | None = None
     title: str | None = None
     company: str | None = None
     location: str | None = None
@@ -37,6 +39,24 @@ class MatchScoreBreakdown(BaseModel):
     detail: str
 
 
+class GapInsight(BaseModel):
+    skill_id: str
+    skill_name: str
+    gap_type: str
+    severity: str
+    reason: str
+    recommended_action: str
+
+
+class RAGContextItem(BaseModel):
+    source_type: str
+    source_id: str
+    title: str
+    snippet: str
+    score: float
+    chunk_index: int = 0
+
+
 class AddedFromMissingSkill(BaseModel):
     skill_id: str
     skill_name: str
@@ -60,6 +80,9 @@ class JobMatchOut(BaseModel):
     strength_areas: list[str] = Field(default_factory=list)
     related_skills: list[str] = Field(default_factory=list)
     semantic_alignment_examples: list[str] = Field(default_factory=list)
+    retrieved_context: list[RAGContextItem] = Field(default_factory=list)
+    gap_reasoning_summary: str = ""
+    gap_insights: list[GapInsight] = Field(default_factory=list)
     score_breakdown: list[MatchScoreBreakdown] = Field(default_factory=list)
     recommended_next_steps: list[str] = Field(default_factory=list)
     extracted_skill_count: int = 0
@@ -74,11 +97,29 @@ class JobMatchOut(BaseModel):
     keyword_overlap_terms: list[str] = Field(default_factory=list)
     semantic_alignment_score: float = 0
     semantic_alignment_explanation: str = ""
+    personal_skill_vector_score: float = 0
+    personal_skill_vector_explanation: str = ""
     history_id: str | None = None
 
 
-class TailorPreviewIn(BaseModel):
+class UserSkillVectorOut(BaseModel):
     user_id: str
+    embedding_dimensions: int = 0
+    confirmed_skill_count: int = 0
+    evidence_item_count: int = 0
+    portfolio_item_count: int = 0
+    source_preview: str = ""
+    updated_at: datetime | None = None
+
+
+class UserSkillVectorHistoryPoint(BaseModel):
+    score: float = 0
+    label: str = ""
+    updated_at: datetime | None = None
+
+
+class TailorPreviewIn(BaseModel):
+    user_id: str | None = None
     job_id: str | None = Field(default=None, description="Job ingest id")
     job_text: str | None = Field(default=None, description="Optional job text if job_id not provided")
     resume_snapshot_id: str | None = Field(default=None, description="Optional resume snapshot to use as the tailoring template")
@@ -102,6 +143,7 @@ class TailoredResumeOut(BaseModel):
     template: str
     selected_skill_ids: list[str]
     selected_item_ids: list[str]
+    retrieved_context: list[RAGContextItem] = Field(default_factory=list)
     sections: list[ResumeSection]
     plain_text: str
     created_at: datetime | None = None
@@ -148,6 +190,7 @@ class JobMatchHistoryEntryOut(BaseModel):
     title: str | None = None
     company: str | None = None
     location: str | None = None
+    source_history_id: str | None = None
     match_score: float
     semantic_alignment_score: float = 0
     matched_skills: list[str] = Field(default_factory=list)

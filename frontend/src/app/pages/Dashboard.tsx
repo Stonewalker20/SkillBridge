@@ -8,10 +8,11 @@ import { Badge } from "../components/ui/badge";
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { useHeaderTheme } from "../lib/headerTheme";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 interface DashboardSummary {
   totalSkills: number;
-  portfolioItems: number;
+  evidenceCount: number;
   averageMatchScore: number;
   tailoredResumes: number;
   recentActivity: Array<{
@@ -23,15 +24,35 @@ interface DashboardSummary {
     date: string;
   }>;
   topSkillCategories: Array<{ category: string; count: number }>;
+  portfolioToJobAnalytics: {
+    job_skill_coverage_pct: number;
+    matched_skill_rate_pct: number;
+    evidence_backed_match_pct: number;
+    portfolio_backed_match_pct: number;
+    portfolio_skill_count: number;
+    job_skill_count: number;
+  };
+  portfolioTypeDistribution: Array<{ type: string; count: number }>;
+  recentMatchTrend: Array<{ label: string; score: number; created_at?: string }>;
 }
 
 const EMPTY_SUMMARY: DashboardSummary = {
   totalSkills: 0,
-  portfolioItems: 0,
+  evidenceCount: 0,
   averageMatchScore: 0,
   tailoredResumes: 0,
   recentActivity: [],
   topSkillCategories: [],
+  portfolioToJobAnalytics: {
+    job_skill_coverage_pct: 0,
+    matched_skill_rate_pct: 0,
+    evidence_backed_match_pct: 0,
+    portfolio_backed_match_pct: 0,
+    portfolio_skill_count: 0,
+    job_skill_count: 0,
+  },
+  portfolioTypeDistribution: [],
+  recentMatchTrend: [],
 };
 
 function safeNum(v: any): number {
@@ -159,7 +180,7 @@ export function Dashboard() {
 
         const normalizedBase: DashboardSummary = {
           totalSkills: safeNum(base?.totalSkills ?? base?.total_skills ?? 0),
-          portfolioItems: safeNum(base?.portfolioItems ?? base?.portfolio_items ?? 0),
+          evidenceCount: safeNum(base?.evidenceCount ?? base?.evidence_count ?? base?.totals?.evidence ?? 0),
           averageMatchScore: safeNum(base?.averageMatchScore ?? base?.average_match_score ?? 0),
           tailoredResumes: safeNum(base?.tailoredResumes ?? base?.tailored_resumes ?? 0),
           recentActivity: Array.isArray(base?.recentActivity)
@@ -171,6 +192,24 @@ export function Dashboard() {
             ? base.topSkillCategories
             : Array.isArray(base?.top_skill_categories)
               ? base.top_skill_categories
+              : [],
+          portfolioToJobAnalytics: {
+            job_skill_coverage_pct: safeNum(base?.portfolioToJobAnalytics?.job_skill_coverage_pct ?? base?.portfolio_to_job_analytics?.job_skill_coverage_pct ?? 0),
+            matched_skill_rate_pct: safeNum(base?.portfolioToJobAnalytics?.matched_skill_rate_pct ?? base?.portfolio_to_job_analytics?.matched_skill_rate_pct ?? 0),
+            evidence_backed_match_pct: safeNum(base?.portfolioToJobAnalytics?.evidence_backed_match_pct ?? base?.portfolio_to_job_analytics?.evidence_backed_match_pct ?? 0),
+            portfolio_backed_match_pct: safeNum(base?.portfolioToJobAnalytics?.portfolio_backed_match_pct ?? base?.portfolio_to_job_analytics?.portfolio_backed_match_pct ?? 0),
+            portfolio_skill_count: safeNum(base?.portfolioToJobAnalytics?.portfolio_skill_count ?? base?.portfolio_to_job_analytics?.portfolio_skill_count ?? 0),
+            job_skill_count: safeNum(base?.portfolioToJobAnalytics?.job_skill_count ?? base?.portfolio_to_job_analytics?.job_skill_count ?? 0),
+          },
+          portfolioTypeDistribution: Array.isArray(base?.portfolioTypeDistribution)
+            ? base.portfolioTypeDistribution
+            : Array.isArray(base?.portfolio_type_distribution)
+              ? base.portfolio_type_distribution
+              : [],
+          recentMatchTrend: Array.isArray(base?.recentMatchTrend)
+            ? base.recentMatchTrend
+            : Array.isArray(base?.recent_match_trend)
+              ? base.recent_match_trend
               : [],
         };
 
@@ -241,8 +280,8 @@ export function Dashboard() {
         bgColor: "bg-blue-50",
       },
       {
-        name: "Portfolio Items",
-        value: summary.portfolioItems,
+        name: "Evidence",
+        value: summary.evidenceCount,
         icon: FolderOpen,
         color: "text-[#0D9488]",
         bgColor: "bg-teal-50",
@@ -277,6 +316,22 @@ export function Dashboard() {
     [summary.recentActivity, hiddenRecentActivityKeys, clearedRecentActivityKeys, clearedRecentActivityIds]
   );
 
+  const portfolioVisualMetrics = useMemo(
+    () => [
+      {
+        label: "Matched Skills",
+        value: `${Math.round(summary.portfolioToJobAnalytics.matched_skill_rate_pct)}%`,
+        detail: "Coverage across recent analyzed jobs",
+      },
+      {
+        label: "Evidence-Backed",
+        value: `${Math.round(summary.portfolioToJobAnalytics.evidence_backed_match_pct)}%`,
+        detail: "Matched skills already supported by evidence",
+      },
+    ],
+    [summary.portfolioToJobAnalytics]
+  );
+
   const hideRecentActivityItem = (id: string | number) => {
     setHiddenRecentActivityKeys((current) => (current.includes(String(id)) ? current : [...current, String(id)]));
   };
@@ -297,9 +352,9 @@ export function Dashboard() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
-        <div className="px-6 py-7 md:px-8">
+        <div className="px-6 py-6 md:px-8">
           <div className="max-w-2xl">
             <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
               Career Overview
@@ -314,17 +369,17 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {stats.map((stat) => (
           <Card key={stat.name} className="border-slate-200 p-0 transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/80">
-            <Link to={stat.href ?? "/app"} className="block p-6">
-              <div className="flex items-center gap-4">
-                <div className={`rounded-2xl p-3 ${stat.bgColor}`}>
-                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
+            <Link to={stat.href ?? "/app"} className="block p-4">
+              <div className="flex items-center gap-3">
+                <div className={`rounded-2xl p-2.5 ${stat.bgColor}`}>
+                  <stat.icon className={`h-5 w-5 ${stat.color}`} />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-slate-300">{stat.name}</p>
-                  <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-slate-100">{stat.value}</p>
+                  <p className="mt-1 text-xl font-bold text-gray-900 dark:text-slate-100">{stat.value}</p>
                 </div>
               </div>
             </Link>
@@ -334,7 +389,7 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity */}
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Recent Activity</h3>
             <div className="flex items-center gap-2">
@@ -352,7 +407,7 @@ export function Dashboard() {
           {visibleRecentActivity.length === 0 ? (
             <div className="text-sm text-gray-500 dark:text-slate-400">No recent activity yet.</div>
           ) : (
-            <div className="max-h-[26rem] space-y-3 overflow-y-auto pr-1">
+            <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
               {visibleRecentActivity.map((activity) => (
                 <div
                   key={activity.id}
@@ -389,7 +444,7 @@ export function Dashboard() {
         </Card>
 
         {/* Top Skill Categories */}
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Top Skill Categories</h3>
             <div className="flex items-center gap-2">
@@ -403,7 +458,7 @@ export function Dashboard() {
           {summary.topSkillCategories.length === 0 ? (
             <div className="text-sm text-gray-500 dark:text-slate-400">No categories yet. Confirm skills to populate this chart.</div>
           ) : (
-            <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
+            <div className="max-h-[22rem] space-y-4 overflow-y-auto pr-1">
               {summary.topSkillCategories.map((category) => {
                 const denom = summary.topSkillCategories.reduce((acc, c) => acc + (c.count || 0), 0) || 1;
                 const pct = Math.min(100, Math.max(0, (category.count / denom) * 100));
@@ -416,6 +471,84 @@ export function Dashboard() {
                     </div>
                     <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800">
                       <div className={`h-2.5 rounded-full transition-all ${activeHeaderTheme.barClass}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Evidence to Job Match</h3>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                How strongly your saved work history supports the skills showing up in recent job analyses.
+              </p>
+            </div>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/app/analytics/skills">Open analytics</Link>
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {portfolioVisualMetrics.map((metric) => (
+              <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/60">
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{metric.label}</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">{metric.value}</p>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{metric.detail}</p>
+              </div>
+            ))}
+          </div>
+          {summary.recentMatchTrend.length > 0 ? (
+            <div className="mt-5 h-52 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={summary.recentMatchTrend} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                  <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(148, 163, 184, 0.12)" }}
+                    formatter={(value: number) => [`${Math.round(Number(value) || 0)}%`, "Match score"]}
+                    labelFormatter={(label) => String(label)}
+                  />
+                  <Bar dataKey="score" radius={[10, 10, 4, 4]} fill="var(--dashboard-accent, #1E3A8A)" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="mt-6 rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              Analyze a few jobs to unlock a recent match trend chart here.
+            </div>
+          )}
+        </Card>
+
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="mb-5">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Evidence Signal Mix</h3>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+              The types of evidence currently contributing to your profile depth.
+            </p>
+          </div>
+          {summary.portfolioTypeDistribution.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              Add evidence to start visualizing how your work history is distributed.
+            </div>
+          ) : (
+            <div className="max-h-[22rem] space-y-4 overflow-y-auto pr-1">
+              {summary.portfolioTypeDistribution.map((entry) => {
+                const maxCount = Math.max(...summary.portfolioTypeDistribution.map((item) => item.count), 1);
+                const width = (entry.count / maxCount) * 100;
+                return (
+                  <div key={entry.type} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium capitalize text-slate-900 dark:text-slate-100">{entry.type}</span>
+                      <span className="text-slate-600 dark:text-slate-300">{entry.count}</span>
+                    </div>
+                    <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-800">
+                      <div className={`h-3 rounded-full ${activeHeaderTheme.barClass}`} style={{ width: `${width}%` }} />
                     </div>
                   </div>
                 );

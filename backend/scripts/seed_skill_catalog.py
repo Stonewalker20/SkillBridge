@@ -1,3 +1,5 @@
+"""Catalog seeding script that loads the broader predefined skill dataset into MongoDB."""
+
 #!/usr/bin/env python3
 from __future__ import annotations
 

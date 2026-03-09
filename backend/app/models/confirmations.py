@@ -1,3 +1,5 @@
+"""Pydantic schemas for confirmed, rejected, and edited skill payloads tied to user confirmations."""
+
 from __future__ import annotations
 
 from datetime import datetime

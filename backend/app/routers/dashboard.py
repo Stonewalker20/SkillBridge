@@ -1,3 +1,5 @@
+"""Dashboard summary routes that aggregate user metrics, recent activity, and top skill category signals."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
@@ -7,6 +9,20 @@ from app.core.auth import require_user
 from app.utils.mongo import oid_str, ref_values
 
 router = APIRouter()
+
+
+def _score_percent(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round((numerator / denominator) * 100.0, 2)
+
+
+def _safe_count(value) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
 
 # UC 1.4 – Dashboard Summary (user-specific)
 @router.get("/summary")
@@ -148,6 +164,123 @@ async def dashboard_summary(
     average_match_score = round(float((match_score_rows[0] or {}).get("avg_match_score", 0) or 0), 2) if match_score_rows else 0.0
     tailored_resumes = await db["tailored_resumes"].count_documents({"user_id": {"$in": user_refs}})
 
+    evidence_items = await (
+        db["evidence"]
+        .find({"user_id": {"$in": user_refs}, "origin": "user"}, {"type": 1, "skill_ids": 1, "structured_evidence": 1})
+        .to_list(length=2000)
+    )
+    recent_match_runs = await (
+        db["job_match_runs"]
+        .find({"user_id": {"$in": user_refs}}, {"analysis": 1, "created_at": 1})
+        .sort("created_at", -1)
+        .limit(6)
+        .to_list(length=6)
+    )
+
+    portfolio_type_counts: dict[str, int] = {}
+    for item in evidence_items:
+        item_type = str(item.get("type") or "other").strip() or "other"
+        portfolio_type_counts[item_type] = portfolio_type_counts.get(item_type, 0) + 1
+
+    portfolio_skill_ids = {
+        oid_str(skill_id)
+        for item in evidence_items
+        for skill_id in (item.get("skill_ids") or [])
+        if oid_str(skill_id)
+    }
+    structured_evidence_skill_ids = {
+        oid_str(skill_id)
+        for item in evidence_items
+        if item.get("structured_evidence") is True
+        for skill_id in (item.get("skill_ids") or [])
+        if oid_str(skill_id)
+    }
+    evidence_skill_ids = {
+        oid_str(skill_id)
+        for item in evidence_items
+        for skill_id in (item.get("skill_ids") or [])
+        if oid_str(skill_id)
+    }
+
+    recent_job_skill_ids: set[str] = set()
+    recent_match_trend: list[dict] = []
+    recent_job_ids: list[ObjectId] = []
+    total_recent_job_skill_count = 0
+    total_recent_matched_skill_count = 0
+    total_recent_evidence_backed_skill_count = 0
+
+    for run in recent_match_runs:
+        job_id = run.get("job_id")
+        if isinstance(job_id, ObjectId):
+            recent_job_ids.append(job_id)
+        elif isinstance(job_id, str) and ObjectId.is_valid(job_id):
+            recent_job_ids.append(ObjectId(job_id))
+
+    recent_job_docs = await (
+        db["job_ingests"]
+        .find({"_id": {"$in": recent_job_ids}}, {"extracted_skills.skill_id": 1})
+        .to_list(length=len(recent_job_ids) or 1)
+    )
+    job_skill_ids_by_job_id: dict[str, set[str]] = {}
+    for job_doc in recent_job_docs:
+        job_skill_ids_by_job_id[oid_str(job_doc.get("_id"))] = {
+            str(entry.get("skill_id") or "").strip()
+            for entry in (job_doc.get("extracted_skills") or [])
+            if str(entry.get("skill_id") or "").strip()
+        }
+
+    for index, run in enumerate(reversed(recent_match_runs), start=1):
+        analysis = run.get("analysis") or {}
+        run_job_id = oid_str(run.get("job_id"))
+        extracted_ids = set(job_skill_ids_by_job_id.get(run_job_id, set()))
+        matched_ids = {
+            str(skill_id).strip()
+            for skill_id in (analysis.get("matched_skill_ids") or [])
+            if str(skill_id).strip()
+        }
+        matched_names = {
+            str(skill_name).strip()
+            for skill_name in (analysis.get("matched_skills") or [])
+            if str(skill_name).strip()
+        }
+        extracted_count = len(extracted_ids) or _safe_count(analysis.get("extracted_skill_count"))
+        matched_count = (
+            len(matched_ids)
+            or _safe_count(analysis.get("matched_skill_count"))
+            or len(matched_names)
+        )
+        evidence_backed_count = len(matched_ids & evidence_skill_ids)
+        if matched_count > 0 and evidence_backed_count == 0:
+            evidence_backed_count = min(
+                matched_count,
+                _safe_count(analysis.get("evidence_aligned_count")),
+            )
+        recent_job_skill_ids.update(extracted_ids)
+        total_recent_job_skill_count += extracted_count
+        total_recent_matched_skill_count += matched_count
+        total_recent_evidence_backed_skill_count += evidence_backed_count
+        recent_match_trend.append(
+            {
+                "label": f"Run {index}",
+                "score": round(float(analysis.get("match_score") or 0.0), 2),
+                "created_at": run.get("created_at"),
+            }
+        )
+
+    portfolio_to_job_analytics = {
+        "job_skill_coverage_pct": _score_percent(len(portfolio_skill_ids & recent_job_skill_ids), len(recent_job_skill_ids)),
+        "matched_skill_rate_pct": _score_percent(total_recent_matched_skill_count, total_recent_job_skill_count),
+        "evidence_backed_match_pct": _score_percent(total_recent_evidence_backed_skill_count, total_recent_matched_skill_count),
+        "portfolio_backed_match_pct": _score_percent(total_recent_evidence_backed_skill_count, total_recent_matched_skill_count),
+        "portfolio_skill_count": len(portfolio_skill_ids),
+        "job_skill_count": len(recent_job_skill_ids),
+    }
+
+    portfolio_type_distribution = [
+        {"type": item_type, "count": count}
+        for item_type, count in sorted(portfolio_type_counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
     return {
         "user_id": user_id_str,
         "totals": totals,
@@ -156,4 +289,7 @@ async def dashboard_summary(
         "recent_projects": proj_out,
         "recent_activity": recent_activity,
         "top_skills_by_evidence": top_skills,
+        "portfolio_to_job_analytics": portfolio_to_job_analytics,
+        "portfolio_type_distribution": portfolio_type_distribution,
+        "recent_match_trend": recent_match_trend,
     }

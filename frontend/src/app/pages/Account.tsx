@@ -4,7 +4,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Separator } from "../components/ui/separator";
-import { User, Mail, Lock, LogOut, Trash2 } from "lucide-react";
+import { User, Mail, Lock, LogOut, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../services/api";
 import { useActivity } from "../context/ActivityContext";
@@ -27,16 +27,23 @@ import {
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
 import { useHeaderTheme } from "../lib/headerTheme";
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
+import { AVATAR_PRESETS, avatarPresetClass, type AvatarPresetValue } from "../lib/avatarPresets";
+import { useAuth } from "../context/AuthContext";
 
 export function Account() {
+  const { refreshUser } = useAuth();
   const { recordActivity } = useActivity();
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [aiSettings, setAiSettings] = useState<any>(null);
   const [savingAI, setSavingAI] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarPreset, setAvatarPreset] = useState<string | null>("midnight");
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -53,6 +60,8 @@ export function Account() {
         ]);
         setUsername(me?.username || "");
         setEmail(me?.email || "");
+        setAvatarUrl(me?.avatar_url || null);
+        setAvatarPreset(me?.avatar_preset || "midnight");
         setAiSettings(settings);
       } catch (e: any) {
         toast.error(e?.message || "Failed to load account");
@@ -76,6 +85,7 @@ export function Account() {
     setSavingProfile(true);
     try {
       await api.patchMe({ username: username || undefined });
+      await refreshUser();
       recordActivity({
         id: "account:username",
         type: "account",
@@ -94,6 +104,7 @@ export function Account() {
     setSavingProfile(true);
     try {
       await api.patchMe({ email: email || undefined });
+      await refreshUser();
       recordActivity({
         id: "account:email",
         type: "account",
@@ -169,6 +180,34 @@ export function Account() {
     }
   };
 
+  const handleSelectAvatarPreset = async (preset: AvatarPresetValue) => {
+    try {
+      const updated = await api.patchMe({ avatar_preset: preset });
+      setAvatarPreset(updated.avatar_preset || preset);
+      setAvatarUrl(updated.avatar_url || null);
+      await refreshUser();
+      toast.success("Profile icon updated");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update profile icon");
+    }
+  };
+
+  const handleAvatarUpload = async (file: File | null) => {
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const updated = await api.uploadMyAvatar(file);
+      setAvatarUrl(updated.avatar_url || null);
+      setAvatarPreset(updated.avatar_preset || null);
+      await refreshUser();
+      toast.success("Profile photo updated");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to upload profile photo");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
@@ -185,9 +224,12 @@ export function Account() {
         <div className={`${activeHeaderTheme.heroClass} px-8 py-8`}>
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-center gap-4">
-              <div className={`flex h-20 w-20 items-center justify-center rounded-full ${activeHeaderTheme.avatarClass} text-2xl font-bold text-white shadow-sm`}>
-                {initials}
-              </div>
+              <Avatar className="h-20 w-20 shadow-sm">
+                {avatarUrl ? <AvatarImage src={avatarUrl} alt={`${username || "Account"} avatar`} /> : null}
+                <AvatarFallback className={`text-2xl font-bold ${avatarPresetClass(avatarPreset) ?? activeHeaderTheme.avatarClass} text-white`}>
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
               <div>
                 <div className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Account Settings</div>
                 <h2 className="mt-2 text-2xl font-bold text-gray-900 dark:text-slate-100">{username || "Account"}</h2>
@@ -197,13 +239,14 @@ export function Account() {
                 </div>
               </div>
             </div>
-            <div className="w-full max-w-xs">
-              <Label htmlFor="account-header-style" className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
-                Header Style
-              </Label>
+            <div className="flex w-full justify-start lg:w-auto lg:justify-end">
               <Select value={headerTheme} onValueChange={(value) => setHeaderTheme(value as typeof headerTheme)}>
-                <SelectTrigger id="account-header-style" className="mt-2 border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100">
-                  <SelectValue placeholder="Choose header style" />
+                <SelectTrigger
+                  id="account-header-style"
+                  aria-label="Edit header style"
+                  className="h-9 w-24 border-slate-200 bg-white/85 px-3 text-sm font-medium dark:border-slate-700 dark:bg-slate-900/75 dark:text-slate-100"
+                >
+                  <span>Edit</span>
                 </SelectTrigger>
                 <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
                   {themes.map((theme) => (
@@ -222,7 +265,7 @@ export function Account() {
           {/* Username Section */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <User className="h-5 w-5 text-[#1E3A8A]" />
+              <User className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Username</h3>
             </div>
             <div className="flex gap-4">
@@ -248,7 +291,7 @@ export function Account() {
           {/* Email Section */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <Mail className="h-5 w-5 text-[#1E3A8A]" />
+              <Mail className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Email Address</h3>
             </div>
             <div className="flex gap-4">
@@ -266,6 +309,61 @@ export function Account() {
                 <Button onClick={handleUpdateEmail} disabled={savingProfile} className={activeHeaderTheme.buttonClass}>
                   Update
                 </Button>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Upload className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Profile Icon</h3>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-16 w-16">
+                    {avatarUrl ? <AvatarImage src={avatarUrl} alt={`${username || "Account"} avatar preview`} /> : null}
+                    <AvatarFallback className={`text-lg font-bold ${avatarPresetClass(avatarPreset) ?? activeHeaderTheme.avatarClass} text-white`}>
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100">Upload a photo or choose a default style</p>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">Supported formats: PNG, JPG, JPEG, WEBP up to 5 MB.</p>
+                    <Input
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                      className="mt-3 max-w-sm bg-white dark:bg-slate-950/70"
+                      disabled={uploadingAvatar}
+                      onChange={(event) => {
+                        handleAvatarUpload(event.target.files?.[0] ?? null);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="w-full max-w-md">
+                  <div className="grid grid-cols-3 gap-3">
+                    {AVATAR_PRESETS.map((preset) => {
+                      const selected = !avatarUrl && avatarPreset === preset.value;
+                      return (
+                        <button
+                          type="button"
+                          key={preset.value}
+                          onClick={() => handleSelectAvatarPreset(preset.value)}
+                          className={`rounded-2xl border p-3 text-left transition ${selected ? "border-slate-900 dark:border-slate-100" : "border-slate-200 dark:border-slate-700"}`}
+                        >
+                          <div className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold ${preset.className}`}>
+                            {initials}
+                          </div>
+                          <div className="mt-2 text-sm font-medium text-gray-900 dark:text-slate-100">{preset.label}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -399,7 +497,7 @@ export function Account() {
           {/* Password Section (stub until backend exists) */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <Lock className="h-5 w-5 text-[#1E3A8A]" />
+              <Lock className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Change Password</h3>
             </div>
             <div className="space-y-4">
@@ -504,9 +602,9 @@ export function Account() {
       </Card>
 
       {/* Info Card */}
-      <Card className="border-blue-200 bg-blue-50 p-6 dark:border-blue-900/60 dark:bg-blue-950/30">
+      <Card className={`p-6 ${activeHeaderTheme.softPanelClass}`}>
         <p className="text-sm text-gray-600 dark:text-slate-300">
-          <span className="font-semibold text-[#1E3A8A]">Note:</span> Your data is securely stored and encrypted.
+          <span className={`font-semibold ${activeHeaderTheme.accentTextClass}`}>Note:</span> Your data is securely stored and encrypted.
         </p>
       </Card>
     </div>

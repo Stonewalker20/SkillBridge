@@ -1,3 +1,5 @@
+"""Smoke tests covering authentication flows and health endpoints."""
+
 def test_health_endpoints(test_context):
     client = test_context["client"]
     assert client.get("/health/").status_code == 200
@@ -25,6 +27,20 @@ def test_auth_register_login_profile_and_logout(test_context):
     patch = client.patch("/auth/me", headers=auth_headers, json={"username": "renamed"})
     assert patch.status_code == 200
     assert patch.json()["username"] == "renamed"
+
+    preset = client.patch("/auth/me", headers=auth_headers, json={"avatar_preset": "ember"})
+    assert preset.status_code == 200
+    assert preset.json()["avatar_preset"] == "ember"
+    assert preset.json()["avatar_url"] is None
+
+    uploaded = client.post(
+        "/auth/me/avatar",
+        headers=auth_headers,
+        files={"file": ("avatar.png", b"fake-image-content", "image/png")},
+    )
+    assert uploaded.status_code == 200
+    assert uploaded.json()["avatar_url"].startswith("/media/avatars/")
+    assert uploaded.json()["avatar_preset"] is None
 
     logout = client.post("/auth/logout", headers=auth_headers)
     assert logout.status_code == 200

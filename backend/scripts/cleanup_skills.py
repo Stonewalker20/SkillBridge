@@ -1,3 +1,5 @@
+"""Maintenance script for pruning or repairing problematic skill records in the catalog."""
+
 #!/usr/bin/env python3
 import os, re
 from pymongo import MongoClient

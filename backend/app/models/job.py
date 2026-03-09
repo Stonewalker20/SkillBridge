@@ -1,3 +1,5 @@
+"""Pydantic schemas for job posting submission, moderation, and serialized job records."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field

@@ -1,3 +1,5 @@
+"""Evidence analysis and CRUD routes that ingest user artifacts, extract skills, and keep retrieval indexes synchronized."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, HTTPException, Depends, UploadFile, File, Form
@@ -6,7 +8,14 @@ from datetime import datetime, timezone
 from app.core.db import get_db
 from app.models.evidence import EvidenceIn, EvidenceOut, EvidencePatch
 from app.utils.ai import extract_skill_candidates, embed_texts, cosine_similarity, normalize_ai_preferences
-from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
+from app.utils.rag import delete_rag_document, sync_rag_document
+from app.utils.skill_catalog import (
+    build_canonical_skill_index,
+    lexical_skill_similarity,
+    merge_skill_docs,
+    normalize_skill_text,
+    should_use_strict_exact_match,
+)
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 import io
 import os
@@ -102,20 +111,72 @@ def _candidate_tokens(value: str) -> set[str]:
     }
 
 
+def _count_phrase_occurrences(text: str, phrase: str) -> int:
+    normalized_text = str(text or "")
+    normalized_phrase = str(phrase or "").strip()
+    if not normalized_text or not normalized_phrase:
+        return 0
+    if re.fullmatch(r"[A-Za-z0-9]+", normalized_phrase):
+        pattern = rf"(?<![A-Za-z0-9]){re.escape(normalized_phrase)}(?![A-Za-z0-9])"
+    else:
+        pattern = re.escape(normalized_phrase)
+    return len(re.findall(pattern, normalized_text, flags=re.IGNORECASE))
+
+
+def _evidence_frequency(text: str, terms: list[str]) -> float:
+    max_count = max((_count_phrase_occurrences(text, term) for term in terms if term), default=0)
+    if max_count <= 0:
+        return 0.0
+    # Confidence must stay bounded even when a phrase is repeated many times.
+    return round(min(1.0, max_count / 3.0), 4)
+
+
+async def _semantic_similarity_to_terms(observed_text: str, canonical_terms: list[str], ai_preferences: dict | None = None) -> float:
+    cleaned_terms = [str(term or "").strip() for term in canonical_terms if str(term or "").strip()]
+    observed = str(observed_text or "").strip()
+    if not observed or not cleaned_terms:
+        return 0.0
+
+    vectors, _provider = await embed_texts([observed, *cleaned_terms], preferences=ai_preferences)
+    if len(vectors) != len(cleaned_terms) + 1:
+        return 0.0
+
+    observed_vec = vectors[0]
+    semantic_similarity = max((cosine_similarity(observed_vec, vec) for vec in vectors[1:]), default=0.0)
+    return round(max(0.0, min(1.0, semantic_similarity)), 4)
+
+
+async def _compute_skill_confidence(text: str, observed_terms: list[str], canonical_terms: list[str], ai_preferences: dict | None = None) -> float:
+    frequency = _evidence_frequency(text, [*observed_terms, *canonical_terms])
+    semantic_similarity = await _semantic_similarity_to_terms(
+        observed_terms[0] if observed_terms else "",
+        canonical_terms or observed_terms,
+        ai_preferences=ai_preferences,
+    )
+    return round(max(0.0, min(1.0, frequency * semantic_similarity)), 4)
+
+
 async def _semantic_catalog_match(candidate_name: str, visible_skills: list[dict], ai_preferences: dict | None = None) -> tuple[dict | None, str | None]:
     candidate_tokens = _candidate_tokens(candidate_name)
     shortlist: list[tuple[dict, str, float]] = []
+    strict_exact = should_use_strict_exact_match(candidate_name)
     for skill in visible_skills:
         names = [(skill.get("name") or "").strip()]
         names.extend(str(alias or "").strip() for alias in (skill.get("aliases") or []))
         for label in names:
             if not label:
                 continue
+            lexical_score = lexical_skill_similarity(candidate_name, label)
+            if strict_exact:
+                if lexical_score >= 1.0:
+                    shortlist.append((skill, label, lexical_score))
+                continue
             label_tokens = _candidate_tokens(label)
             token_overlap = len(candidate_tokens & label_tokens)
             overlap_ratio = token_overlap / max(1, len(candidate_tokens | label_tokens))
-            if token_overlap > 0 or candidate_name.lower() in label.lower() or label.lower() in candidate_name.lower():
-                shortlist.append((skill, label, overlap_ratio))
+            combined_lexical = max(lexical_score, overlap_ratio)
+            if combined_lexical >= 0.34:
+                shortlist.append((skill, label, combined_lexical))
 
     shortlist.sort(key=lambda item: item[2], reverse=True)
     shortlist = shortlist[:20]
@@ -132,12 +193,13 @@ async def _semantic_catalog_match(candidate_name: str, visible_skills: list[dict
     best_score = 0.0
     for (skill, _label, lexical_score), vec in zip(shortlist, vectors[1:]):
         semantic_score = cosine_similarity(candidate_vec, vec)
-        combined_score = (semantic_score * 0.8) + (lexical_score * 0.2)
+        combined_score = (semantic_score * 0.72) + (lexical_score * 0.28)
         if combined_score > best_score:
             best_score = combined_score
             best_skill = skill
 
-    if best_skill is None or best_score < 0.42:
+    threshold = 0.98 if strict_exact else 0.56
+    if best_skill is None or best_score < threshold:
         return None, provider
     return best_skill, provider
 
@@ -149,6 +211,8 @@ async def extract_skill_matches(db, text: str, ai_preferences: dict | None = Non
 
     skills = await db["skills"].find({}, {"name": 1, "aliases": 1, "category": 1, "hidden": 1}).to_list(length=5000)
     visible_skills = merge_skill_docs([skill for skill in skills if not is_hidden_skill(skill)])
+    exact_index, term_index = build_canonical_skill_index(visible_skills)
+    skill_by_id = {oid_str(skill.get("_id")): skill for skill in visible_skills}
     matches: dict[str, dict] = {}
 
     for skill in visible_skills:
@@ -166,41 +230,45 @@ async def extract_skill_matches(db, text: str, ai_preferences: dict | None = Non
                 best = matched_on
                 break
         if best:
+            canonical_terms = [token for token, _matched_on in candidates if token]
+            confidence = await _compute_skill_confidence(
+                lowered,
+                observed_terms=[token for token, matched_on in candidates if matched_on == best][:1] or [name],
+                canonical_terms=canonical_terms,
+                ai_preferences=ai_preferences,
+            )
             matches[sid] = {
                 "skill_id": sid,
                 "skill_name": name,
                 "category": skill.get("category", ""),
                 "matched_on": best,
+                "confidence": confidence,
                 "is_new": False,
             }
 
     ai_candidates, provider = await extract_skill_candidates(text, max_candidates=25, preferences=ai_preferences)
-    visible_skill_tokens: list[tuple[str, dict]] = []
-    for skill in visible_skills:
-        name = (skill.get("name") or "").strip()
-        if name:
-            visible_skill_tokens.append((normalize_skill_text(name), skill))
-        for alias in skill.get("aliases", []) or []:
-            alias_text = (alias or "").strip()
-            if alias_text:
-                visible_skill_tokens.append((normalize_skill_text(alias_text), skill))
 
     for candidate in ai_candidates:
         candidate_name = str(candidate.get("name") or "").strip()
         if not candidate_name:
             continue
         candidate_key = normalize_skill_text(candidate_name)
-        matched_skill = None
-        matched_on = None
-        for token, skill in visible_skill_tokens:
-            if candidate_key == token:
-                matched_skill = skill
-                matched_on = "ai-exact"
-                break
-            if candidate_key in token or token in candidate_key:
-                matched_skill = skill
-                matched_on = "ai-semantic"
-                break
+        matched_skill = exact_index.get(candidate_key)
+        matched_on = "ai-exact" if matched_skill is not None else None
+        strict_exact = should_use_strict_exact_match(candidate_name)
+
+        if matched_skill is None and not strict_exact:
+            best_skill = None
+            best_score = 0.0
+            for skill_id, terms in term_index.items():
+                for term in terms:
+                    score = lexical_skill_similarity(candidate_key, term)
+                    if score > best_score:
+                        best_score = score
+                        best_skill = skill_by_id.get(skill_id)
+            if best_skill is not None and best_score >= 0.72:
+                matched_skill = best_skill
+                matched_on = "ai-lexical"
         if matched_skill is None:
             matched_skill, provider = await _semantic_catalog_match(candidate_name, visible_skills, ai_preferences=ai_preferences)
             if matched_skill is not None:
@@ -208,21 +276,39 @@ async def extract_skill_matches(db, text: str, ai_preferences: dict | None = Non
         if matched_skill is not None:
             sid = oid_str(matched_skill.get("_id"))
             if sid not in matches:
+                canonical_terms = canonical_skill_terms = [
+                    str(matched_skill.get("name") or "").strip(),
+                    *[str(alias or "").strip() for alias in (matched_skill.get("aliases") or [])],
+                ]
+                confidence = await _compute_skill_confidence(
+                    lowered,
+                    observed_terms=[candidate_name],
+                    canonical_terms=canonical_skill_terms,
+                    ai_preferences=ai_preferences,
+                )
                 matches[sid] = {
                     "skill_id": sid,
                     "skill_name": matched_skill.get("name", candidate_name),
                     "category": matched_skill.get("category", "") or candidate.get("category", ""),
                     "matched_on": matched_on or "ai-semantic",
+                    "confidence": confidence,
                     "is_new": False,
                 }
             continue
 
         synthetic_id = "candidate:" + sha1(candidate_name.lower().encode("utf-8")).hexdigest()[:12]
+        confidence = await _compute_skill_confidence(
+            lowered,
+            observed_terms=[candidate_name],
+            canonical_terms=[candidate_name],
+            ai_preferences=ai_preferences,
+        )
         matches[synthetic_id] = {
             "skill_id": synthetic_id,
             "skill_name": candidate_name,
             "category": str(candidate.get("category") or "").strip() or "General",
             "matched_on": f"ai-candidate:{provider}",
+            "confidence": confidence,
             "is_new": True,
         }
 
@@ -313,13 +399,16 @@ async def list_evidence(
     skill_id: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
     origin: str | None = Query(default=None),
+    user=Depends(require_user),
 ):
     db = get_db()
-    q: dict = {}
+    effective_user_id = oid_str(user.get("_id"))
+    if user_id and oid_str(user_id) != effective_user_id:
+        raise HTTPException(status_code=403, detail="You can only list your own evidence")
+
+    q: dict = ref_query("user_id", effective_user_id)
     if user_email:
         q["user_email"] = user_email
-    if user_id:
-        q.update(ref_query("user_id", user_id))
     if skill_id:
         q["skill_ids"] = {"$in": ref_values(skill_id)}
     if project_id:
@@ -352,6 +441,7 @@ async def list_evidence(
 @router.post("/", response_model=EvidenceOut)
 async def create_evidence(payload: EvidenceIn, user=Depends(require_user)):
     db = get_db()
+    ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
 
     skill_ids = []
     for sid in payload.skill_ids or []:
@@ -373,6 +463,18 @@ async def create_evidence(payload: EvidenceIn, user=Depends(require_user)):
     }
 
     res = await db["evidence"].insert_one(doc)
+    # Keep the retrieval index in sync with the persisted evidence text so job match
+    # and tailoring can ground future generations on this exact document.
+    await sync_rag_document(
+        db,
+        user_id=oid_str(user["_id"]),
+        source_type="evidence",
+        source_id=oid_str(res.inserted_id),
+        title=doc.get("title", ""),
+        text=doc.get("text_excerpt", ""),
+        preferences=ai_preferences,
+        metadata={"evidence_type": doc.get("type", "other"), "origin": doc.get("origin", "user")},
+    )
 
     return EvidenceOut(
         **serialize_evidence({"_id": res.inserted_id, **doc}),
@@ -382,6 +484,7 @@ async def create_evidence(payload: EvidenceIn, user=Depends(require_user)):
 @router.patch("/{evidence_id}", response_model=EvidenceOut)
 async def patch_evidence(evidence_id: str, payload: EvidencePatch, user=Depends(require_user)):
     db = get_db()
+    ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
 
     try:
         evidence_oid = to_object_id(evidence_id)
@@ -410,6 +513,19 @@ async def patch_evidence(evidence_id: str, payload: EvidencePatch, user=Depends(
     updated = await db["evidence"].find_one({"_id": evidence_oid})
     if not updated:
         raise HTTPException(status_code=500, detail="Failed to load updated evidence")
+
+    # Evidence edits must immediately change retrieval results; re-indexing here keeps
+    # the derived rag_chunks collection aligned with the canonical evidence record.
+    await sync_rag_document(
+        db,
+        user_id=oid_str(user["_id"]),
+        source_type="evidence",
+        source_id=evidence_id,
+        title=updated.get("title", ""),
+        text=updated.get("text_excerpt", ""),
+        preferences=ai_preferences,
+        metadata={"evidence_type": updated.get("type", "other"), "origin": updated.get("origin", "user")},
+    )
 
     return EvidenceOut(**serialize_evidence(updated))
 
@@ -492,6 +608,14 @@ async def delete_evidence(evidence_id: str, user=Depends(require_user)):
                     continue
 
                 await db["skills"].delete_one({"_id": {"$in": ref_values(sid)}})
+
+    # Delete the derived retrieval rows after the source evidence is removed.
+    await delete_rag_document(
+        db,
+        user_id=oid_str(user["_id"]),
+        source_type="evidence",
+        source_id=evidence_id,
+    )
 
     return {
         "ok": True,

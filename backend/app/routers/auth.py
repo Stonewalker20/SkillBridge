@@ -1,7 +1,10 @@
+"""Authentication routes for account creation, login, profile updates, logout, and account deletion."""
+
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from bson import ObjectId
+from pathlib import Path
 
 from app.core.db import get_db
 from app.core.auth import (
@@ -16,6 +19,29 @@ from app.utils.mongo import oid_str
 from app.core.config import settings
 
 router = APIRouter()
+AVATAR_PRESETS = {"midnight", "sunset", "mint", "ember", "violet", "slate"}
+ALLOWED_AVATAR_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+def serialize_user_out(user: dict) -> UserOut:
+    return UserOut(
+        id=oid_str(user["_id"]),
+        email=user["email"],
+        username=user["username"],
+        role=user.get("role", "user"),
+        avatar_url=str(user.get("avatar_url") or "").strip() or None,
+        avatar_preset=str(user.get("avatar_preset") or "").strip() or None,
+    )
+
+
+def _delete_local_avatar_if_present(user: dict):
+    avatar_url = str(user.get("avatar_url") or "").strip()
+    if not avatar_url.startswith("/media/avatars/"):
+        return
+    filename = avatar_url.rsplit("/", 1)[-1]
+    target = settings.user_avatar_upload_path / filename
+    if target.exists():
+        target.unlink()
 
 
 def bootstrap_role_for_email(email: str) -> str:
@@ -44,6 +70,7 @@ async def register(payload: RegisterIn):
         "password_salt": password_parts["salt"],
         "password_hash": password_parts["hash"],
         "role": bootstrap_role_for_email(payload.email),
+        "avatar_preset": "midnight",
         "created_at": now_utc(),
     }
 
@@ -53,12 +80,7 @@ async def register(payload: RegisterIn):
 
     return AuthOut(
         token=token,
-        user=UserOut(
-            id=oid_str(res.inserted_id),
-            email=doc["email"],
-            username=doc["username"],
-            role=doc["role"],
-        ),
+        user=serialize_user_out({**doc, "_id": res.inserted_id}),
     )
 
 
@@ -90,23 +112,13 @@ async def login(payload: LoginIn):
 
     return AuthOut(
         token=token,
-        user=UserOut(
-            id=oid_str(user["_id"]),
-            email=user["email"],
-            username=user["username"],
-            role=user.get("role", "user"),
-        ),
+        user=serialize_user_out(user),
     )
 
 
 @router.get("/me", response_model=UserOut)
 async def me(user=Depends(require_user)):
-    return UserOut(
-        id=oid_str(user["_id"]),
-        email=user["email"],
-        username=user["username"],
-        role=user.get("role", "user"),
-    )
+    return serialize_user_out(user)
 
 
 @router.patch("/me", response_model=UserOut)
@@ -114,6 +126,14 @@ async def patch_me(payload: UserPatch, user=Depends(require_user)):
     db = get_db()
 
     updates = payload.model_dump(exclude_none=True)
+    if "avatar_preset" in updates:
+        avatar_preset = str(updates["avatar_preset"] or "").strip().lower()
+        if avatar_preset and avatar_preset not in AVATAR_PRESETS:
+            raise HTTPException(status_code=400, detail="Invalid avatar preset")
+        updates["avatar_preset"] = avatar_preset or None
+        if avatar_preset:
+            _delete_local_avatar_if_present(user)
+            updates["avatar_url"] = None
 
     if "password" in updates:
         password_parts = hash_password(updates.pop("password"))
@@ -127,13 +147,39 @@ async def patch_me(payload: UserPatch, user=Depends(require_user)):
         )
 
     updated = await db["users"].find_one({"_id": user["_id"]})
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
 
-    return UserOut(
-        id=oid_str(updated["_id"]),
-        email=updated["email"],
-        username=updated["username"],
-        role=updated.get("role", "user"),
+    return serialize_user_out(updated)
+
+
+@router.post("/me/avatar", response_model=UserOut)
+async def upload_avatar(file: UploadFile = File(...), user=Depends(require_user)):
+    filename = str(file.filename or "").strip()
+    suffix = Path(filename).suffix.lower()
+    if suffix not in ALLOWED_AVATAR_SUFFIXES:
+        raise HTTPException(status_code=400, detail="Unsupported avatar file type")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Avatar file is empty")
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Avatar file is too large")
+
+    target_name = f"{oid_str(user['_id'])}{suffix}"
+    target = settings.user_avatar_upload_path / target_name
+    _delete_local_avatar_if_present(user)
+    target.write_bytes(content)
+
+    db = get_db()
+    await db["users"].update_one(
+        {"_id": user["_id"]},
+        {"$set": {"avatar_url": f"/media/avatars/{target_name}", "avatar_preset": None}},
     )
+    updated = await db["users"].find_one({"_id": user["_id"]})
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+    return serialize_user_out(updated)
 
 
 @router.delete("/me")
