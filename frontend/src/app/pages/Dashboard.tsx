@@ -319,11 +319,6 @@ export function Dashboard() {
   const portfolioVisualMetrics = useMemo(
     () => [
       {
-        label: "Evidence Coverage",
-        value: `${Math.round(summary.portfolioToJobAnalytics.job_skill_coverage_pct)}%`,
-        detail: `${summary.portfolioToJobAnalytics.portfolio_skill_count} evidence-linked skills across ${summary.portfolioToJobAnalytics.job_skill_count} recent job skills`,
-      },
-      {
         label: "Matched Skills",
         value: `${Math.round(summary.portfolioToJobAnalytics.matched_skill_rate_pct)}%`,
         detail: "Coverage across recent analyzed jobs",
@@ -332,11 +327,6 @@ export function Dashboard() {
         label: "Evidence-Backed",
         value: `${Math.round(summary.portfolioToJobAnalytics.evidence_backed_match_pct)}%`,
         detail: "Matched skills already supported by evidence",
-      },
-      {
-        label: "Evidence-Mapped",
-        value: `${Math.round(summary.portfolioToJobAnalytics.portfolio_backed_match_pct)}%`,
-        detail: "Matched skills already represented in your saved evidence",
       },
     ],
     [summary.portfolioToJobAnalytics]

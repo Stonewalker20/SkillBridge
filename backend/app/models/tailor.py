@@ -190,6 +190,7 @@ class JobMatchHistoryEntryOut(BaseModel):
     title: str | None = None
     company: str | None = None
     location: str | None = None
+    source_history_id: str | None = None
     match_score: float
     semantic_alignment_score: float = 0
     matched_skills: list[str] = Field(default_factory=list)

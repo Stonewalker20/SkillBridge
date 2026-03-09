@@ -1302,6 +1302,20 @@ def _dedupe_skill_ids_by_name(skill_ids: Iterable[str], skill_docs: dict[str, di
         ordered.append(skill_id)
     return ordered
 
+
+def _dedupe_skill_ids_by_terms(skill_ids: Iterable[str], skill_docs: dict[str, dict]) -> list[str]:
+    ordered: list[str] = []
+    seen_terms: set[str] = set()
+    for skill_id in skill_ids:
+        terms = _skill_terms(skill_docs.get(skill_id))
+        if not terms:
+            continue
+        if terms & seen_terms:
+            continue
+        seen_terms.update(terms)
+        ordered.append(skill_id)
+    return ordered
+
 def _serialize_history(doc: dict) -> JobMatchHistoryEntryOut:
     analysis = doc.get("analysis") or {}
     return JobMatchHistoryEntryOut(
@@ -1310,6 +1324,7 @@ def _serialize_history(doc: dict) -> JobMatchHistoryEntryOut:
         title=doc.get("title"),
         company=doc.get("company"),
         location=doc.get("location"),
+        source_history_id=oid_str(doc.get("source_history_id")) if doc.get("source_history_id") else None,
         match_score=float(analysis.get("match_score") or 0),
         semantic_alignment_score=float(analysis.get("semantic_alignment_score") or 0),
         matched_skills=[str(value) for value in analysis.get("matched_skills", []) or []],
@@ -1376,29 +1391,55 @@ def _render_plain_text(sections: list[ResumeSection]) -> str:
         lines.append("")
     return "\n".join(lines).strip() + "\n"
 
+
+async def _persist_job_ingest_snapshot(
+    db,
+    *,
+    user_id: str,
+    title: str | None,
+    company: str | None,
+    location: str | None,
+    text: str,
+) -> dict:
+    skills = await _load_skill_catalog(db)
+    extracted = _match_skills(text, skills)
+    keywords = _tokenize_keywords(text, extracted)
+    now = now_utc()
+    doc = {
+        "user_id": to_object_id(user_id),
+        "title": title,
+        "company": company,
+        "location": location,
+        "text": text,
+        "extracted_skills": [e.model_dump() for e in extracted[:200]],
+        "keywords": keywords,
+        "created_at": now,
+    }
+    res = await db["job_ingests"].insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return doc
+
 @router.post("/job/ingest", response_model=JobIngestOut)
 async def ingest_job(payload: JobIngestIn, user=Depends(require_user)):
     db = get_db()
     user_id = _scoped_user_id(user, payload.user_id)
-    skills = await _load_skill_catalog(db)
-    extracted = _match_skills(payload.text, skills)
-    keywords = _tokenize_keywords(payload.text, extracted)
-
-    now = now_utc()
-    doc = payload.model_dump()
-    doc["user_id"] = to_object_id(user_id)
-    doc["extracted_skills"] = [e.model_dump() for e in extracted[:200]]
-    doc["keywords"] = keywords
-    doc["created_at"] = now
-    # store full text; keep preview for response
-    res = await db["job_ingests"].insert_one(doc)
+    doc = await _persist_job_ingest_snapshot(
+        db,
+        user_id=user_id,
+        title=payload.title,
+        company=payload.company,
+        location=payload.location,
+        text=payload.text,
+    )
+    extracted = [ExtractedSkill(**entry) for entry in (doc.get("extracted_skills") or [])]
+    keywords = list(doc.get("keywords") or [])
 
     preview = payload.text.strip().replace("\n", " ")
     if len(preview) > 220:
         preview = preview[:220] + "..."
 
     return JobIngestOut(
-        id=oid_str(res.inserted_id),
+        id=oid_str(doc["_id"]),
         user_id=user_id,
         title=payload.title,
         company=payload.company,
@@ -1406,7 +1447,7 @@ async def ingest_job(payload: JobIngestIn, user=Depends(require_user)):
         text_preview=preview,
         extracted_skills=extracted[:75],
         keywords=keywords,
-        created_at=now,
+        created_at=doc.get("created_at"),
     )
 
 @router.post("/match", response_model=JobMatchOut)
@@ -1431,6 +1472,22 @@ async def match_job(payload: dict, user=Depends(require_user)):
     job_doc = await db["job_ingests"].find_one({"_id": job_oid, **ref_query("user_id", user_id)})
     if not job_doc:
         raise HTTPException(status_code=404, detail="Job ingest not found for user_id")
+
+    skills = await _load_skill_catalog(db)
+    recomputed_extracted = [entry.model_dump() for entry in _match_skills(job_doc.get("text", ""), skills)[:200]]
+    recomputed_keywords = _tokenize_keywords(job_doc.get("text", ""), [ExtractedSkill(**entry) for entry in recomputed_extracted])
+    if recomputed_extracted != (job_doc.get("extracted_skills") or []) or recomputed_keywords != (job_doc.get("keywords") or []):
+        await db["job_ingests"].update_one(
+            {"_id": job_oid},
+            {
+                "$set": {
+                    "extracted_skills": recomputed_extracted,
+                    "keywords": recomputed_keywords,
+                }
+            },
+        )
+        job_doc["extracted_skills"] = recomputed_extracted
+        job_doc["keywords"] = recomputed_keywords
 
     extracted = job_doc.get("extracted_skills") or []
     ignored_skill_names = _normalize_ignored_skill_names(payload.get("ignored_skill_names"))
@@ -1487,23 +1544,51 @@ async def match_job(payload: dict, user=Depends(require_user)):
     filtered_extracted_ids = _dedupe_preserve_order(str(entry.get("skill_id")) for entry in filtered_extracted if entry.get("skill_id"))
     extracted_skill_ids = [skill_id for skill_id in filtered_extracted_ids if skill_id in all_skill_docs]
     extracted_skill_ids = _dedupe_skill_ids_by_name(extracted_skill_ids, all_skill_docs)
+    extracted_skill_ids = _dedupe_skill_ids_by_terms(extracted_skill_ids, all_skill_docs)
     priority_extracted = [entry for entry in filtered_extracted if str(entry.get("skill_id") or "") in all_skill_docs]
     required_ids, preferred_ids = _classify_job_skill_priority(job_doc.get("text", ""), priority_extracted, all_skill_docs)
     required_ids = set(_dedupe_skill_ids_by_name(required_ids, all_skill_docs))
+    required_ids = set(_dedupe_skill_ids_by_terms(required_ids, all_skill_docs))
     preferred_ids = set(_dedupe_skill_ids_by_name(preferred_ids, all_skill_docs)) - required_ids
+    preferred_ids = set(_dedupe_skill_ids_by_terms(preferred_ids, all_skill_docs)) - required_ids
+    if not required_ids:
+        # Many pasted job postings do not preserve clean section formatting. When we cannot
+        # reliably detect a dedicated required section, treat the extracted job skills as the
+        # effective required set so coverage, matched skills, and missing skills remain coherent.
+        required_ids = set(extracted_skill_ids) - preferred_ids
+        if not required_ids:
+            required_ids = set(extracted_skill_ids)
     confirmed_term_lookup = {
         term
         for skill_id in user_skill_ids
         for term in _skill_terms(all_skill_docs.get(skill_id))
+    }
+    added_skill_id_lookup = {
+        entry["skill_id"]
+        for entry in added_from_missing_skills
+        if entry.get("skill_id")
+    }
+    added_skill_term_lookup = {
+        normalize_skill_text(entry["skill_name"])
+        for entry in added_from_missing_skills
+        if normalize_skill_text(entry.get("skill_name") or "")
     }
     matched_ids = []
     for skill_id in extracted_skill_ids:
         if skill_id in user_skill_ids:
             matched_ids.append(skill_id)
             continue
+        if skill_id in added_skill_id_lookup:
+            matched_ids.append(skill_id)
+            continue
+        extracted_terms = _skill_terms(all_skill_docs.get(skill_id))
+        if extracted_terms & added_skill_term_lookup:
+            matched_ids.append(skill_id)
+            continue
         if _skill_terms(all_skill_docs.get(skill_id)) & confirmed_term_lookup:
             matched_ids.append(skill_id)
     matched_ids = _dedupe_skill_ids_by_name(matched_ids, all_skill_docs)
+    matched_ids = _dedupe_skill_ids_by_terms(matched_ids, all_skill_docs)
     matched_skill_id_set = set(matched_ids)
     missing_ids = [skill_id for skill_id in extracted_skill_ids if skill_id not in matched_skill_id_set]
     matched_required_ids = [skill_id for skill_id in matched_ids if skill_id in required_ids]
@@ -1807,6 +1892,7 @@ async def match_job(payload: dict, user=Depends(require_user)):
         "company": job_doc.get("company"),
         "location": job_doc.get("location"),
         "text_preview": job_doc.get("text", "")[:220],
+        "job_text_snapshot": job_doc.get("text", ""),
         "analysis": result.model_dump(),
         "created_at": now,
         "updated_at": now,
@@ -2102,9 +2188,9 @@ async def get_job_match_history_detail(history_id: str, user_id: str | None = No
         raise HTTPException(status_code=404, detail="History entry not found")
 
     base = _serialize_history(doc)
-    job_text = None
+    job_text = str(doc.get("job_text_snapshot") or "").strip() or None
     job_id = doc.get("job_id")
-    if job_id is not None and ObjectId.is_valid(str(job_id)):
+    if not job_text and job_id is not None and ObjectId.is_valid(str(job_id)):
         job_doc = await db["job_ingests"].find_one({"_id": ObjectId(str(job_id)), **ref_query("user_id", scoped_user_id)})
         if job_doc:
             job_text = job_doc.get("text")
@@ -2116,6 +2202,58 @@ async def get_job_match_history_detail(history_id: str, user_id: str | None = No
         job_text=job_text,
         analysis=analysis,
     )
+
+
+@router.post("/history/{history_id}/reanalyze", response_model=JobMatchOut)
+async def reanalyze_job_match_history(history_id: str, user_id: str | None = None, user=Depends(require_user)):
+    db = get_db()
+    scoped_user_id = _scoped_user_id(user, user_id)
+    try:
+        history_oid = ObjectId(history_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid history id")
+
+    history_doc = await db["job_match_runs"].find_one({"_id": history_oid, **ref_query("user_id", scoped_user_id)})
+    if not history_doc:
+        raise HTTPException(status_code=404, detail="History entry not found")
+
+    source_text = str(history_doc.get("job_text_snapshot") or "").strip()
+    if not source_text:
+        job_id = history_doc.get("job_id")
+        if job_id is not None and ObjectId.is_valid(str(job_id)):
+            job_doc = await db["job_ingests"].find_one({"_id": ObjectId(str(job_id)), **ref_query("user_id", scoped_user_id)})
+            source_text = str((job_doc or {}).get("text") or "").strip()
+    if not source_text:
+        raise HTTPException(status_code=400, detail="No saved job description is available for reanalysis")
+
+    fresh_job_doc = await _persist_job_ingest_snapshot(
+        db,
+        user_id=scoped_user_id,
+        title=str(history_doc.get("title") or "").strip() or None,
+        company=str(history_doc.get("company") or "").strip() or None,
+        location=str(history_doc.get("location") or "").strip() or None,
+        text=source_text,
+    )
+
+    fresh_result = await match_job(
+        {
+            "job_id": oid_str(fresh_job_doc.get("_id")),
+            "resume_snapshot_id": None,
+            "persist_history": True,
+        },
+        user=user,
+    )
+    if fresh_result.history_id:
+        await db["job_match_runs"].update_one(
+            {"_id": ObjectId(fresh_result.history_id)},
+            {
+                "$set": {
+                    "source_history_id": history_oid,
+                    "job_text_snapshot": source_text,
+                }
+            },
+        )
+    return fresh_result
 
 @router.delete("/history/{history_id}")
 async def delete_job_match_history(history_id: str, user_id: str | None = None, user=Depends(require_user)):

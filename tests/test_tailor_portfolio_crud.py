@@ -1,4 +1,4 @@
-"""Tailor Add-on — Portfolio Items CRUD
+"""Tailor Add-on — Structured Evidence CRUD compatibility
 
 Endpoints:
 - POST   /portfolio/items
@@ -7,7 +7,7 @@ Endpoints:
 - DELETE /portfolio/items/{item_id}
 
 What is being tested:
-- Create a portfolio item with bullets, links, skill_ids.
+- Create a structured evidence item through the legacy compatibility route.
 - List returns the created item.
 - Patch updates priority + visibility + bullets.
 - Delete removes it.
@@ -64,7 +64,7 @@ def main():
     if "id" not in item:
         die("Missing id on create")
     item_id = item["id"]
-    ok("Created portfolio item")
+    ok("Created structured evidence item via compatibility route")
     pretty(item)
 
     r = requests.get(f"{base}/portfolio/items?user_id={args.user_id}", timeout=15)
@@ -72,7 +72,7 @@ def main():
     items = get_json(r)
     if not any(x.get("id") == item_id for x in items):
         die("Created item not found in list")
-    ok("List portfolio items contains created item")
+    ok("Compatibility list contains created item")
 
     patch = {"priority": 10, "visibility": "public", "bullets": ["Updated bullet 1", "Updated bullet 2"]}
     r = requests.patch(f"{base}/portfolio/items/{item_id}", json=patch, timeout=15)
@@ -84,7 +84,7 @@ def main():
         die("visibility not updated")
     if updated.get("bullets") != patch["bullets"]:
         die("bullets not updated")
-    ok("Patched portfolio item")
+    ok("Patched structured evidence item via compatibility route")
     pretty(updated)
 
     r = requests.delete(f"{base}/portfolio/items/{item_id}", timeout=15)
@@ -92,7 +92,7 @@ def main():
     out = get_json(r)
     if not out.get("deleted"):
         die("delete did not return deleted=true")
-    ok("Deleted portfolio item")
+    ok("Deleted structured evidence item via compatibility route")
 
     r = requests.get(f"{base}/portfolio/items?user_id={args.user_id}", timeout=15)
     assert_status(r, 200)

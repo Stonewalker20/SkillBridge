@@ -403,6 +403,7 @@ export type JobMatchHistoryEntry = {
   title?: string | null;
   company?: string | null;
   location?: string | null;
+  source_history_id?: string | null;
   match_score: number;
   semantic_alignment_score?: number;
   matched_skills?: string[];
@@ -908,6 +909,9 @@ export const api = {
   },
 
   getJobMatchHistoryDetail: async (historyId: string) => request<JobMatchHistoryDetail>(`/tailor/history/${historyId}`, "GET"),
+
+  reanalyzeJobMatchHistory: async (historyId: string) =>
+    request<any>(`/tailor/history/${encodeURIComponent(historyId)}/reanalyze`, "POST"),
 
   deleteJobMatchHistory: async (historyId: string) =>
     request<{ ok: boolean; id: string; title?: string }>(`/tailor/history/${historyId}`, "DELETE"),

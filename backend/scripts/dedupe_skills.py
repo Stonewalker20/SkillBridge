@@ -233,11 +233,11 @@ def main() -> None:
         project_link_updates += 1
 
     portfolio_updates = 0
-    for item in db.portfolio_items.find({}, {"skill_ids": 1}):
+    for item in db.evidence.find({}, {"skill_ids": 1}):
         current_ids = list(item.get("skill_ids") or [])
         remapped = remap_skill_id_list(current_ids, id_map)
         if [oid_str(value) for value in remapped] != [oid_str(value) for value in current_ids]:
-            db.portfolio_items.update_one(
+            db.evidence.update_one(
                 {"_id": item["_id"]},
                 {"$set": {"skill_ids": remapped, "updated_at": now_utc()}},
             )

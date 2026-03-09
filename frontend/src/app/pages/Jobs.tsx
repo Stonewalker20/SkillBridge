@@ -108,6 +108,7 @@ export function Jobs() {
   const [searchParams, setSearchParams] = useSearchParams();
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const [jobDescription, setJobDescription] = useState("");
+  const [isJobDescriptionExpanded, setIsJobDescriptionExpanded] = useState(false);
   const [jobTitle, setJobTitle] = useState("");
   const [company, setCompany] = useState("");
   const [location, setLocation] = useState("");
@@ -185,6 +186,7 @@ export function Jobs() {
 
   const handleReset = () => {
     setJobDescription("");
+    setIsJobDescriptionExpanded(false);
     setJobTitle("");
     setCompany("");
     setLocation("");
@@ -442,15 +444,15 @@ export function Jobs() {
   };
 
   const handleReanalyzeHistory = async (entry: JobMatchHistoryEntry) => {
-    const historyJobId = String(entry.job_id ?? "").trim();
-    if (!historyJobId) {
-      toast.error("This saved analysis is missing its job id");
-      return;
-    }
-
     setReanalyzingHistoryId(entry.id);
     try {
-      await api.matchJob({ job_id: historyJobId });
+      const match = await api.reanalyzeJobMatchHistory(entry.id);
+      setAnalysis(match as MatchResult);
+      setJobId(String((match as any)?.job_id ?? entry.job_id ?? "").trim() || null);
+      setJobTitle(String(entry.title ?? "").trim());
+      setCompany(String(entry.company ?? "").trim());
+      setLocation(String(entry.location ?? "").trim());
+      setLastTailoredId(null);
       await refreshHistory();
 
       recordActivity({
@@ -469,23 +471,17 @@ export function Jobs() {
   };
 
   const handleReanalyzeCurrent = async () => {
-    const currentJobId = String(jobId ?? "").trim();
-    if (!currentJobId) {
-      toast.error("This analysis is missing its job id");
+    const currentHistoryId = String(normalized.historyId ?? "").trim();
+    if (!currentHistoryId) {
+      toast.error("Restore or save a job analysis before reanalyzing it");
       return;
     }
 
     setReanalyzingCurrent(true);
     try {
-      const match = await api.matchJob({
-        job_id: currentJobId,
-        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
-        history_id: String(normalized.historyId ?? "").trim() || undefined,
-        ignored_skill_names: normalized.ignoredSkills,
-        added_from_missing_skills: normalized.addedFromMissingSkills,
-        persist_history: true,
-      });
+      const match = await api.reanalyzeJobMatchHistory(currentHistoryId);
       setAnalysis(match as MatchResult);
+      setJobId(String((match as any)?.job_id ?? jobId ?? "").trim() || null);
       setLastTailoredId(null);
       try {
         await refreshHistory();
@@ -493,7 +489,7 @@ export function Jobs() {
         console.error("Failed to refresh job match history:", historyError);
       }
       recordActivity({
-        id: `jobs:reanalyze-current:${currentJobId}`,
+        id: `jobs:reanalyze-current:${currentHistoryId}`,
         type: "jobs",
         action: "reanalyzed",
         name: jobTitle || company || "Current job match",
@@ -679,9 +675,22 @@ export function Jobs() {
                 onChange={(e) => setJobDescription(e.target.value)}
                 placeholder="Paste the full job description here..."
                 rows={9}
-                className="font-mono text-sm"
+                className={`${isJobDescriptionExpanded ? "h-[30rem]" : "h-64"} resize-none overflow-y-auto font-mono text-sm`}
               />
-              <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">Include requirements, qualifications, and responsibilities for best results.</p>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="text-xs text-gray-500 dark:text-slate-400">Include requirements, qualifications, and responsibilities for best results.</p>
+                {jobDescription.trim().length > 600 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => setIsJobDescriptionExpanded((current) => !current)}
+                  >
+                    {isJobDescriptionExpanded ? "Show less" : "Load more"}
+                  </Button>
+                ) : null}
+              </div>
             </div>
 
             <Button

@@ -6,7 +6,7 @@ Endpoints:
 
 What is being tested:
 - Ingest a job posting.
-- Ensure at least one portfolio item exists for the user.
+- Ensure at least one structured evidence item exists for the user.
 - Generate tailored resume preview using job_id.
 
 Pass criteria:
@@ -39,7 +39,7 @@ def ensure_portfolio_item(base: str, user_id: str, skill_ids: list[str]) -> str:
         "type": "project",
         "title": "Resume Tailor Engine",
         "org": "SkillBridge",
-        "summary": "Selection-based tailoring engine on top of portfolio items.",
+        "summary": "Selection-based tailoring engine on top of structured evidence.",
         "bullets": [
             "Normalized skills and evidence into a portfolio graph to support job-specific selection.",
             "Generated ATS-friendly resume previews with export to PDF/DOCX.",
@@ -64,7 +64,7 @@ def main():
     mongodb_id = ensure_skill(base, "MongoDB", "Database", ["mongo"])
 
     item_id = ensure_portfolio_item(base, args.user_id, [python_id, fastapi_id, mongodb_id])
-    ok(f"Ensured portfolio item exists: {item_id}")
+    ok(f"Ensured structured evidence item exists: {item_id}")
 
     job_text = """Backend Engineer role.
 
