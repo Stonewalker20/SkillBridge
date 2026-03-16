@@ -9,6 +9,9 @@ build/
 
 # Data
 backend/data/raw/
+backend/ml_sandbox/artifacts/
+backend/ml_sandbox/datasets/generated/
+backend/tests/.tmp_avatars/
 
 # Envs
 .venv/

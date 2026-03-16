@@ -7,3 +7,4 @@ scikit-learn>=1.5
 tqdm>=4.66
 psutil>=6.0
 accelerate>=0.33
+mlflow>=2.16

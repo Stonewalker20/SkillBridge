@@ -1,0 +1,3 @@
+{"id":"extract-1","text":"Built FastAPI APIs in Python and deployed analytics dashboards for internal teams.","expected_skills":["Python","FastAPI","analytics dashboards"],"metadata":{"domain":"backend"}}
+{"id":"extract-2","text":"Experienced with machine learning, PyTorch, and model evaluation for NLP pipelines.","expected_skills":["machine learning","PyTorch","NLP"],"metadata":{"domain":"ml"}}
+{"id":"extract-3","text":"Used SQL, Tableau, and stakeholder communication to drive reporting decisions.","expected_skills":["SQL","Tableau","stakeholder communication"],"metadata":{"domain":"analytics"}}
