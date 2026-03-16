@@ -10,6 +10,13 @@ from app.utils.ai import cosine_similarity, embed_texts, normalize_ai_preference
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 
 
+_RAG_STOPWORDS = {
+    "the", "and", "for", "with", "that", "this", "from", "your", "will", "have", "has", "into",
+    "using", "used", "their", "they", "them", "must", "plus", "able", "work", "team", "role",
+    "more", "less", "some", "many", "each", "make", "made", "over", "under", "than", "then",
+}
+
+
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -18,6 +25,29 @@ def _clean_text(text: str) -> str:
     value = str(text or "")
     value = re.sub(r"\s+", " ", value).strip()
     return value
+
+
+def _tokenize_for_retrieval(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[A-Za-z][A-Za-z0-9+.#-]{1,}", _clean_text(text).lower())
+        if token not in _RAG_STOPWORDS
+    }
+
+
+def _lexical_overlap_score(query_text: str, candidate_text: str) -> float:
+    query_tokens = _tokenize_for_retrieval(query_text)
+    candidate_tokens = _tokenize_for_retrieval(candidate_text)
+    if not query_tokens or not candidate_tokens:
+        return 0.0
+
+    overlap = query_tokens & candidate_tokens
+    if not overlap:
+        return 0.0
+
+    coverage = len(overlap) / len(query_tokens)
+    density = len(overlap) / len(candidate_tokens)
+    return round((coverage * 0.8) + (density * 0.2), 4)
 
 
 def split_text_into_chunks(text: str, chunk_size: int = 500, overlap: int = 80) -> list[str]:
@@ -140,9 +170,11 @@ async def retrieve_rag_context(
     ranked: list[dict] = []
     for doc in docs:
         vector = list(doc.get("embedding") or [])
-        if not vector:
-            continue
-        score = cosine_similarity(query_vec, vector)
+        score = cosine_similarity(query_vec, vector) if vector else 0.0
+        provider_name = provider
+        if score <= 0:
+            score = _lexical_overlap_score(query, f"{doc.get('title') or ''} {doc.get('text') or ''}")
+            provider_name = "lexical-overlap"
         if score <= 0:
             continue
         ranked.append(
@@ -153,7 +185,7 @@ async def retrieve_rag_context(
                 "snippet": _clean_text(doc.get("text") or ""),
                 "score": round(float(score), 4),
                 "chunk_index": int(doc.get("chunk_index") or 0),
-                "provider": provider,
+                "provider": provider_name,
                 "metadata": doc.get("metadata") or {},
             }
         )

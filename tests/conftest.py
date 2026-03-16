@@ -1,10 +1,19 @@
 import os
+import sys
+import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pytest
 from bson import ObjectId
 from fastapi.testclient import TestClient
+
+
+ROOT = Path(__file__).resolve().parents[1]
+BACKEND_ROOT = ROOT / "backend"
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
 
 
 def _matches(doc: Dict[str, Any], filt: Dict[str, Any]) -> bool:
@@ -23,6 +32,12 @@ def _matches(doc: Dict[str, Any], filt: Dict[str, Any]) -> bool:
             if doc.get(k) != v:
                 return False
     return True
+
+
+def _should_remove_array_item(item: Any, filt: Dict[str, Any]) -> bool:
+    if not isinstance(item, dict):
+        return item == filt
+    return _matches(item, filt)
 
 
 @dataclass
@@ -45,6 +60,17 @@ class FakeCursor:
     def __init__(self, docs: List[Dict[str, Any]]):
         self._docs = docs
 
+    def sort(self, key, direction: int = 1):
+        sort_fields = key if isinstance(key, list) else [(key, direction)]
+        for field, order in reversed(sort_fields):
+            reverse = int(order or 1) < 0
+            self._docs = sorted(self._docs, key=lambda doc: doc.get(field), reverse=reverse)
+        return self
+
+    def limit(self, length: int):
+        self._docs = list(self._docs)[: max(0, int(length or 0))]
+        return self
+
     async def to_list(self, length: int = 1000):
         return list(self._docs)[:length]
 
@@ -63,16 +89,20 @@ class FakeCollection:
         self._docs.append(d)
         return _InsertOneResult(inserted_id=d["_id"])
 
-    async def find_one(self, filt: Dict[str, Any], proj: Optional[Dict[str, int]] = None):
-        for d in self._docs:
-            if _matches(d, filt):
-                if not proj:
-                    return dict(d)
-                out = {"_id": d.get("_id")}
-                for k, inc in proj.items():
-                    if inc and k in d:
-                        out[k] = d[k]
-                return out
+    async def find_one(self, filt: Dict[str, Any], proj: Optional[Dict[str, int]] = None, sort: Optional[List[Any]] = None):
+        docs = [dict(d) for d in self._docs if _matches(d, filt)]
+        if sort:
+            for key, direction in reversed(sort):
+                reverse = int(direction or 1) < 0
+                docs.sort(key=lambda doc: doc.get(key), reverse=reverse)
+        for d in docs:
+            if not proj:
+                return dict(d)
+            out = {"_id": d.get("_id")}
+            for k, inc in proj.items():
+                if inc and k in d:
+                    out[k] = d[k]
+            return out
         return None
 
     def find(self, filt: Optional[Dict[str, Any]] = None, proj: Optional[Dict[str, int]] = None):
@@ -106,9 +136,36 @@ class FakeCollection:
                             if v not in arr:
                                 arr.append(v)
                         nd[k] = arr
+                if "$pull" in update:
+                    for k, v in update["$pull"].items():
+                        arr = list(nd.get(k, []))
+                        nd[k] = [item for item in arr if not _should_remove_array_item(item, v)]
                 self._docs[i] = nd
                 return _UpdateResult(matched_count=1, modified_count=1)
         return _UpdateResult(matched_count=0, modified_count=0)
+
+    async def update_many(self, filt: Dict[str, Any], update: Dict[str, Any]):
+        matched = 0
+        modified = 0
+        for i, d in enumerate(list(self._docs)):
+            if _matches(d, filt):
+                nd = dict(d)
+                changed = False
+                if "$set" in update:
+                    nd.update(update["$set"])
+                    changed = True
+                if "$pull" in update:
+                    for k, v in update["$pull"].items():
+                        arr = list(nd.get(k, []))
+                        next_arr = [item for item in arr if not _should_remove_array_item(item, v)]
+                        if next_arr != arr:
+                            nd[k] = next_arr
+                            changed = True
+                self._docs[i] = nd
+                matched += 1
+                if changed:
+                    modified += 1
+        return _UpdateResult(matched_count=matched, modified_count=modified)
 
     async def delete_one(self, filt: Dict[str, Any]):
         before = len(self._docs)
@@ -169,3 +226,26 @@ def client(fake_db):
 
     os.environ.setdefault("RUN_INTEGRATION_TESTS", "0")
     return TestClient(main_mod.app)
+
+
+@pytest.fixture(scope="session")
+def auth_context(client):
+    email = f"smoke_{uuid.uuid4().hex[:8]}@example.com"
+    password = "SmokePass123!"
+    register = client.post("/auth/register", json={"email": email, "username": "smokeuser", "password": password})
+    assert register.status_code in (200, 201), register.text
+    token = register.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    me = client.get("/auth/me", headers=headers)
+    assert me.status_code == 200, me.text
+    return {"headers": headers, "user_id": me.json()["id"], "email": email, "password": password}
+
+
+@pytest.fixture(scope="session")
+def auth_headers(auth_context):
+    return auth_context["headers"]
+
+
+@pytest.fixture(scope="session")
+def user_id(auth_context):
+    return auth_context["user_id"]
