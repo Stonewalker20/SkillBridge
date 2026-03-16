@@ -1,3 +1,5 @@
+"""Local AI utilities for embeddings, skill extraction support, rewrite helpers, and transformer fallback behavior."""
+
 from __future__ import annotations
 
 import atexit
@@ -52,12 +54,14 @@ SKILL_CATEGORY_BY_LABEL = {
 
 _SENTENCE_MODEL = None
 _ZERO_SHOT_PIPELINE = None
+_REWRITE_PIPELINE = None
 _TORCH_RUNTIME_CONFIGURED = False
 _EMBED_CACHE: "OrderedDict[str, list[float]]" = OrderedDict()
 _CLASSIFY_CACHE: "OrderedDict[str, tuple[bool, str]]" = OrderedDict()
 _CACHE_LIMIT = 2048
 _SENTENCE_MODELS: dict[str, object] = {}
 _ZERO_SHOT_PIPELINES: dict[str, object] = {}
+_REWRITE_PIPELINES: dict[str, object] = {}
 
 DEFAULT_INFERENCE_MODE = "auto"
 AVAILABLE_INFERENCE_MODES = ["auto", "local-transformer", "local-fallback"]
@@ -162,6 +166,25 @@ def _load_zero_shot_pipeline(model_name: str | None = None):
         return None
 
 
+def _load_rewrite_pipeline(model_name: str | None = None):
+    chosen_model = str(model_name or settings.local_rewrite_model).strip() or settings.local_rewrite_model
+    if chosen_model in _REWRITE_PIPELINES:
+        return _REWRITE_PIPELINES[chosen_model]
+    try:
+        from transformers import pipeline
+
+        _configure_torch_runtime()
+        _REWRITE_PIPELINES[chosen_model] = pipeline(
+            "text2text-generation",
+            model=chosen_model,
+            device=settings.local_model_device,
+            framework="pt",
+        )
+        return _REWRITE_PIPELINES[chosen_model]
+    except Exception:
+        return None
+
+
 def _configure_torch_runtime() -> None:
     global _TORCH_RUNTIME_CONFIGURED
     if _TORCH_RUNTIME_CONFIGURED:
@@ -178,9 +201,9 @@ def _configure_torch_runtime() -> None:
 
 
 def release_local_models() -> None:
-    global _SENTENCE_MODEL, _ZERO_SHOT_PIPELINE, _EMBED_CACHE, _CLASSIFY_CACHE, _SENTENCE_MODELS, _ZERO_SHOT_PIPELINES
+    global _SENTENCE_MODEL, _ZERO_SHOT_PIPELINE, _REWRITE_PIPELINE, _EMBED_CACHE, _CLASSIFY_CACHE, _SENTENCE_MODELS, _ZERO_SHOT_PIPELINES, _REWRITE_PIPELINES
 
-    for obj in list(_SENTENCE_MODELS.values()) + list(_ZERO_SHOT_PIPELINES.values()) + [_SENTENCE_MODEL, _ZERO_SHOT_PIPELINE]:
+    for obj in list(_SENTENCE_MODELS.values()) + list(_ZERO_SHOT_PIPELINES.values()) + list(_REWRITE_PIPELINES.values()) + [_SENTENCE_MODEL, _ZERO_SHOT_PIPELINE, _REWRITE_PIPELINE]:
         if obj is None:
             continue
         model = getattr(obj, "model", obj)
@@ -192,8 +215,10 @@ def release_local_models() -> None:
 
     _SENTENCE_MODEL = None
     _ZERO_SHOT_PIPELINE = None
+    _REWRITE_PIPELINE = None
     _SENTENCE_MODELS.clear()
     _ZERO_SHOT_PIPELINES.clear()
+    _REWRITE_PIPELINES.clear()
     _EMBED_CACHE.clear()
     _CLASSIFY_CACHE.clear()
     gc.collect()
@@ -207,14 +232,15 @@ def get_inference_status(preferences: dict | None = None) -> dict[str, str]:
     force_fallback = prefs["inference_mode"] == "local-fallback"
     embed_model = None if force_fallback else _load_sentence_transformer(prefs["embedding_model"])
     zero_shot = None if force_fallback else _load_zero_shot_pipeline(prefs["zero_shot_model"])
+    rewrite_model = None if force_fallback else _load_rewrite_pipeline(settings.local_rewrite_model)
     embeddings_provider = "local-transformer" if embed_model is not None else "local-hash"
-    rewrite_provider = "local-rule"
+    rewrite_provider = "local-llm" if rewrite_model is not None else "local-rule"
     return {
         "provider_mode": "Local Transformer" if embed_model is not None or zero_shot is not None else "Local Fallback",
         "embeddings_provider": embeddings_provider,
         "rewrite_provider": rewrite_provider,
         "embedding_model": prefs["embedding_model"] if embed_model is not None else "hashed-embedding-v1",
-        "rewrite_model": "resume-rule-rewriter-v1",
+        "rewrite_model": settings.local_rewrite_model if rewrite_model is not None else "resume-rule-rewriter-v1",
     }
 
 
@@ -224,6 +250,7 @@ async def warm_local_models() -> dict[str, str]:
     # Touch both paths so the first real request does not pay model init cost.
     await embed_texts(["python fastapi mongodb", "machine learning project experience"], preferences=prefs)
     await extract_skill_candidates("Python, FastAPI, MongoDB, machine learning, leadership", max_candidates=5, preferences=prefs)
+    await rewrite_resume_bullets("python fastapi ml dashboards", ["Built analytics APIs for internal users."], focus="balanced")
     return get_inference_status(prefs) if status else status
 
 
@@ -296,10 +323,66 @@ def _rewrite_locally(job_text: str, bullets: list[str], focus: str) -> list[str]
     return rewritten
 
 
+def _rewrite_prompt(job_text: str, bullet: str, focus: str) -> str:
+    trimmed_job = " ".join(str(job_text or "").split())[:900]
+    trimmed_bullet = re.sub(r"^\s*[-*]\s*", "", str(bullet or "").strip())
+    focus_instruction = {
+        "ats": "Keep ATS-friendly keywords from the job posting when they are truthful.",
+        "impact": "Emphasize measurable impact, ownership, and outcomes.",
+        "balanced": "Balance clarity, relevance, and measurable impact.",
+    }.get(focus, "Balance clarity, relevance, and measurable impact.")
+    return (
+        "Rewrite the resume bullet to be concise, truthful, and professional. "
+        "Do not invent experience. Keep it one bullet line. "
+        f"{focus_instruction}\n"
+        f"Job posting: {trimmed_job}\n"
+        f"Original bullet: {trimmed_bullet}\n"
+        "Rewritten bullet:"
+    )
+
+
+def _rewrite_with_local_llm(job_text: str, bullets: list[str], focus: str) -> tuple[list[str], str] | None:
+    pipeline = _load_rewrite_pipeline(settings.local_rewrite_model)
+    if pipeline is None:
+        return None
+
+    rewritten: list[str] = []
+    for bullet in bullets:
+        prompt = _rewrite_prompt(job_text, bullet, focus)
+        try:
+            outputs = pipeline(
+                prompt,
+                max_new_tokens=72,
+                do_sample=False,
+                num_beams=4,
+                truncation=True,
+            )
+        except Exception:
+            return None
+        if not outputs:
+            continue
+        text = str(outputs[0].get("generated_text") or "").strip()
+        if text.lower().startswith(prompt.lower()):
+            text = text[len(prompt):].strip()
+        text = re.sub(r"^\s*[-*]\s*", "", text).strip()
+        if not text:
+            continue
+        if not text.endswith("."):
+            text += "."
+        rewritten.append(f"- {text}")
+
+    if not rewritten:
+        return None
+    return rewritten, "local-llm"
+
+
 async def rewrite_resume_bullets(job_text: str, bullets: list[str], focus: str = "balanced") -> tuple[list[str], str]:
     cleaned = [re.sub(r"^\s*[-*]\s*", "", str(bullet or "").strip()) for bullet in bullets if str(bullet or "").strip()]
     if not cleaned:
         return [], "local-rule"
+    rewritten = _rewrite_with_local_llm(job_text, cleaned, focus)
+    if rewritten is not None:
+        return rewritten
     return _rewrite_locally(job_text, cleaned, focus), "local-rule"
 
 

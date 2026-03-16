@@ -1,9 +1,50 @@
+"""Tests for evidence ingestion, evidence CRUD, and user skill confirmation flows."""
+
 from io import BytesIO
+
+
+def test_evidence_skill_matching_resolves_aliases_and_acronyms(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+
+    response = client.post(
+        "/evidence/analyze",
+        headers=headers,
+        data={"title": "Alias Coverage", "type": "project", "text": "Built machine learning dashboards with Python services."},
+    )
+
+    assert response.status_code == 200
+    extracted = response.json()["items"][0]["extracted_skills"]
+    extracted_names = {skill["skill_name"] for skill in extracted}
+    assert "ML" in extracted_names
+    assert "Python" in extracted_names
+
+
+def test_evidence_skill_matching_keeps_short_skill_matching_strict(test_context, monkeypatch):
+    client = test_context["client"]
+    headers = test_context["headers"]
+
+    async def _fake_extract_skill_candidates(_text: str, max_candidates: int = 25, preferences: dict | None = None):
+        return [{"name": "Learning", "category": "General"}], "test-transformer"
+
+    monkeypatch.setattr("app.routers.evidence.extract_skill_candidates", _fake_extract_skill_candidates)
+
+    response = client.post(
+        "/evidence/analyze",
+        headers=headers,
+        data={"title": "Strict Short Skill", "type": "project", "text": "The team focused on learning systems and mentoring."},
+    )
+
+    assert response.status_code == 200
+    extracted = response.json()["items"][0]["extracted_skills"]
+    extracted_names = {skill["skill_name"] for skill in extracted}
+    assert "ML" not in extracted_names
 
 
 def test_evidence_analysis_and_crud(test_context):
     client = test_context["client"]
     headers = test_context["headers"]
+    db = test_context["db"]
 
     analysis = client.post(
         "/evidence/analyze",
@@ -13,6 +54,7 @@ def test_evidence_analysis_and_crud(test_context):
     assert analysis.status_code == 200
     extracted = analysis.json()["items"][0]["extracted_skills"]
     assert any(skill["skill_name"] == "Python" for skill in extracted)
+    assert all(0.0 <= float(skill.get("confidence", 0.0)) <= 1.0 for skill in extracted)
 
     created = client.post(
         "/evidence/",
@@ -29,6 +71,7 @@ def test_evidence_analysis_and_crud(test_context):
     )
     assert created.status_code == 200
     evidence_id = created.json()["id"]
+    assert any(str(doc.get("source_id")) == evidence_id for doc in db["rag_chunks"].docs)
 
     listed = client.get("/evidence/", headers=headers)
     assert listed.status_code == 200
@@ -37,9 +80,11 @@ def test_evidence_analysis_and_crud(test_context):
     patched = client.patch(f"/evidence/{evidence_id}", headers=headers, json={"title": "Updated Project Summary"})
     assert patched.status_code == 200
     assert patched.json()["title"] == "Updated Project Summary"
+    assert any(doc.get("title") == "Updated Project Summary" for doc in db["rag_chunks"].docs if str(doc.get("source_id")) == evidence_id)
 
     deleted = client.delete(f"/evidence/{evidence_id}", headers=headers)
     assert deleted.status_code == 200
+    assert not any(str(doc.get("source_id")) == evidence_id for doc in db["rag_chunks"].docs)
 
 
 def test_evidence_multi_file_analysis(test_context, monkeypatch):
@@ -76,6 +121,37 @@ def test_evidence_multi_file_analysis(test_context, monkeypatch):
     }
     assert "Python" in extracted_names
     assert "ML" in extracted_names or "FastAPI" in extracted_names
+
+
+def test_evidence_confidence_increases_with_repeated_support(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+
+    low_support = client.post(
+        "/evidence/analyze",
+        headers=headers,
+        data={"title": "Low Support", "type": "project", "text": "Built one Python dashboard."},
+    )
+    assert low_support.status_code == 200
+    low_python = next(
+        float(skill["confidence"])
+        for skill in low_support.json()["items"][0]["extracted_skills"]
+        if skill["skill_name"] == "Python"
+    )
+
+    high_support = client.post(
+        "/evidence/analyze",
+        headers=headers,
+        data={"title": "High Support", "type": "project", "text": "Python services, Python dashboards, Python automation, Python APIs."},
+    )
+    assert high_support.status_code == 200
+    high_python = next(
+        float(skill["confidence"])
+        for skill in high_support.json()["items"][0]["extracted_skills"]
+        if skill["skill_name"] == "Python"
+    )
+
+    assert high_python > low_python
 
 
 def test_profile_confirmation_routes(test_context):

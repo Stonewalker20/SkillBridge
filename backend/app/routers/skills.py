@@ -1,8 +1,11 @@
+"""Skill catalog routes for listing, creating, deleting, and analyzing skills available to or owned by the user."""
+
 import re
 
 from fastapi import APIRouter, Query, HTTPException, Depends
 from app.core.db import get_db
 from app.models.skill import SkillIn, SkillOut, SkillUpdate
+from app.utils.ai import cosine_similarity, embed_texts, normalize_ai_preferences
 from app.utils.skill_catalog import expand_alias_variants, merge_skill_docs, normalize_skill_text
 from app.utils.mongo import oid_str, ref_values
 from app.core.auth import require_user
@@ -37,6 +40,28 @@ def normalize_str_list(values: list[str] | None) -> list[str]:
         seen.add(key)
         out.append(s)
     return out
+
+
+def _count_occurrences(text: str, phrase: str) -> int:
+    normalized_text = str(text or "")
+    normalized_phrase = str(phrase or "").strip()
+    if not normalized_text or not normalized_phrase:
+        return 0
+    if re.fullmatch(r"[A-Za-z0-9]+", normalized_phrase):
+        pattern = rf"(?<![A-Za-z0-9]){re.escape(normalized_phrase)}(?![A-Za-z0-9])"
+    else:
+        pattern = re.escape(normalized_phrase)
+    return len(re.findall(pattern, normalized_text, flags=re.IGNORECASE))
+
+
+async def _extract_confidence(text: str, observed_term: str, canonical_terms: list[str]) -> float:
+    mention_count = max((_count_occurrences(text, term) for term in [observed_term, *canonical_terms] if term), default=0)
+    evidence_frequency = min(1.0, mention_count / 3.0) if mention_count > 0 else 0.0
+    vectors, _provider = await embed_texts([observed_term, *canonical_terms], preferences=normalize_ai_preferences())
+    semantic_similarity = 0.0
+    if len(vectors) == len(canonical_terms) + 1:
+        semantic_similarity = max((cosine_similarity(vectors[0], vec) for vec in vectors[1:]), default=0.0)
+    return round(max(0.0, min(1.0, evidence_frequency * semantic_similarity)), 4)
 
 
 def is_hidden_skill(doc: dict) -> bool:
@@ -299,7 +324,7 @@ async def extract_skills(snapshot_id: str):
             if not c_norm:
                 continue
             if c_norm.lower() in lowered:
-                conf = 0.9 if c_norm.lower() == name.lower() else 0.75
+                conf = await _extract_confidence(text, c_norm, [str(term or "").strip() for term in candidates if str(term or "").strip()])
                 if conf > best_conf:
                     best_conf = conf
                     best = c_norm

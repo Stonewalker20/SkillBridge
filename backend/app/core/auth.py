@@ -1,3 +1,5 @@
+"""Authentication primitives for password hashing, session creation, token validation, and user dependency injection."""
+
 from __future__ import annotations
 
 from fastapi import HTTPException, Header, Depends
@@ -100,6 +102,10 @@ async def require_user(authorization: Optional[str] = Header(default=None)) -> D
     if not user:
         await db["sessions"].delete_one({"_id": sess["_id"]})
         raise HTTPException(status_code=401, detail="Invalid token")
+
+    if user.get("is_active", True) is False:
+        await db["sessions"].delete_many({"user_id": user["_id"]})
+        raise HTTPException(status_code=401, detail="Account deactivated")
 
     return user
 

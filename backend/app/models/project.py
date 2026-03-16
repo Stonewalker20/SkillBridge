@@ -1,3 +1,5 @@
+"""Pydantic schemas for user projects and project-skill link records."""
+
 from __future__ import annotations
 
 from datetime import datetime

@@ -1,3 +1,5 @@
+"""Job submission and moderation routes that manage saved job postings and their approval lifecycle."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, HTTPException

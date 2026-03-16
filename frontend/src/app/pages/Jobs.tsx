@@ -13,6 +13,24 @@ import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateC
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 
+type RetrievedContextItem = {
+  source_type: string;
+  source_id: string;
+  title: string;
+  snippet: string;
+  score: number;
+  chunk_index?: number;
+};
+
+type GapInsightItem = {
+  skill_id: string;
+  skill_name: string;
+  gap_type: string;
+  severity: string;
+  reason: string;
+  recommended_action: string;
+};
+
 type MatchResult = {
   job_id?: string;
   match_score?: number;
@@ -31,6 +49,9 @@ type MatchResult = {
   strength_areas?: string[];
   related_skills?: string[];
   semantic_alignment_examples?: string[];
+  retrieved_context?: RetrievedContextItem[];
+  gap_reasoning_summary?: string;
+  gap_insights?: GapInsightItem[];
   score_breakdown?: Array<{ label?: string; score?: number; detail?: string }>;
   recommended_next_steps?: string[];
   extracted_skill_count?: number;
@@ -45,6 +66,8 @@ type MatchResult = {
   keyword_overlap_terms?: string[];
   semantic_alignment_score?: number;
   semantic_alignment_explanation?: string;
+  personal_skill_vector_score?: number;
+  personal_skill_vector_explanation?: string;
   history_id?: string | null;
   tailored_resume_id?: string | null;
   [k: string]: any;
@@ -85,6 +108,7 @@ export function Jobs() {
   const [searchParams, setSearchParams] = useSearchParams();
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const [jobDescription, setJobDescription] = useState("");
+  const [isJobDescriptionExpanded, setIsJobDescriptionExpanded] = useState(false);
   const [jobTitle, setJobTitle] = useState("");
   const [company, setCompany] = useState("");
   const [location, setLocation] = useState("");
@@ -135,6 +159,9 @@ export function Jobs() {
       strengthAreas: asArray<string>(a.strength_areas ?? a.strengthAreas),
       relatedSkills: asArray<string>(a.related_skills ?? a.relatedSkills),
       semanticAlignmentExamples: asArray<string>(a.semantic_alignment_examples ?? a.semanticAlignmentExamples),
+      retrievedContext: asArray<RetrievedContextItem>(a.retrieved_context ?? a.retrievedContext),
+      gapReasoningSummary: String(a.gap_reasoning_summary ?? a.gapReasoningSummary ?? ""),
+      gapInsights: asArray<GapInsightItem>(a.gap_insights ?? a.gapInsights),
       scoreBreakdown,
       nextSteps: asArray<string>(a.recommended_next_steps ?? a.recommendedNextSteps),
       extractedSkillCount: Number(a.extracted_skill_count ?? a.extractedSkillCount ?? 0) || 0,
@@ -150,6 +177,8 @@ export function Jobs() {
       keywordOverlapScore: Number(keywordOverlapBreakdown?.score ?? 0) || 0,
       semanticAlignmentScore: Number(a.semantic_alignment_score ?? a.semanticAlignmentScore ?? 0) || 0,
       semanticAlignmentExplanation: String(a.semantic_alignment_explanation ?? a.semanticAlignmentExplanation ?? ""),
+      personalSkillVectorScore: Number(a.personal_skill_vector_score ?? a.personalSkillVectorScore ?? 0) || 0,
+      personalSkillVectorExplanation: String(a.personal_skill_vector_explanation ?? a.personalSkillVectorExplanation ?? ""),
       historyId: a.history_id ?? a.historyId ?? null,
       tailoredResumeId: a.tailored_resume_id ?? a.tailoredResumeId ?? null,
     };
@@ -157,6 +186,7 @@ export function Jobs() {
 
   const handleReset = () => {
     setJobDescription("");
+    setIsJobDescriptionExpanded(false);
     setJobTitle("");
     setCompany("");
     setLocation("");
@@ -201,15 +231,19 @@ export function Jobs() {
     const loadHistoryAndTemplates = async () => {
       setHistoryLoading(true);
       try {
-        const [entries, snapshots] = await Promise.all([api.listJobMatchHistory(8), api.listResumeSnapshots()]);
-        if (active) {
-          setHistory(entries);
-          setResumeSnapshots(snapshots);
-        }
+        const entries = await api.listJobMatchHistory(8);
+        if (active) setHistory(entries);
       } catch (error) {
         console.error("Failed to load job match history:", error);
       } finally {
         if (active) setHistoryLoading(false);
+      }
+
+      try {
+        const snapshots = await api.listResumeSnapshots();
+        if (active) setResumeSnapshots(snapshots);
+      } catch (error) {
+        console.error("Failed to load resume snapshots:", error);
       }
     };
     loadHistoryAndTemplates();
@@ -410,15 +444,15 @@ export function Jobs() {
   };
 
   const handleReanalyzeHistory = async (entry: JobMatchHistoryEntry) => {
-    const historyJobId = String(entry.job_id ?? "").trim();
-    if (!historyJobId) {
-      toast.error("This saved analysis is missing its job id");
-      return;
-    }
-
     setReanalyzingHistoryId(entry.id);
     try {
-      await api.matchJob({ job_id: historyJobId });
+      const match = await api.reanalyzeJobMatchHistory(entry.id);
+      setAnalysis(match as MatchResult);
+      setJobId(String((match as any)?.job_id ?? entry.job_id ?? "").trim() || null);
+      setJobTitle(String(entry.title ?? "").trim());
+      setCompany(String(entry.company ?? "").trim());
+      setLocation(String(entry.location ?? "").trim());
+      setLastTailoredId(null);
       await refreshHistory();
 
       recordActivity({
@@ -437,23 +471,17 @@ export function Jobs() {
   };
 
   const handleReanalyzeCurrent = async () => {
-    const currentJobId = String(jobId ?? "").trim();
-    if (!currentJobId) {
-      toast.error("This analysis is missing its job id");
+    const currentHistoryId = String(normalized.historyId ?? "").trim();
+    if (!currentHistoryId) {
+      toast.error("Restore or save a job analysis before reanalyzing it");
       return;
     }
 
     setReanalyzingCurrent(true);
     try {
-      const match = await api.matchJob({
-        job_id: currentJobId,
-        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
-        history_id: String(normalized.historyId ?? "").trim() || undefined,
-        ignored_skill_names: normalized.ignoredSkills,
-        added_from_missing_skills: normalized.addedFromMissingSkills,
-        persist_history: true,
-      });
+      const match = await api.reanalyzeJobMatchHistory(currentHistoryId);
       setAnalysis(match as MatchResult);
+      setJobId(String((match as any)?.job_id ?? jobId ?? "").trim() || null);
       setLastTailoredId(null);
       try {
         await refreshHistory();
@@ -461,7 +489,7 @@ export function Jobs() {
         console.error("Failed to refresh job match history:", historyError);
       }
       recordActivity({
-        id: `jobs:reanalyze-current:${currentJobId}`,
+        id: `jobs:reanalyze-current:${currentHistoryId}`,
         type: "jobs",
         action: "reanalyzed",
         name: jobTitle || company || "Current job match",
@@ -610,8 +638,9 @@ export function Jobs() {
           <p className="text-gray-600 dark:text-slate-300">Paste a job description to get a detailed job match breakdown and generate a tailored resume</p>
         </div>
 
-        <Card className="p-8 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="job-title">Job Title (Optional)</Label>
@@ -645,10 +674,23 @@ export function Jobs() {
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
                 placeholder="Paste the full job description here..."
-                rows={12}
-                className="font-mono text-sm"
+                rows={9}
+                className={`${isJobDescriptionExpanded ? "h-[30rem]" : "h-64"} resize-none overflow-y-auto font-mono text-sm`}
               />
-              <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">Include requirements, qualifications, and responsibilities for best results.</p>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="text-xs text-gray-500 dark:text-slate-400">Include requirements, qualifications, and responsibilities for best results.</p>
+                {jobDescription.trim().length > 600 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => setIsJobDescriptionExpanded((current) => !current)}
+                  >
+                    {isJobDescriptionExpanded ? "Show less" : "Load more"}
+                  </Button>
+                ) : null}
+              </div>
             </div>
 
             <Button
@@ -681,7 +723,7 @@ export function Jobs() {
           ) : history.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-slate-400">No prior analyses yet.</p>
           ) : (
-            <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-2">
+            <div className="max-h-[34rem] space-y-3 overflow-y-auto pr-2">
               {history.map((entry) => (
                 <div key={entry.id} className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 md:flex-row md:items-center md:justify-between dark:border-slate-800 dark:bg-slate-950/60">
                   <div>
@@ -724,6 +766,7 @@ export function Jobs() {
             </div>
           )}
         </Card>
+        </div>
       </div>
     );
   }
@@ -746,7 +789,23 @@ export function Jobs() {
         </div>
       </div>
 
-      <Card className="p-8 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card className="p-4 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex flex-wrap gap-2">
+          {[
+            ["#job-summary", "Summary"],
+            ["#job-skills", "Skills"],
+            ["#job-reasoning", "Reasoning"],
+            ["#job-resume", "Resume"],
+            ["#job-history", "History"],
+          ].map(([href, label]) => (
+            <Button key={href} asChild variant="outline" size="sm" className="h-8 rounded-full border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-900/70">
+              <a href={href}>{label}</a>
+            </Button>
+          ))}
+        </div>
+      </Card>
+
+      <Card id="job-summary" className="p-8 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="grid gap-6 lg:grid-cols-[220px_1fr] lg:items-center">
           <div className="flex flex-col items-center rounded-2xl bg-slate-50 p-6 text-center dark:bg-slate-950/70">
             <span className={`text-5xl font-bold ${getScoreColor(normalized.matchScore)}`}>{normalized.matchScore}%</span>
@@ -795,6 +854,13 @@ export function Jobs() {
           </p>
         </Card>
         <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-sm text-gray-500 dark:text-slate-400">Personal Skill Vector</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.personalSkillVectorScore}%</p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
+            {normalized.personalSkillVectorExplanation || "This compares the job vector against your combined user profile vector built from confirmed skills, evidence, and resume context."}
+          </p>
+        </Card>
+        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <p className="text-sm text-gray-500 dark:text-slate-400">Coverage Snapshot</p>
           <div className="mt-3 space-y-2 text-sm text-gray-700 dark:text-slate-200">
             <p>Matched job skills: {normalized.matchedSkillCount} of {normalized.extractedSkillCount}</p>
@@ -820,11 +886,49 @@ export function Jobs() {
       </div>
 
       <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-gray-500 dark:text-slate-400">Retrieved Evidence</p>
+            <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
+              These are the strongest evidence and resume snippets the backend retrieved to ground this analysis.
+            </p>
+          </div>
+          <Badge className="border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            {normalized.retrievedContext.length} snippets
+          </Badge>
+        </div>
+        {normalized.retrievedContext.length === 0 ? (
+          <p className="mt-4 text-sm text-gray-600 dark:text-slate-300">
+            No retrieval context was available. Add resume or evidence text to strengthen grounded matching.
+          </p>
+        ) : (
+          <div className="mt-4 grid max-h-[22rem] gap-3 overflow-y-auto pr-1 md:grid-cols-2">
+            {normalized.retrievedContext.map((context) => (
+              <div key={`${context.source_type}:${context.source_id}:${context.chunk_index ?? 0}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{context.title || "Retrieved context"}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                      {String(context.source_type || "context").replaceAll("_", " ")}
+                    </p>
+                  </div>
+                  <Badge className="shrink-0 border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/50 dark:text-sky-200">
+                    {Math.round(Number(context.score ?? 0) * 100)}%
+                  </Badge>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{context.snippet}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
         <p className="text-sm text-gray-500 dark:text-slate-400">Semantic Alignment Examples</p>
         {normalized.semanticAlignmentExamples.length === 0 ? (
           <p className="mt-3 text-sm text-gray-600 dark:text-slate-300">No concrete examples yet. Add more evidence or projects tied to your confirmed skills to strengthen semantic matching.</p>
         ) : (
-          <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-slate-200">
+          <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1 text-sm text-gray-700 dark:text-slate-200">
             {normalized.semanticAlignmentExamples.map((example) => (
               <li key={example} className="rounded-md bg-slate-50 px-3 py-2 dark:bg-slate-950/70">
                 {example}
@@ -834,7 +938,7 @@ export function Jobs() {
         )}
       </Card>
 
-      <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card id="job-reasoning" className="p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Score Breakdown</h3>
           <p className="text-sm text-gray-600 dark:text-slate-300">The overall score weighs coverage of required skills, supporting evidence, and overlap with job language.</p>
@@ -864,12 +968,13 @@ export function Jobs() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div id="job-skills" className="grid grid-cols-1 md:grid-cols-3 gap-6 scroll-mt-24">
         <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
             <h3 className="font-semibold text-gray-900 dark:text-slate-100">Matched Skills</h3>
           </div>
+          <div className="max-h-[18rem] overflow-y-auto">
           <div className="flex flex-wrap gap-2">
             {normalized.matchedSkills.length === 0 ? (
               <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
@@ -894,6 +999,7 @@ export function Jobs() {
               ))
             )}
           </div>
+          </div>
         </Card>
 
         <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
@@ -901,6 +1007,7 @@ export function Jobs() {
             <AlertCircle className="h-5 w-5 text-orange-600" />
             <h3 className="font-semibold text-gray-900 dark:text-slate-100">Missing Skills</h3>
           </div>
+          <div className="max-h-[18rem] overflow-y-auto">
           <div className="flex flex-wrap gap-2">
             {normalized.missingSkills.length === 0 ? (
               <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
@@ -933,6 +1040,7 @@ export function Jobs() {
               ))
             )}
           </div>
+          </div>
         </Card>
 
         <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
@@ -940,6 +1048,7 @@ export function Jobs() {
             <Sparkles className="h-5 w-5 text-[#1E3A8A]" />
             <h3 className="font-semibold text-gray-900 dark:text-slate-100">Strength Areas</h3>
           </div>
+          <div className="max-h-[18rem] overflow-y-auto">
           <div className="flex flex-wrap gap-2">
             {normalized.strengthAreas.length === 0 ? (
               <span className="text-sm text-gray-500 dark:text-slate-400">None returned</span>
@@ -950,6 +1059,7 @@ export function Jobs() {
                 </Badge>
               ))
             )}
+          </div>
           </div>
         </Card>
       </div>
@@ -1016,6 +1126,43 @@ export function Jobs() {
       </Card>
 
       <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex items-center gap-2 mb-4">
+          <AlertCircle className="h-5 w-5 text-[#1E3A8A]" />
+          <h3 className="font-semibold text-gray-900 dark:text-slate-100">Gap Reasoning</h3>
+        </div>
+        <p className="mb-4 text-sm text-gray-600 dark:text-slate-300">
+          {normalized.gapReasoningSummary || "The backend did not return a detailed gap rationale for this analysis."}
+        </p>
+        {normalized.gapInsights.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-slate-400">No individual gap insights were returned.</p>
+        ) : (
+          <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
+            {normalized.gapInsights.map((insight) => (
+              <div key={`${insight.skill_id}:${insight.gap_type}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{insight.skill_name}</span>
+                  <Badge className="border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                    {insight.gap_type}
+                  </Badge>
+                  <Badge
+                    className={
+                      insight.severity === "high"
+                        ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
+                        : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
+                    }
+                  >
+                    {insight.severity}
+                  </Badge>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{insight.reason}</p>
+                <p className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-100">{insight.recommended_action}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card id="job-resume" className="p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Tailored Resume</h3>
@@ -1064,7 +1211,7 @@ export function Jobs() {
         )}
       </Card>
 
-      <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card id="job-history" className="p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -1075,7 +1222,7 @@ export function Jobs() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="mt-4 grid max-h-[28rem] grid-cols-1 gap-4 overflow-y-auto pr-1 lg:grid-cols-2">
           {historyLoading ? (
             <p className="text-sm text-gray-500 dark:text-slate-400">Loading saved analyses...</p>
           ) : history.length === 0 ? (

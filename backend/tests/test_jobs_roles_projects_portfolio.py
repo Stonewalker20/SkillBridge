@@ -1,24 +1,28 @@
+"""Tests for job, role, project, and portfolio flows that span multiple user-owned resources."""
+
 def test_jobs_roles_projects_and_portfolio_endpoints(test_context):
     client = test_context["client"]
     user_id = test_context["user_id"]
+    headers = test_context["headers"]
 
-    project = client.post("/projects/", json={"user_id": user_id, "title": "Capstone", "description": "ML project", "tags": ["ml"]})
+    project = client.post("/projects/", headers=headers, json={"user_id": user_id, "title": "Capstone", "description": "ML project", "tags": ["ml"]})
     assert project.status_code == 200
     project_id = project.json()["id"]
 
-    listed_projects = client.get("/projects/", params={"user_id": user_id})
+    listed_projects = client.get("/projects/", headers=headers, params={"user_id": user_id})
     assert listed_projects.status_code == 200
     assert any(item["id"] == project_id for item in listed_projects.json())
 
-    linked = client.post(f"/projects/{project_id}/skills", json={"skill_id": test_context["skill_python"]})
+    linked = client.post(f"/projects/{project_id}/skills", headers=headers, json={"skill_id": test_context["skill_python"]})
     assert linked.status_code == 200
 
-    project_skills = client.get(f"/projects/{project_id}/skills")
+    project_skills = client.get(f"/projects/{project_id}/skills", headers=headers)
     assert project_skills.status_code == 200
     assert len(project_skills.json()) == 1
 
     portfolio = client.post(
         "/portfolio/items",
+        headers=headers,
         json={
             "user_id": user_id,
             "type": "project",
@@ -32,11 +36,11 @@ def test_jobs_roles_projects_and_portfolio_endpoints(test_context):
     assert portfolio.status_code == 200
     portfolio_id = portfolio.json()["id"]
 
-    portfolio_list = client.get("/portfolio/items", params={"user_id": user_id})
+    portfolio_list = client.get("/portfolio/items", headers=headers, params={"user_id": user_id})
     assert portfolio_list.status_code == 200
     assert any(item["id"] == portfolio_id for item in portfolio_list.json())
 
-    portfolio_patch = client.patch(f"/portfolio/items/{portfolio_id}", json={"title": "Updated Portfolio Item"})
+    portfolio_patch = client.patch(f"/portfolio/items/{portfolio_id}", headers=headers, json={"title": "Updated Portfolio Item"})
     assert portfolio_patch.status_code == 200
     assert portfolio_patch.json()["title"] == "Updated Portfolio Item"
 
@@ -76,5 +80,5 @@ def test_jobs_roles_projects_and_portfolio_endpoints(test_context):
     role_weights = client.get(f"/roles/{role_id}/weights")
     assert role_weights.status_code == 200
 
-    portfolio_delete = client.delete(f"/portfolio/items/{portfolio_id}")
+    portfolio_delete = client.delete(f"/portfolio/items/{portfolio_id}", headers=headers)
     assert portfolio_delete.status_code == 200

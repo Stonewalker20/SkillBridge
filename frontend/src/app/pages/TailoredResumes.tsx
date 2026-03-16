@@ -10,6 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { useHeaderTheme } from "../lib/headerTheme";
 
 const RESUMES_PER_PAGE = 15;
+const TAILORED_RESUME_FETCH_LIMIT = 1000;
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -52,8 +53,10 @@ export function TailoredResumes() {
     const load = async () => {
       setLoading(true);
       try {
-        const rows = await api.listTailoredResumes(200);
-        setItems(Array.isArray(rows) ? rows : []);
+        const response = await api.listTailoredResumes(TAILORED_RESUME_FETCH_LIMIT);
+        const rows = Array.isArray(response) ? response : [];
+        setItems(rows);
+        setHiddenIds((current) => current.filter((id) => rows.some((item) => item.id === id)));
       } catch (error) {
         console.error("Failed to load tailored resumes:", error);
         toast.error("Failed to load tailored resumes");
@@ -113,6 +116,7 @@ export function TailoredResumes() {
   };
 
   const visibleItems = items.filter((item) => !hiddenIds.includes(item.id));
+  const hiddenCount = items.length - visibleItems.length;
   const totalPages = Math.max(1, Math.ceil(visibleItems.length / RESUMES_PER_PAGE));
   const pagedItems = visibleItems.slice((page - 1) * RESUMES_PER_PAGE, page * RESUMES_PER_PAGE);
 
@@ -166,6 +170,48 @@ export function TailoredResumes() {
                 </div>
               </div>
 
+              <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-900 dark:text-slate-100">Retrieved Evidence</div>
+                    <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                      Snippets retrieved from your evidence and resume to support this tailored resume.
+                    </div>
+                  </div>
+                  <Badge className="border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    {detail.retrieved_context?.length ?? 0} snippets
+                  </Badge>
+                </div>
+
+                {!detail.retrieved_context || detail.retrieved_context.length === 0 ? (
+                  <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">
+                    No retrieved evidence was stored for this resume.
+                  </p>
+                ) : (
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {detail.retrieved_context.map((context) => (
+                      <div
+                        key={`${context.source_type}:${context.source_id}:${context.chunk_index ?? 0}`}
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/70"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{context.title || "Retrieved context"}</div>
+                            <div className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                              {String(context.source_type || "context").replaceAll("_", " ")}
+                            </div>
+                          </div>
+                          <Badge className="shrink-0 border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/50 dark:text-sky-200">
+                            {Math.round(Number(context.score ?? 0) * 100)}%
+                          </Badge>
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{context.snippet}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-4">
                 {detail.sections.map((section) => (
                   <div key={section.title} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/60">
@@ -204,6 +250,25 @@ export function TailoredResumes() {
           </Button>
         ) : null}
       </div>
+
+      <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {visibleItems.length} visible resume{visibleItems.length === 1 ? "" : "s"}
+              {hiddenCount > 0 ? ` of ${items.length} saved` : ""}
+            </div>
+            <div className="text-sm text-slate-600 dark:text-slate-300">
+              {hiddenCount > 0
+                ? `${hiddenCount} resume${hiddenCount === 1 ? "" : "s"} hidden locally on this device.`
+                : "This total matches the resumes currently visible in your library."}
+            </div>
+          </div>
+          <Badge variant="outline" className="w-fit dark:border-slate-700 dark:text-slate-200">
+            {items.length} saved total
+          </Badge>
+        </div>
+      </Card>
 
       {visibleItems.length === 0 ? (
         <Card className="border-slate-200 p-8 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300">

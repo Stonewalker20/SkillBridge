@@ -1,3 +1,5 @@
+"""Pydantic schemas for canonical skills, user-created skills, and skill listing responses."""
+
 from __future__ import annotations
 from pydantic import BaseModel, Field
 from typing import List, Optional

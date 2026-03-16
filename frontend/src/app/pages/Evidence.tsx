@@ -444,7 +444,7 @@ export function Evidence() {
         <div className="flex flex-col gap-5 px-6 py-7 md:px-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300">
-              <Upload className="h-3.5 w-3.5 text-[#1E3A8A]" />
+              <Upload className={`h-3.5 w-3.5 ${activeHeaderTheme.accentTextClass}`} />
               Evidence Library
             </div>
             <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Your proof of work, organized and skill-linked.</h1>
@@ -573,7 +573,7 @@ export function Evidence() {
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
                     <div className="flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-slate-100">
-                      <Upload className="h-4 w-4 text-[#1E3A8A]" />
+                      <Upload className={`h-4 w-4 ${activeHeaderTheme.accentTextClass}`} />
                       Upload PDF / DOCX / TXT / MD
                     </div>
                     <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">
@@ -651,7 +651,7 @@ export function Evidence() {
                     {analysisItems.map((analysis) => (
                       <Card key={analysis.analysis_id} className="overflow-hidden border-slate-200 p-0 dark:border-slate-800 dark:bg-slate-950">
                         <div className="space-y-4">
-                          <div className="border-b bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/80">
+                          <div className={`border-b px-4 py-3 dark:border-slate-800 ${activeHeaderTheme.softPanelClass}`}>
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <div className="text-sm font-medium text-gray-900 dark:text-slate-100">Ready to save</div>
@@ -789,8 +789,8 @@ export function Evidence() {
 
       {filteredItems.length === 0 ? (
         <Card className="overflow-hidden border-slate-200 p-0 text-center dark:border-slate-800 dark:bg-slate-950">
-          <div className="bg-[linear-gradient(135deg,_rgba(30,58,138,0.08),_rgba(15,23,42,0.03))] px-6 py-12 dark:bg-[linear-gradient(135deg,_rgba(45,212,191,0.08),_rgba(15,23,42,0.18))]">
-            <Upload className="mx-auto h-10 w-10 text-[#1E3A8A]" />
+          <div className={`${activeHeaderTheme.softPanelClass} px-6 py-12`}>
+            <Upload className={`mx-auto h-10 w-10 ${activeHeaderTheme.accentTextClass}`} />
             <div className="mt-4 text-lg font-semibold text-slate-900 dark:text-slate-100">No evidence added yet</div>
             <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">Add text or upload files to start building your evidence library.</div>
             <Button onClick={() => setIsAddOpen(true)} className={`mt-6 ${activeHeaderTheme.buttonClass}`}>
@@ -805,12 +805,12 @@ export function Evidence() {
             const externalUrl = item.source && /^https?:\/\//i.test(item.source) ? item.source : "";
             return (
               <Card key={item.id} className="group overflow-hidden border-slate-200 p-0 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950">
-                <div className="border-b bg-[linear-gradient(135deg,_rgba(30,58,138,0.08),_rgba(255,255,255,0.9))] px-5 py-4 dark:border-slate-800 dark:bg-[linear-gradient(135deg,_rgba(251,191,36,0.10),_rgba(15,23,42,0.95))]">
+                <div className={`border-b px-5 py-4 dark:border-slate-800 ${activeHeaderTheme.softPanelClass}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-sm dark:bg-slate-900">
-                          <FileText className="h-4 w-4 text-[#1E3A8A]" />
+                          <FileText className={`h-4 w-4 ${activeHeaderTheme.accentTextClass}`} />
                         </div>
                         <div className="min-w-0">
                           <h3 className="truncate text-base font-semibold text-gray-900 dark:text-slate-100">{item.title}</h3>
@@ -823,7 +823,7 @@ export function Evidence() {
                     </div>
 
                     {externalUrl ? (
-                      <a href={externalUrl} target="_blank" rel="noreferrer" className="text-gray-500 transition-colors hover:text-[#1E3A8A] dark:text-slate-400 dark:hover:text-amber-300">
+                      <a href={externalUrl} target="_blank" rel="noreferrer" className={`text-gray-500 transition-opacity hover:opacity-80 dark:text-slate-400 ${activeHeaderTheme.accentTextClass}`}>
                         <ExternalLink className="h-4 w-4" />
                       </a>
                     ) : null}

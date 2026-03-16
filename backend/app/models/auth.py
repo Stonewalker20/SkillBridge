@@ -1,3 +1,5 @@
+"""Pydantic schemas for authentication requests and authenticated user responses."""
+
 from __future__ import annotations
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
@@ -16,6 +18,8 @@ class UserOut(BaseModel):
     email: EmailStr
     username: str
     role: str = "user"
+    avatar_url: Optional[str] = None
+    avatar_preset: Optional[str] = None
 
 class AuthOut(BaseModel):
     token: str
@@ -25,3 +29,4 @@ class UserPatch(BaseModel):
     email: Optional[EmailStr] = None
     username: Optional[str] = Field(default=None, min_length=2, max_length=50)
     password: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    avatar_preset: Optional[str] = None
