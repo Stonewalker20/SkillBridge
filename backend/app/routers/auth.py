@@ -52,6 +52,10 @@ def bootstrap_role_for_email(email: str) -> str:
         return "team"
     return "user"
 
+
+def is_user_active(user: dict) -> bool:
+    return user.get("is_active", True) is not False
+
 @router.post("/register", response_model=AuthOut)
 async def register(payload: RegisterIn):
     db = get_db()
@@ -70,6 +74,7 @@ async def register(payload: RegisterIn):
         "password_salt": password_parts["salt"],
         "password_hash": password_parts["hash"],
         "role": bootstrap_role_for_email(payload.email),
+        "is_active": True,
         "avatar_preset": "midnight",
         "created_at": now_utc(),
     }
@@ -94,6 +99,9 @@ async def login(payload: LoginIn):
 
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if not is_user_active(user):
+        raise HTTPException(status_code=403, detail="Account deactivated")
 
     password_salt = user.get("password_salt")
     password_hash = user.get("password_hash")

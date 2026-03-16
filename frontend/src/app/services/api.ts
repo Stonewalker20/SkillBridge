@@ -507,7 +507,9 @@ export type AdminUserRecord = {
   email: string;
   username: string;
   role: string;
+  is_active: boolean;
   created_at?: string;
+  deactivated_at?: string;
 };
 
 export type AdminJob = {
@@ -870,6 +872,8 @@ export const api = {
     const suffix = search.size ? `?${search.toString()}` : "";
     return request<SkillGraph>(`/taxonomy/graph/${skillId}${suffix}`, "GET");
   },
+  searchTailorRag: (query: string, limit = 5) =>
+    request<any[]>(`/tailor/rag/search?q=${encodeURIComponent(query)}&limit=${encodeURIComponent(String(limit))}`, "GET"),
   getSkillTrajectory: () => request<SkillTrajectoryOut>("/taxonomy/trajectory", "GET"),
   getCareerPathDetail: (roleId: string) => request<CareerPathDetail>(`/taxonomy/trajectory/path/${encodeURIComponent(roleId)}`, "GET"),
   getLearningPathSkillDetail: (skillName: string) =>
@@ -925,6 +929,7 @@ export const api = {
   listAdminUsers: () => request<AdminUserRecord[]>("/admin/users", "GET"),
   updateAdminUserRole: (userId: string, role: string) =>
     request<AdminUserRecord>(`/admin/users/${userId}`, "PATCH", { role }),
+  deactivateAdminUser: (userId: string) => request<{ ok: boolean }>(`/admin/users/${userId}`, "DELETE"),
   listAdminJobs: (status?: string) => {
     const suffix = status ? `?status=${encodeURIComponent(status)}` : "";
     return request<AdminJob[]>("/admin/jobs" + suffix, "GET");
@@ -960,6 +965,15 @@ export const api = {
       })
     );
   },
+  createPortfolioItemRaw: (payload: any) => request<any>("/portfolio/items", "POST", payload),
+  listPortfolioItemsRaw: (params?: { user_id?: string; type?: string; visibility?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.user_id) search.set("user_id", params.user_id);
+    if (params?.type) search.set("type", params.type);
+    if (params?.visibility) search.set("visibility", params.visibility);
+    const suffix = search.size ? `?${search.toString()}` : "";
+    return request<any[]>("/portfolio/items" + suffix, "GET");
+  },
   listPortfolioItems: async (userId: string, params?: { type?: string; visibility?: string }) => {
     const evidence = await api.listEvidence({ user_id: userId, origin: "user" });
     return evidence.filter((item) => {
@@ -967,6 +981,7 @@ export const api = {
       return true;
     });
   },
+  patchPortfolioItemRaw: (itemId: string, payload: any) => request<any>(`/portfolio/items/${itemId}`, "PATCH", payload),
   patchPortfolioItem: (itemId: string, payload: any) =>
     request<any>(EVIDENCE_UPDATE_ROUTE.replace("{evidence_id}", itemId), "PATCH", {
       type: ["project", "paper", "cert", "other"].includes(String(payload?.type ?? "")) ? payload?.type : payload?.type ? "other" : undefined,
@@ -981,5 +996,6 @@ export const api = {
       skill_ids: payload?.skill_ids,
       tags: payload?.tags,
     }),
+  deletePortfolioItemRaw: (itemId: string) => request<any>(`/portfolio/items/${itemId}`, "DELETE"),
   deletePortfolioItem: (itemId: string) => request<any>(EVIDENCE_UPDATE_ROUTE.replace("{evidence_id}", itemId), "DELETE"),
 };

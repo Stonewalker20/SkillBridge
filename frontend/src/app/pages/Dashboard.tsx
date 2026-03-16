@@ -55,6 +55,8 @@ const EMPTY_SUMMARY: DashboardSummary = {
   recentMatchTrend: [],
 };
 
+const TAILORED_RESUME_FETCH_LIMIT = 1000;
+
 function safeNum(v: any): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -90,6 +92,17 @@ function normalizeRecentActivityItem(item: any) {
     name: String(item?.name ?? "Untitled"),
     date,
   };
+}
+
+function loadHiddenTailoredResumeIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem("tailoredResumes:hiddenIds");
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.map((value) => String(value || "").trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
 }
 
 function mergeRecentActivity(sources: Array<Array<any>>): DashboardSummary["recentActivity"] {
@@ -217,9 +230,10 @@ export function Dashboard() {
         //    - profile confirmation = resume_snapshot_id null
         //    - total skills = confirmed length
         //    - top categories computed from confirmed skill ids -> global skills list mapping
-        const [skillsLib, profileConf] = await Promise.all([
+        const [skillsLib, profileConf, tailoredResumeRows] = await Promise.all([
           loadAllSkills(),
           api.getProfileConfirmation().catch(() => null as ConfirmationOut | null),
+          api.listTailoredResumes(TAILORED_RESUME_FETCH_LIMIT).catch(() => []),
         ]);
         const confirmed = Array.isArray(profileConf?.confirmed) ? profileConf!.confirmed : [];
         const confirmedIds = new Set(confirmed.map((c) => (c?.skill_id ?? "").trim()).filter(Boolean));
@@ -251,11 +265,16 @@ export function Dashboard() {
           activities,
           normalizedBase.recentActivity,
         ]);
+        const hiddenTailoredResumeIds = new Set(loadHiddenTailoredResumeIds());
+        const visibleTailoredResumeCount = Array.isArray(tailoredResumeRows)
+          ? tailoredResumeRows.filter((item) => !hiddenTailoredResumeIds.has(String(item?.id ?? ""))).length
+          : normalizedBase.tailoredResumes;
 
         setSummary({
           ...normalizedBase,
           // ✅ authoritative, user-specific
           totalSkills: userSpecificTotalSkills,
+          tailoredResumes: visibleTailoredResumeCount,
           recentActivity: mergedRecentActivity,
           topSkillCategories,
         });

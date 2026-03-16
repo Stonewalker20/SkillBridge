@@ -47,3 +47,19 @@ def test_auth_register_login_profile_and_logout(test_context):
 
     delete = client.delete("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert delete.status_code == 401
+
+
+def test_deactivated_user_cannot_login_or_use_existing_session(test_context):
+    client = test_context["client"]
+    db = test_context["db"]
+
+    db["users"].docs[0]["is_active"] = False
+
+    login = client.post("/auth/login", json={"email": "tester@example.com", "password": "password123"})
+    assert login.status_code == 403
+    assert login.json()["detail"] == "Account deactivated"
+
+    me = client.get("/auth/me", headers=test_context["headers"])
+    assert me.status_code == 401
+    assert me.json()["detail"] == "Account deactivated"
+    assert db["sessions"].docs == []

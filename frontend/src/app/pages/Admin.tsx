@@ -8,17 +8,20 @@ import { Shield, Users, Briefcase, Database, Sparkles, RefreshCw } from "lucide-
 import { api, type AdminJob, type AdminSummary, type AdminUserRecord } from "../services/api";
 import { toast } from "sonner";
 import { useHeaderTheme } from "../lib/headerTheme";
+import { useAuth } from "../context/AuthContext";
 
 const ADMIN_ROLES = ["user", "team", "admin", "owner"];
 
 export function Admin() {
   const { activeHeaderTheme } = useHeaderTheme();
+  const { user: currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [jobs, setJobs] = useState<AdminJob[]>([]);
   const [jobFilter, setJobFilter] = useState("pending");
   const [savingRoleId, setSavingRoleId] = useState<string>("");
+  const [deactivatingUserId, setDeactivatingUserId] = useState<string>("");
   const [moderatingJobId, setModeratingJobId] = useState<string>("");
 
   const load = async (status = jobFilter) => {
@@ -58,6 +61,46 @@ export function Admin() {
       toast.error(error?.message || "Failed to update role");
     } finally {
       setSavingRoleId("");
+    }
+  };
+
+  const deactivateUser = async (userRecord: AdminUserRecord) => {
+    const isSelf = userRecord.id === currentUser?.id;
+    if (isSelf || !userRecord.is_active) return;
+
+    const confirmed = window.confirm(`Deactivate ${userRecord.username}'s account? They will lose access but remain in the database.`);
+    if (!confirmed) return;
+
+    setDeactivatingUserId(userRecord.id);
+    try {
+      await api.deactivateAdminUser(userRecord.id);
+      setUsers((current) =>
+        current.map((entry) =>
+          entry.id === userRecord.id
+            ? {
+                ...entry,
+                is_active: false,
+                deactivated_at: new Date().toISOString(),
+              }
+            : entry
+        )
+      );
+      setSummary((current) =>
+        current
+          ? {
+              ...current,
+              team_members:
+                ["team", "admin", "owner"].includes(userRecord.role) && current.team_members > 0
+                  ? current.team_members - 1
+                  : current.team_members,
+            }
+          : current
+      );
+      toast.success("User account deactivated");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to deactivate user");
+    } finally {
+      setDeactivatingUserId("");
     }
   };
 
@@ -170,8 +213,10 @@ export function Admin() {
               <TableHeader className="bg-slate-50/90 dark:bg-slate-950/80">
                 <TableRow className="border-slate-200 dark:border-slate-800">
                   <TableHead className="text-slate-700 dark:text-slate-300">User</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300">Status</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300">Role</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300">Created</TableHead>
+                  <TableHead className="text-right text-slate-700 dark:text-slate-300">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -182,7 +227,30 @@ export function Admin() {
                       <div className="text-xs text-gray-500 dark:text-slate-400">{user.email}</div>
                     </TableCell>
                     <TableCell>
-                      <Select value={user.role} onValueChange={(value) => updateRole(user.id, value)} disabled={savingRoleId === user.id}>
+                      <div className="flex flex-col gap-1">
+                        <Badge
+                          variant="outline"
+                          className={
+                            user.is_active
+                              ? "w-fit border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-300"
+                              : "w-fit border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/60 dark:text-amber-300"
+                          }
+                        >
+                          {user.is_active ? "Active" : "Deactivated"}
+                        </Badge>
+                        {!user.is_active && user.deactivated_at ? (
+                          <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                            {new Date(user.deactivated_at).toLocaleString()}
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={user.role}
+                        onValueChange={(value) => updateRole(user.id, value)}
+                        disabled={savingRoleId === user.id || deactivatingUserId === user.id || !user.is_active}
+                      >
                         <SelectTrigger className="w-[140px] dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
                           <SelectValue />
                         </SelectTrigger>
@@ -197,6 +265,21 @@ export function Admin() {
                     </TableCell>
                     <TableCell className="text-xs text-gray-500 dark:text-slate-400">
                       {user.created_at ? new Date(user.created_at).toLocaleString() : "Unknown"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {user.id === currentUser?.id ? (
+                        <span className="text-xs text-gray-500 dark:text-slate-400">Current account</span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => deactivateUser(user)}
+                          disabled={deactivatingUserId === user.id || savingRoleId === user.id || !user.is_active}
+                          className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900 dark:bg-slate-950/70 dark:text-rose-300 dark:hover:bg-rose-950/40 dark:hover:text-rose-200"
+                        >
+                          {user.is_active ? "Deactivate" : "Deactivated"}
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

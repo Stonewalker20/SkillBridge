@@ -6,7 +6,7 @@ from app.main import app
 
 def _read_frontend_api_ts() -> str:
     here = Path(__file__).resolve()
-    repo_root = here.parents[2]
+    repo_root = here.parents[1]
     api_ts = repo_root / "frontend" / "src" / "app" / "services" / "api.ts"
     return api_ts.read_text(encoding="utf-8")
 
@@ -32,6 +32,7 @@ def _extract_paths(ts: str) -> set[str]:
                 "/ingest",
                 "/projects",
                 "/dashboard",
+                "/admin",
                 "/roles",
                 "/taxonomy",
                 "/tailor",
@@ -43,12 +44,21 @@ def _extract_paths(ts: str) -> set[str]:
 
 
 def _normalize_to_openapi(path: str) -> str:
+    path = path.replace("{id}{id}", "{id}")
+    if "/admin/users/{id}" in path:
+        return path.replace("{id}", "{user_id}")
     if "/skills/{id}" in path:
         return path.replace("{id}", "{skill_id}")
     if "/jobs/{id}" in path:
         return path.replace("{id}", "{job_id}")
     if "/projects/{id}" in path:
         return path.replace("{id}", "{project_id}")
+    if "/tailor/history/{id}/reanalyze" in path:
+        return path.replace("{id}", "{history_id}")
+    if "/tailor/history/{id}" in path:
+        return path.replace("{id}", "{history_id}")
+    if "/tailor/resumes/{id}" in path:
+        return path.replace("{id}", "{tailored_id}")
     if "/roles/{id}" in path:
         return path.replace("{id}", "{role_id}")
     if "/tailor/{id}" in path:
@@ -61,6 +71,12 @@ def _normalize_to_openapi(path: str) -> str:
         return path.replace("{id}", "{snapshot_id}")
     if "/taxonomy/aliases/{id}" in path:
         return path.replace("{id}", "{skill_id}")
+    if "/taxonomy/graph/{id}" in path:
+        return path.replace("{id}", "{skill_id}")
+    if "/taxonomy/trajectory/path/{id}" in path:
+        return path.replace("{id}", "{role_id}")
+    if "/taxonomy/learning-path/skill/{id}" in path:
+        return path.replace("{id}", "{skill_name}")
     return path
 
 

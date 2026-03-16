@@ -11,7 +11,9 @@ class AdminUserOut(BaseModel):
     email: str
     username: str
     role: str = "user"
+    is_active: bool = True
     created_at: datetime | None = None
+    deactivated_at: datetime | None = None
 
 
 class AdminUserRolePatch(BaseModel):

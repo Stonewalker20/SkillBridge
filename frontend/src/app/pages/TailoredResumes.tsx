@@ -10,6 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { useHeaderTheme } from "../lib/headerTheme";
 
 const RESUMES_PER_PAGE = 15;
+const TAILORED_RESUME_FETCH_LIMIT = 1000;
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -52,8 +53,10 @@ export function TailoredResumes() {
     const load = async () => {
       setLoading(true);
       try {
-        const rows = await api.listTailoredResumes(200);
-        setItems(Array.isArray(rows) ? rows : []);
+        const response = await api.listTailoredResumes(TAILORED_RESUME_FETCH_LIMIT);
+        const rows = Array.isArray(response) ? response : [];
+        setItems(rows);
+        setHiddenIds((current) => current.filter((id) => rows.some((item) => item.id === id)));
       } catch (error) {
         console.error("Failed to load tailored resumes:", error);
         toast.error("Failed to load tailored resumes");
@@ -113,6 +116,7 @@ export function TailoredResumes() {
   };
 
   const visibleItems = items.filter((item) => !hiddenIds.includes(item.id));
+  const hiddenCount = items.length - visibleItems.length;
   const totalPages = Math.max(1, Math.ceil(visibleItems.length / RESUMES_PER_PAGE));
   const pagedItems = visibleItems.slice((page - 1) * RESUMES_PER_PAGE, page * RESUMES_PER_PAGE);
 
@@ -246,6 +250,25 @@ export function TailoredResumes() {
           </Button>
         ) : null}
       </div>
+
+      <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {visibleItems.length} visible resume{visibleItems.length === 1 ? "" : "s"}
+              {hiddenCount > 0 ? ` of ${items.length} saved` : ""}
+            </div>
+            <div className="text-sm text-slate-600 dark:text-slate-300">
+              {hiddenCount > 0
+                ? `${hiddenCount} resume${hiddenCount === 1 ? "" : "s"} hidden locally on this device.`
+                : "This total matches the resumes currently visible in your library."}
+            </div>
+          </div>
+          <Badge variant="outline" className="w-fit dark:border-slate-700 dark:text-slate-200">
+            {items.length} saved total
+          </Badge>
+        </div>
+      </Card>
 
       {visibleItems.length === 0 ? (
         <Card className="border-slate-200 p-8 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300">

@@ -2090,7 +2090,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn, user=Depends(require
 async def list_tailored_resumes(user_id: str | None = None, limit: int = 100, user=Depends(require_user)):
     db = get_db()
     scoped_user_id = _scoped_user_id(user, user_id)
-    capped_limit = max(1, min(limit, 200))
+    capped_limit = max(1, min(limit, 1000))
     docs = await (
         db["tailored_resumes"]
         .find(ref_query("user_id", scoped_user_id))

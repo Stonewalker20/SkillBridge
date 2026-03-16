@@ -28,7 +28,9 @@ def serialize_user(doc: dict) -> AdminUserOut:
         email=doc.get("email", ""),
         username=doc.get("username", ""),
         role=doc.get("role", "user"),
+        is_active=doc.get("is_active", True),
         created_at=doc.get("created_at"),
+        deactivated_at=doc.get("deactivated_at"),
     )
 
 
@@ -81,7 +83,13 @@ async def admin_summary(_user=Depends(require_admin_user)):
 @router.get("/users", response_model=list[AdminUserOut])
 async def admin_list_users(limit: int = Query(default=250, ge=1, le=1000), _user=Depends(require_admin_user)):
     db = get_db()
-    docs = await db["users"].find({}, {"email": 1, "username": 1, "role": 1, "created_at": 1}).sort("created_at", -1).limit(limit).to_list(length=limit)
+    docs = await (
+        db["users"]
+        .find({}, {"email": 1, "username": 1, "role": 1, "is_active": 1, "created_at": 1, "deactivated_at": 1})
+        .sort("created_at", -1)
+        .limit(limit)
+        .to_list(length=limit)
+    )
     return [serialize_user(doc) for doc in docs]
 
 
@@ -97,7 +105,7 @@ async def admin_update_user_role(user_id: str, payload: AdminUserRolePatch, curr
     if next_role not in ALLOWED_MANAGED_ROLES:
         raise HTTPException(status_code=400, detail="Invalid role")
 
-    target = await db["users"].find_one({"_id": user_oid}, {"email": 1, "username": 1, "role": 1, "created_at": 1})
+    target = await db["users"].find_one({"_id": user_oid}, {"email": 1, "username": 1, "role": 1, "is_active": 1, "created_at": 1, "deactivated_at": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -105,8 +113,34 @@ async def admin_update_user_role(user_id: str, payload: AdminUserRolePatch, curr
         raise HTTPException(status_code=400, detail="You cannot remove your own admin access")
 
     await db["users"].update_one({"_id": user_oid}, {"$set": {"role": next_role, "updated_at": now_utc()}})
-    updated = await db["users"].find_one({"_id": user_oid}, {"email": 1, "username": 1, "role": 1, "created_at": 1})
+    updated = await db["users"].find_one({"_id": user_oid}, {"email": 1, "username": 1, "role": 1, "is_active": 1, "created_at": 1, "deactivated_at": 1})
     return serialize_user(updated)
+
+
+@router.delete("/users/{user_id}")
+async def admin_deactivate_user(user_id: str, current_user=Depends(require_admin_user)):
+    db = get_db()
+    try:
+        user_oid = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user_id")
+
+    target = await db["users"].find_one({"_id": user_oid}, {"role": 1, "is_active": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if oid_str(target["_id"]) == oid_str(current_user["_id"]):
+        raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
+
+    if target.get("is_active", True) is False:
+        return {"ok": True}
+
+    await db["users"].update_one(
+        {"_id": user_oid},
+        {"$set": {"is_active": False, "deactivated_at": now_utc(), "updated_at": now_utc()}},
+    )
+    await db["sessions"].delete_many({"user_id": user_oid})
+    return {"ok": True}
 
 
 @router.get("/jobs", response_model=list[AdminJobOut])
