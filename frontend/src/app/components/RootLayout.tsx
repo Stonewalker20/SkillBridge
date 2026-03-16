@@ -82,7 +82,7 @@ export function RootLayout() {
         : navigation.find((item) => item.href === location.pathname)?.name || "Page";
 
   return (
-    <div className="flex h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)] text-slate-900 dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_48%,_#020617)] dark:text-slate-100">
+    <div className="flex min-h-svh bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)] text-slate-900 dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_48%,_#020617)] dark:text-slate-100 lg:h-svh lg:overflow-hidden">
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div 
@@ -93,7 +93,7 @@ export function RootLayout() {
 
       {/* Sidebar */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200/70 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.96)_52%,_rgba(241,245,249,0.98))] backdrop-blur-xl transition-transform duration-300 ease-in-out dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.96))] lg:static lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex h-svh w-64 flex-col overflow-hidden border-r border-slate-200/70 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.96)_52%,_rgba(241,245,249,0.98))] text-[clamp(0.82rem,0.76rem+0.18vh,0.96rem)] backdrop-blur-xl transition-transform duration-300 ease-in-out dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.96))] lg:sticky lg:top-0 lg:h-svh lg:translate-x-0",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Close button for mobile */}
@@ -106,20 +106,20 @@ export function RootLayout() {
           <X className="h-6 w-6" />
         </Button>
 
-        <div className="border-b border-slate-200/80 bg-white/55 px-6 py-6 dark:border-slate-800/80 dark:bg-slate-950/35">
+        <div className="shrink-0 border-b border-slate-200/80 bg-white/55 px-[clamp(1rem,0.8rem+0.9vh,1.5rem)] py-[clamp(0.75rem,0.45rem+1.2vh,1.5rem)] dark:border-slate-800/80 dark:bg-slate-950/35">
           <Link
             to="/app"
-            className="flex items-center justify-center rounded-2xl bg-white/90 px-1 py-2 shadow-sm ring-1 ring-slate-200/80 transition-opacity hover:opacity-90 dark:bg-slate-950/80 dark:ring-slate-800/80"
+            className="flex items-center justify-center rounded-2xl bg-white/90 px-1 py-[clamp(0.35rem,0.2rem+0.6vh,0.75rem)] shadow-sm ring-1 ring-slate-200/80 transition-opacity hover:opacity-90 dark:bg-slate-950/80 dark:ring-slate-800/80"
           >
             <img
               src={LogoImage}
               alt="SkillBridge Logo"
-              className="h-28 w-full max-w-[220px] scale-[1.6] object-contain"
+              className="h-[clamp(4.75rem,3.6rem+6vh,7rem)] w-full max-w-[210px] scale-[1.35] object-contain"
             />
           </Link>
         </div>
         
-        <nav className="flex-1 space-y-1 p-4">
+        <nav className="flex flex-1 flex-col gap-[clamp(0.4rem,0.2rem+0.5vh,0.9rem)] px-[clamp(0.75rem,0.5rem+0.7vh,1rem)] py-[clamp(0.6rem,0.35rem+0.75vh,1rem)]">
           {navigation.map((item) => {
             const isActive = location.pathname === item.href;
             return (
@@ -131,30 +131,30 @@ export function RootLayout() {
                   navigateFromSidebar(item.href);
                 }}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl px-4 py-3 transition-all",
+                  "flex items-center gap-3 rounded-xl px-[clamp(0.8rem,0.55rem+0.65vh,1rem)] py-[clamp(0.55rem,0.35rem+0.65vh,0.8rem)] transition-all",
                   isActive
                     ? activeHeaderTheme.sidebarActiveClass
                     : "text-slate-700 hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
                 )}
               >
-                <item.icon className="h-5 w-5" />
+                <item.icon className="h-[clamp(1rem,0.9rem+0.25vh,1.2rem)] w-[clamp(1rem,0.9rem+0.25vh,1.2rem)]" />
                 <span className="font-medium">{item.name}</span>
               </Link>
             );
           })}
 
-          <div className="mt-6 border-t border-slate-200/80 pt-4 dark:border-slate-800/80">
-            <p className="px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quick Actions</p>
-            <div className="mt-2 space-y-1">
+          <div className="mt-auto border-t border-slate-200/80 pt-[clamp(0.5rem,0.25rem+0.65vh,1rem)] dark:border-slate-800/80">
+            <p className="px-[clamp(0.8rem,0.55rem+0.65vh,1rem)] text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quick Actions</p>
+            <div className="mt-[clamp(0.3rem,0.15rem+0.45vh,0.55rem)] space-y-[clamp(0.15rem,0.08rem+0.2vh,0.3rem)]">
               <Link
                 to="/app/skills?add=1"
                 onClick={(event) => {
                   event.preventDefault();
                   navigateFromSidebar("/app/skills?add=1");
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
+                className="flex items-center gap-3 rounded-xl px-[clamp(0.8rem,0.55rem+0.65vh,1rem)] py-[clamp(0.5rem,0.3rem+0.55vh,0.75rem)] text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
-                <Target className="h-5 w-5" />
+                <Target className="h-[clamp(1rem,0.9rem+0.25vh,1.2rem)] w-[clamp(1rem,0.9rem+0.25vh,1.2rem)]" />
                 <span className="font-medium">Add Skill</span>
               </Link>
               <Link
@@ -163,9 +163,9 @@ export function RootLayout() {
                   event.preventDefault();
                   navigateFromSidebar("/app/evidence?add=1");
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
+                className="flex items-center gap-3 rounded-xl px-[clamp(0.8rem,0.55rem+0.65vh,1rem)] py-[clamp(0.5rem,0.3rem+0.55vh,0.75rem)] text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
-                <FolderOpen className="h-5 w-5" />
+                <FolderOpen className="h-[clamp(1rem,0.9rem+0.25vh,1.2rem)] w-[clamp(1rem,0.9rem+0.25vh,1.2rem)]" />
                 <span className="font-medium">Upload Evidence</span>
               </Link>
               <Link
@@ -174,9 +174,9 @@ export function RootLayout() {
                   event.preventDefault();
                   navigateFromSidebar("/app/jobs?analyze=1");
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
+                className="flex items-center gap-3 rounded-xl px-[clamp(0.8rem,0.55rem+0.65vh,1rem)] py-[clamp(0.5rem,0.3rem+0.55vh,0.75rem)] text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
-                <Briefcase className="h-5 w-5" />
+                <Briefcase className="h-[clamp(1rem,0.9rem+0.25vh,1.2rem)] w-[clamp(1rem,0.9rem+0.25vh,1.2rem)]" />
                 <span className="font-medium">Analyze New Job</span>
               </Link>
               <Link
@@ -185,20 +185,20 @@ export function RootLayout() {
                   event.preventDefault();
                   navigateFromSidebar("/app/resumes");
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
+                className="flex items-center gap-3 rounded-xl px-[clamp(0.8rem,0.55rem+0.65vh,1rem)] py-[clamp(0.5rem,0.3rem+0.55vh,0.75rem)] text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
               >
-                <FileText className="h-5 w-5" />
+                <FileText className="h-[clamp(1rem,0.9rem+0.25vh,1.2rem)] w-[clamp(1rem,0.9rem+0.25vh,1.2rem)]" />
                 <span className="font-medium">View Tailored Resumes</span>
               </Link>
             </div>
           </div>
         </nav>
 
-        <div className="border-t border-slate-200/80 p-4 dark:border-slate-800/80">
-          <div className="mb-3 flex items-center justify-between rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
+        <div className="shrink-0 border-t border-slate-200/80 px-[clamp(0.75rem,0.5rem+0.7vh,1rem)] py-[clamp(0.6rem,0.35rem+0.75vh,1rem)] dark:border-slate-800/80">
+          <div className="mb-[clamp(0.35rem,0.15rem+0.45vh,0.75rem)] flex items-center justify-between rounded-xl border border-slate-200 bg-white/80 px-[clamp(0.65rem,0.45rem+0.45vh,0.8rem)] py-[clamp(0.45rem,0.3rem+0.4vh,0.7rem)] text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
             <div className="flex items-center gap-2">
-              {isDark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              <span className="text-sm font-medium">{isDark ? "Dark Mode" : "Light Mode"}</span>
+              {isDark ? <Moon className="h-4 w-4 shrink-0" /> : <Sun className="h-4 w-4 shrink-0" />}
+              <span className="text-[clamp(0.74rem,0.68rem+0.15vh,0.86rem)] font-medium">{isDark ? "Dark Mode" : "Light Mode"}</span>
             </div>
             <Switch
               checked={isDark}
@@ -209,7 +209,7 @@ export function RootLayout() {
           </div>
           <Button
             variant="outline"
-            className="w-full justify-start border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
+            className="h-[clamp(2.25rem,2rem+0.45vh,2.5rem)] w-full justify-start border-slate-200 bg-white/80 text-[clamp(0.78rem,0.72rem+0.16vh,0.9rem)] text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
             onClick={handleLogout}
           >
             <LogOut className="mr-2 h-4 w-4" />
@@ -219,7 +219,7 @@ export function RootLayout() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="border-b border-white/70 bg-white/70 px-4 py-4 backdrop-blur-xl sm:px-8 dark:border-slate-800/80 dark:bg-slate-950/55">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -256,8 +256,10 @@ export function RootLayout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 sm:p-8">
-          <Outlet />
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-8">
+          <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
