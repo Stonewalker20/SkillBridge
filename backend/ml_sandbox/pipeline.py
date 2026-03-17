@@ -441,17 +441,18 @@ def build_experiment_configs(
     inference_modes: Sequence[str],
     embedding_models: Sequence[str],
     zero_shot_models: Sequence[str],
-    rewrite_models: Sequence[str],
+    rewrite_models: Sequence[str] | None = None,
 ) -> list[dict[str, str]]:
     runtime = _load_ai_runtime()
     normalize_ai_preferences = runtime["normalize_ai_preferences"]
+    normalized_rewrite_models = tuple(rewrite_models or ("",))
     configs: list[dict[str, str]] = []
     seen: set[tuple[str, str, str, str]] = set()
     for inference_mode, embedding_model, zero_shot_model, rewrite_model in product(
         inference_modes,
         embedding_models,
         zero_shot_models,
-        rewrite_models,
+        normalized_rewrite_models,
     ):
         normalized = normalize_ai_preferences(
             {
