@@ -23,8 +23,6 @@ from app.core.config import settings
 from app.utils.ai import get_inference_status, release_local_models, warm_local_models
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
-import os
-from pathlib import Path
 
 async def ensure_indexes():
     # These indexes support the hot paths we exercise on every authenticated session:
@@ -48,6 +46,9 @@ async def lifespan(_app: FastAPI):
     # FastAPI lifespan keeps startup/shutdown work in one place and avoids the
     # deprecated on_event hooks. This is the right place to connect the database,
     # materialize indexes, and optionally prewarm local ML models.
+    issues = settings.validate_runtime_settings()
+    if issues:
+        raise RuntimeError("Invalid runtime settings:\n- " + "\n- ".join(issues))
     ensure_local_media_dirs()
     await connect_to_mongo()
     await ensure_indexes()
@@ -68,11 +69,9 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="SkillBridge API", version="0.5.0", lifespan=lifespan)
 
-origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.allowed_origins_list,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
