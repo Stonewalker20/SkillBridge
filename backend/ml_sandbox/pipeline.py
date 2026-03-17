@@ -369,7 +369,12 @@ async def _evaluate_rewrite_samples(
 
     for sample in samples:
         started = time.perf_counter()
-        rewritten, provider = await rewrite_resume_bullets(sample.job_text, list(sample.bullets), focus=sample.focus)
+        rewritten, provider = await rewrite_resume_bullets(
+            sample.job_text,
+            list(sample.bullets),
+            focus=sample.focus,
+            preferences=preferences,
+        )
         latency_ms = round((time.perf_counter() - started) * 1000, 2)
         normalized_output = " ".join(str(value or "").strip().lower() for value in rewritten)
         required_hits = [
@@ -436,20 +441,32 @@ def build_experiment_configs(
     inference_modes: Sequence[str],
     embedding_models: Sequence[str],
     zero_shot_models: Sequence[str],
+    rewrite_models: Sequence[str],
 ) -> list[dict[str, str]]:
     runtime = _load_ai_runtime()
     normalize_ai_preferences = runtime["normalize_ai_preferences"]
     configs: list[dict[str, str]] = []
-    seen: set[tuple[str, str, str]] = set()
-    for inference_mode, embedding_model, zero_shot_model in product(inference_modes, embedding_models, zero_shot_models):
+    seen: set[tuple[str, str, str, str]] = set()
+    for inference_mode, embedding_model, zero_shot_model, rewrite_model in product(
+        inference_modes,
+        embedding_models,
+        zero_shot_models,
+        rewrite_models,
+    ):
         normalized = normalize_ai_preferences(
             {
                 "inference_mode": inference_mode,
                 "embedding_model": embedding_model,
                 "zero_shot_model": zero_shot_model,
+                "rewrite_model": rewrite_model,
             }
         )
-        key = (normalized["inference_mode"], normalized["embedding_model"], normalized["zero_shot_model"])
+        key = (
+            normalized["inference_mode"],
+            normalized["embedding_model"],
+            normalized["zero_shot_model"],
+            normalized["rewrite_model"],
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -490,4 +507,3 @@ def write_json_artifact(payload: dict[str, Any], filename: str) -> Path:
     target = target_dir / filename
     target.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     return target
-

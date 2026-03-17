@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     local_model_prewarm: bool  = True
     admin_owner_emails: str = ""
     admin_team_emails: str = ""
-    user_avatar_upload_dir: str = "data/uploads/avatars"
+    user_avatar_upload_dir: str = "backend/data/uploads/avatars"
 
     @property
     def admin_owner_emails_set(self) -> set[str]:

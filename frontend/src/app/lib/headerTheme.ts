@@ -7,6 +7,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "ocean",
     label: "Ocean Blue",
+    swatchColors: ["#1E3A8A", "#0F766E", "#DBEAFE"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.26),_transparent_40%),linear-gradient(135deg,_#eef4ff,_#f8fbff_55%,_#eef6ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.10),_transparent_34%),linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(2,6,23,0.98))]",
     avatarClass: "bg-[linear-gradient(135deg,_#1E3A8A,_#0F766E)]",
@@ -21,6 +22,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "sunrise",
     label: "Sunrise Gold",
+    swatchColors: ["#F59E0B", "#D97706", "#FDE68A"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.30),_transparent_42%),linear-gradient(135deg,_#fff8e7,_#fde68a_58%,_#fff7ed)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.20),_transparent_34%),linear-gradient(135deg,_#2a1e06,_#120d03)]",
     avatarClass: "bg-[linear-gradient(135deg,_#F59E0B,_#D97706)]",
@@ -35,6 +37,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "forest",
     label: "Forest Teal",
+    swatchColors: ["#0F766E", "#14B8A6", "#CCFBF1"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.24),_transparent_40%),linear-gradient(135deg,_#ecfdf5,_#ccfbf1_56%,_#f0fdfa)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.18),_transparent_34%),linear-gradient(135deg,_#07231f,_#041310)]",
     avatarClass: "bg-[linear-gradient(135deg,_#0F766E,_#115E59)]",
@@ -49,6 +52,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "plum",
     label: "Plum Slate",
+    swatchColors: ["#7C3AED", "#4338CA", "#EDE9FE"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.24),_transparent_40%),linear-gradient(135deg,_#faf5ff,_#ede9fe_56%,_#f8fafc)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.14),_transparent_34%),linear-gradient(135deg,_#1b1028,_#0f172a)]",
     avatarClass: "bg-[linear-gradient(135deg,_#7C3AED,_#4338CA)]",
@@ -63,6 +67,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "rose",
     label: "Rose Ember",
+    swatchColors: ["#E11D48", "#F97316", "#FFE4E6"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(244,63,94,0.20),_transparent_40%),linear-gradient(135deg,_#fff1f2,_#ffe4e6_56%,_#fff7ed)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,113,133,0.16),_transparent_34%),linear-gradient(135deg,_#2c0f16,_#17060b)]",
     avatarClass: "bg-[linear-gradient(135deg,_#E11D48,_#BE123C)]",
@@ -77,6 +82,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "slate",
     label: "Slate Steel",
+    swatchColors: ["#334155", "#64748B", "#E2E8F0"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(71,85,105,0.20),_transparent_40%),linear-gradient(135deg,_#f8fafc,_#e2e8f0_58%,_#f1f5f9)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(148,163,184,0.14),_transparent_34%),linear-gradient(135deg,_#111827,_#020617)]",
     avatarClass: "bg-[linear-gradient(135deg,_#334155,_#0F172A)]",
@@ -91,6 +97,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "cobalt",
     label: "Cobalt Mint",
+    swatchColors: ["#2563EB", "#14B8A6", "#DBEAFE"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.22),_transparent_40%),linear-gradient(135deg,_#eff6ff,_#dbeafe_56%,_#ecfeff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(96,165,250,0.16),_transparent_34%),linear-gradient(135deg,_#0a1630,_#03141a)]",
     avatarClass: "bg-[linear-gradient(135deg,_#2563EB,_#0F766E)]",
@@ -101,6 +108,51 @@ export const ACCOUNT_HEADER_THEMES = [
     sidebarClass:
       "bg-[linear-gradient(180deg,_rgba(239,246,255,0.98),_rgba(219,234,254,0.90)_52%,_rgba(236,254,255,0.96))] dark:bg-[linear-gradient(180deg,_rgba(10,22,48,0.98),_rgba(3,20,26,0.96))]",
     sidebarActiveClass: "bg-[linear-gradient(135deg,_#2563EB,_#14B8A6)] text-white shadow-sm",
+  },
+  {
+    value: "aurora",
+    label: "Aurora Sky",
+    swatchColors: ["#0EA5E9", "#22C55E", "#DCFCE7"],
+    heroClass:
+      "bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.22),_transparent_38%),linear-gradient(135deg,_#ecfeff,_#dcfce7_56%,_#eff6ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.15),_transparent_34%),linear-gradient(135deg,_#04161f,_#05150d)]",
+    avatarClass: "bg-[linear-gradient(135deg,_#0EA5E9,_#22C55E)]",
+    buttonClass: "bg-[#0EA5E9] text-white hover:bg-[#0284c7]",
+    barClass: "bg-[linear-gradient(90deg,_#0EA5E9,_#22C55E)]",
+    accentTextClass: "text-sky-600 dark:text-emerald-300",
+    softPanelClass: "bg-[linear-gradient(135deg,_rgba(14,165,233,0.10),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(34,197,94,0.10),_rgba(5,21,13,0.94))]",
+    sidebarClass:
+      "bg-[linear-gradient(180deg,_rgba(236,254,255,0.98),_rgba(220,252,231,0.90)_52%,_rgba(239,246,255,0.96))] dark:bg-[linear-gradient(180deg,_rgba(4,22,31,0.98),_rgba(5,21,13,0.96))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#0EA5E9,_#22C55E)] text-white shadow-sm",
+  },
+  {
+    value: "sandstone",
+    label: "Sandstone Clay",
+    swatchColors: ["#B45309", "#EA580C", "#FED7AA"],
+    heroClass:
+      "bg-[radial-gradient(circle_at_top_left,_rgba(234,88,12,0.20),_transparent_40%),linear-gradient(135deg,_#fff7ed,_#fed7aa_56%,_#ffedd5)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,146,60,0.14),_transparent_34%),linear-gradient(135deg,_#271205,_#180a04)]",
+    avatarClass: "bg-[linear-gradient(135deg,_#B45309,_#EA580C)]",
+    buttonClass: "bg-[#C2410C] text-white hover:bg-[#9a3412]",
+    barClass: "bg-[linear-gradient(90deg,_#B45309,_#EA580C)]",
+    accentTextClass: "text-orange-700 dark:text-orange-300",
+    softPanelClass: "bg-[linear-gradient(135deg,_rgba(234,88,12,0.12),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(251,146,60,0.10),_rgba(24,10,4,0.94))]",
+    sidebarClass:
+      "bg-[linear-gradient(180deg,_rgba(255,247,237,0.98),_rgba(254,215,170,0.90)_52%,_rgba(255,237,213,0.96))] dark:bg-[linear-gradient(180deg,_rgba(39,18,5,0.98),_rgba(24,10,4,0.96))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#B45309,_#EA580C)] text-white shadow-sm",
+  },
+  {
+    value: "orchid",
+    label: "Orchid Pulse",
+    swatchColors: ["#9333EA", "#EC4899", "#F5D0FE"],
+    heroClass:
+      "bg-[radial-gradient(circle_at_top_left,_rgba(147,51,234,0.22),_transparent_40%),linear-gradient(135deg,_#fdf4ff,_#f5d0fe_56%,_#fce7f3)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.14),_transparent_34%),linear-gradient(135deg,_#250925,_#180611)]",
+    avatarClass: "bg-[linear-gradient(135deg,_#9333EA,_#EC4899)]",
+    buttonClass: "bg-[#9333EA] text-white hover:bg-[#7e22ce]",
+    barClass: "bg-[linear-gradient(90deg,_#9333EA,_#EC4899)]",
+    accentTextClass: "text-fuchsia-600 dark:text-pink-300",
+    softPanelClass: "bg-[linear-gradient(135deg,_rgba(147,51,234,0.12),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(236,72,153,0.10),_rgba(24,6,17,0.94))]",
+    sidebarClass:
+      "bg-[linear-gradient(180deg,_rgba(253,244,255,0.98),_rgba(245,208,254,0.90)_52%,_rgba(252,231,243,0.96))] dark:bg-[linear-gradient(180deg,_rgba(37,9,37,0.98),_rgba(24,6,17,0.96))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#9333EA,_#EC4899)] text-white shadow-sm",
   },
 ] as const;
 

@@ -28,5 +28,9 @@ class AuthOut(BaseModel):
 class UserPatch(BaseModel):
     email: Optional[EmailStr] = None
     username: Optional[str] = Field(default=None, min_length=2, max_length=50)
-    password: Optional[str] = Field(default=None, min_length=8, max_length=128)
     avatar_preset: Optional[str] = None
+
+
+class PasswordChangeIn(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)

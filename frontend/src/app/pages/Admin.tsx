@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { Briefcase, Database, RefreshCw, Shield, Sparkles, Users } from "lucide-react";
+import { toast } from "sonner";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-import { Shield, Users, Briefcase, Database, Sparkles, RefreshCw } from "lucide-react";
 import { api, type AdminJob, type AdminSummary, type AdminUserRecord } from "../services/api";
-import { toast } from "sonner";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { useAuth } from "../context/AuthContext";
+import { AdminSectionNav } from "../components/AdminSectionNav";
 
 const ADMIN_ROLES = ["user", "team", "admin", "owner"];
 
@@ -20,9 +21,9 @@ export function Admin() {
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [jobs, setJobs] = useState<AdminJob[]>([]);
   const [jobFilter, setJobFilter] = useState("pending");
-  const [savingRoleId, setSavingRoleId] = useState<string>("");
-  const [deactivatingUserId, setDeactivatingUserId] = useState<string>("");
-  const [moderatingJobId, setModeratingJobId] = useState<string>("");
+  const [savingRoleId, setSavingRoleId] = useState("");
+  const [deactivatingUserId, setDeactivatingUserId] = useState("");
+  const [moderatingJobId, setModeratingJobId] = useState("");
 
   const load = async (status = jobFilter) => {
     setLoading(true);
@@ -65,8 +66,7 @@ export function Admin() {
   };
 
   const deactivateUser = async (userRecord: AdminUserRecord) => {
-    const isSelf = userRecord.id === currentUser?.id;
-    if (isSelf || !userRecord.is_active) return;
+    if (userRecord.id === currentUser?.id || !userRecord.is_active) return;
 
     const confirmed = window.confirm(`Deactivate ${userRecord.username}'s account? They will lose access but remain in the database.`);
     if (!confirmed) return;
@@ -129,11 +129,18 @@ export function Admin() {
   };
 
   if (loading && !summary) {
-    return <div className="p-6 text-sm text-gray-600 dark:text-slate-300">Loading admin workspace...</div>;
+    return (
+      <div className="max-w-7xl space-y-6">
+        <AdminSectionNav />
+        <div className="p-6 text-sm text-gray-600 dark:text-slate-300">Loading admin workspace...</div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl space-y-6">
+      <AdminSectionNav />
+
       <Card className="overflow-hidden border-slate-200 p-0 dark:border-slate-800 dark:bg-slate-950">
         <div className={`${activeHeaderTheme.heroClass} px-8 py-8`}>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -205,7 +212,9 @@ export function Admin() {
               <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">User Access</h2>
               <p className="text-sm text-gray-600 dark:text-slate-300">Promote or adjust team access without exposing account controls to end users.</p>
             </div>
-            <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">{users.length} users</Badge>
+            <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+              {users.length} users
+            </Badge>
           </div>
 
           <div className="max-h-[28rem] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800">
@@ -239,9 +248,7 @@ export function Admin() {
                           {user.is_active ? "Active" : "Deactivated"}
                         </Badge>
                         {!user.is_active && user.deactivated_at ? (
-                          <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                            {new Date(user.deactivated_at).toLocaleString()}
-                          </span>
+                          <span className="text-[11px] text-gray-500 dark:text-slate-400">{new Date(user.deactivated_at).toLocaleString()}</span>
                         ) : null}
                       </div>
                     </TableCell>
@@ -353,7 +360,9 @@ export function Admin() {
                       <div className="mt-1 text-xs text-gray-600 dark:text-slate-300">{job.description_excerpt}</div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="capitalize dark:border-slate-700 dark:text-slate-200">{job.moderation_status}</Badge>
+                      <Badge variant="outline" className="capitalize dark:border-slate-700 dark:text-slate-200">
+                        {job.moderation_status}
+                      </Badge>
                     </TableCell>
                     <TableCell className="whitespace-normal">
                       <div className="flex flex-wrap gap-2">

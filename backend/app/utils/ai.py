@@ -81,10 +81,15 @@ def normalize_ai_preferences(preferences: dict | None = None) -> dict[str, str]:
     if zero_shot_model not in settings.local_zero_shot_model_options_list:
         zero_shot_model = settings.local_zero_shot_model
 
+    rewrite_model = str(raw.get("rewrite_model") or settings.local_rewrite_model).strip()
+    if rewrite_model not in settings.local_rewrite_model_options_list:
+        rewrite_model = settings.local_rewrite_model
+
     return {
         "inference_mode": mode,
         "embedding_model": embedding_model,
         "zero_shot_model": zero_shot_model,
+        "rewrite_model": rewrite_model,
     }
 
 
@@ -232,7 +237,7 @@ def get_inference_status(preferences: dict | None = None) -> dict[str, str]:
     force_fallback = prefs["inference_mode"] == "local-fallback"
     embed_model = None if force_fallback else _load_sentence_transformer(prefs["embedding_model"])
     zero_shot = None if force_fallback else _load_zero_shot_pipeline(prefs["zero_shot_model"])
-    rewrite_model = None if force_fallback else _load_rewrite_pipeline(settings.local_rewrite_model)
+    rewrite_model = None if force_fallback else _load_rewrite_pipeline(prefs["rewrite_model"])
     embeddings_provider = "local-transformer" if embed_model is not None else "local-hash"
     rewrite_provider = "local-llm" if rewrite_model is not None else "local-rule"
     return {
@@ -240,7 +245,7 @@ def get_inference_status(preferences: dict | None = None) -> dict[str, str]:
         "embeddings_provider": embeddings_provider,
         "rewrite_provider": rewrite_provider,
         "embedding_model": prefs["embedding_model"] if embed_model is not None else "hashed-embedding-v1",
-        "rewrite_model": settings.local_rewrite_model if rewrite_model is not None else "resume-rule-rewriter-v1",
+        "rewrite_model": prefs["rewrite_model"] if rewrite_model is not None else "resume-rule-rewriter-v1",
     }
 
 
@@ -341,8 +346,8 @@ def _rewrite_prompt(job_text: str, bullet: str, focus: str) -> str:
     )
 
 
-def _rewrite_with_local_llm(job_text: str, bullets: list[str], focus: str) -> tuple[list[str], str] | None:
-    pipeline = _load_rewrite_pipeline(settings.local_rewrite_model)
+def _rewrite_with_local_llm(job_text: str, bullets: list[str], focus: str, model_name: str | None = None) -> tuple[list[str], str] | None:
+    pipeline = _load_rewrite_pipeline(model_name)
     if pipeline is None:
         return None
 
@@ -376,11 +381,14 @@ def _rewrite_with_local_llm(job_text: str, bullets: list[str], focus: str) -> tu
     return rewritten, "local-llm"
 
 
-async def rewrite_resume_bullets(job_text: str, bullets: list[str], focus: str = "balanced") -> tuple[list[str], str]:
+async def rewrite_resume_bullets(job_text: str, bullets: list[str], focus: str = "balanced", preferences: dict | None = None) -> tuple[list[str], str]:
     cleaned = [re.sub(r"^\s*[-*]\s*", "", str(bullet or "").strip()) for bullet in bullets if str(bullet or "").strip()]
     if not cleaned:
         return [], "local-rule"
-    rewritten = _rewrite_with_local_llm(job_text, cleaned, focus)
+    prefs = normalize_ai_preferences(preferences)
+    if prefs["inference_mode"] == "local-fallback":
+        return _rewrite_locally(job_text, cleaned, focus), "local-rule"
+    rewritten = _rewrite_with_local_llm(job_text, cleaned, focus, prefs["rewrite_model"])
     if rewritten is not None:
         return rewritten
     return _rewrite_locally(job_text, cleaned, focus), "local-rule"

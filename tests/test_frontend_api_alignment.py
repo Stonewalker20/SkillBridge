@@ -47,6 +47,12 @@ def _normalize_to_openapi(path: str) -> str:
     path = path.replace("{id}{id}", "{id}")
     if "/admin/users/{id}" in path:
         return path.replace("{id}", "{user_id}")
+    if "/admin/mlflow/experiments/{id}/runs/{id}" in path:
+        return path.replace("/admin/mlflow/experiments/{id}/runs/{id}", "/admin/mlflow/experiments/{experiment_id}/runs/{run_id}")
+    if "/admin/mlflow/experiments/{id}/runs" in path:
+        return path.replace("{id}", "{experiment_id}")
+    if "/admin/mlflow/jobs/{id}" in path:
+        return path.replace("{id}", "{job_id}")
     if "/skills/{id}" in path:
         return path.replace("{id}", "{skill_id}")
     if "/jobs/{id}" in path:

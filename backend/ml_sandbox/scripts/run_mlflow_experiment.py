@@ -76,6 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--inference-mode", action="append", default=[])
     parser.add_argument("--embedding-model", action="append", default=[])
     parser.add_argument("--zero-shot-model", action="append", default=[])
+    parser.add_argument("--rewrite-model", action="append", default=[])
     parser.add_argument(
         "--tag",
         action="append",
@@ -134,6 +135,7 @@ def main() -> int:
     args.inference_mode = args.inference_mode or ["auto"]
     args.embedding_model = args.embedding_model or ["sentence-transformers/all-MiniLM-L6-v2"]
     args.zero_shot_model = args.zero_shot_model or ["MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33"]
+    args.rewrite_model = args.rewrite_model or ["google/flan-t5-small"]
 
     artifacts_root = ROOT / "backend" / "ml_sandbox" / "artifacts"
     artifacts_root.mkdir(parents=True, exist_ok=True)
@@ -151,6 +153,7 @@ def main() -> int:
         inference_modes=args.inference_mode,
         embedding_models=args.embedding_model,
         zero_shot_models=args.zero_shot_model,
+        rewrite_models=args.rewrite_model,
     )
     tags = _parse_tags(args.tag)
     parent_run_name = args.run_name or f"skillbridge-sweep-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
@@ -173,6 +176,7 @@ def main() -> int:
                 "extraction_dataset": args.extraction_dataset,
                 "ranking_dataset": args.ranking_dataset,
                 "rewrite_dataset": args.rewrite_dataset,
+                "rewrite_models": ",".join(args.rewrite_model),
             }
         )
         manifest_path = Path(args.dataset_dir).expanduser() / "manifest.json" if args.dataset_dir else None
@@ -184,6 +188,7 @@ def main() -> int:
             child_run_name = (
                 f"{config['inference_mode']}::{config['embedding_model'].split('/')[-1]}"
                 f"::{config['zero_shot_model'].split('/')[-1]}"
+                f"::{config['rewrite_model'].split('/')[-1]}"
             )
             with mlflow.start_run(experiment_id=experiment_id, run_name=child_run_name, nested=True):
                 mlflow.log_params(config)

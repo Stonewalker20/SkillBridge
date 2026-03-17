@@ -68,6 +68,38 @@ python backend/ml_sandbox/scripts/run_mlflow_experiment.py \
 5. Keep candidate extraction and scoring changes in the sandbox first.
 6. Only port changes into production code after you have benchmark evidence.
 
+## Bootstrapping Without Real Users
+
+If you do not have live user data yet, seed a separate local Mongo database from the repo's unified backend data folder.
+
+Current local paths:
+- seed inputs: `backend/data/seed/`
+- avatar uploads: `backend/data/uploads/avatars`
+
+Dry-run the synthetic seeder:
+
+```bash
+python backend/ml_sandbox/scripts/seed_synthetic_eval_data.py --dry-run
+```
+
+Populate a dedicated seed database:
+
+```bash
+python backend/ml_sandbox/scripts/seed_synthetic_eval_data.py \
+  --mongo-db skillbridge_ml_seed \
+  --max-resume-rows 12 \
+  --max-external-postings 12 \
+  --max-large-linkedin-jobs 12 \
+  --max-nyc-jobs 12
+```
+
+Then export eval sets from that synthetic database:
+
+```bash
+export ML_SANDBOX_ANON_SALT="replace-with-a-long-random-secret"
+python backend/ml_sandbox/scripts/export_eval_sets.py --mongo-db skillbridge_ml_seed
+```
+
 ## Exporting Safe Eval Sets From Mongo
 
 The sandbox now includes a generator that mines real SkillBridge artifacts and emits anonymized JSONL files for extraction, retrieval, and rewrite evaluation.

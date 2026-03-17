@@ -9,6 +9,7 @@ import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useAccountPreferences } from "../context/AccountPreferencesContext";
 
 interface DashboardSummary {
   totalSkills: number;
@@ -139,6 +140,7 @@ export function Dashboard() {
   const { user } = useAuth();
   const { activities, clearActivities } = useActivity();
   const { activeHeaderTheme } = useHeaderTheme();
+  const { preferences } = useAccountPreferences();
   const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [hiddenRecentActivityKeys, setHiddenRecentActivityKeys] = useState<string[]>(() => {
@@ -372,21 +374,23 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
-        <div className="px-6 py-6 md:px-8">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-              Career Overview
+      {preferences.showWelcomeHero ? (
+        <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
+          <div className="px-6 py-6 md:px-8">
+            <div className="max-w-2xl">
+              <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                Career Overview
+              </div>
+              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                Welcome back, {user?.username || (user as any)?.name || "there"}
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                Track your confirmed skills, evidence momentum, and job-match readiness from one place.
+              </p>
             </div>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              Welcome back, {user?.username || (user as any)?.name || "there"}
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Track your confirmed skills, evidence momentum, and job-match readiness from one place.
-            </p>
           </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {stats.map((stat) => (
@@ -406,61 +410,62 @@ export function Dashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activity */}
-        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Recent Activity</h3>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={handleClearRecentActivity}>
-                Clear recent
-              </Button>
-              {hiddenRecentActivityKeys.length > 0 ? (
-                <Button variant="ghost" size="sm" onClick={() => setHiddenRecentActivityKeys([])}>
-                  Reset hidden
+      <div className={`grid grid-cols-1 gap-6 ${preferences.showRecentActivity ? "lg:grid-cols-2" : ""}`}>
+        {preferences.showRecentActivity ? (
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Recent Activity</h3>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={handleClearRecentActivity}>
+                  Clear recent
                 </Button>
-              ) : null}
+                {hiddenRecentActivityKeys.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => setHiddenRecentActivityKeys([])}>
+                    Reset hidden
+                  </Button>
+                ) : null}
+              </div>
             </div>
-          </div>
 
-          {visibleRecentActivity.length === 0 ? (
-            <div className="text-sm text-gray-500 dark:text-slate-400">No recent activity yet.</div>
-          ) : (
-            <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
-              {visibleRecentActivity.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3 last:border-slate-100 dark:border-slate-800 dark:bg-slate-800/60"
-                >
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className="capitalize bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                      {activity.type}
-                    </Badge>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{activity.name}</p>
-                      <p className="text-xs text-gray-500 capitalize dark:text-slate-400">{activity.action}</p>
+            {visibleRecentActivity.length === 0 ? (
+              <div className="text-sm text-gray-500 dark:text-slate-400">No recent activity yet.</div>
+            ) : (
+              <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
+                {visibleRecentActivity.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3 last:border-slate-100 dark:border-slate-800 dark:bg-slate-800/60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="capitalize bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                        {activity.type}
+                      </Badge>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{activity.name}</p>
+                        <p className="text-xs text-gray-500 capitalize dark:text-slate-400">{activity.action}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 dark:text-slate-400">
+                        {activity.date ? new Date(activity.date).toLocaleDateString() : ""}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-full text-slate-400 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-900 dark:hover:text-slate-100"
+                        onClick={() => hideRecentActivityItem(activity.eventKey ?? `${activity.id}:${activity.date}`)}
+                        aria-label={`Hide activity ${activity.name}`}
+                        title="Hide activity"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 dark:text-slate-400">
-                      {activity.date ? new Date(activity.date).toLocaleDateString() : ""}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 rounded-full text-slate-400 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-900 dark:hover:text-slate-100"
-                      onClick={() => hideRecentActivityItem(activity.eventKey ?? `${activity.id}:${activity.date}`)}
-                      aria-label={`Hide activity ${activity.name}`}
-                      title="Hide activity"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+                ))}
+              </div>
+            )}
+          </Card>
+        ) : null}
 
         {/* Top Skill Categories */}
         <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
@@ -499,83 +504,85 @@ export function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Evidence to Job Match</h3>
+      {preferences.showPortfolioInsights ? (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Evidence to Job Match</h3>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                  How strongly your saved work history supports the skills showing up in recent job analyses.
+                </p>
+              </div>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/app/analytics/skills">Open analytics</Link>
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {portfolioVisualMetrics.map((metric) => (
+                <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/60">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{metric.label}</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">{metric.value}</p>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{metric.detail}</p>
+                </div>
+              ))}
+            </div>
+            {summary.recentMatchTrend.length > 0 ? (
+              <div className="mt-5 h-52 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={summary.recentMatchTrend} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                    <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                    <Tooltip
+                      cursor={{ fill: "rgba(148, 163, 184, 0.12)" }}
+                      formatter={(value: number) => [`${Math.round(Number(value) || 0)}%`, "Match score"]}
+                      labelFormatter={(label) => String(label)}
+                    />
+                    <Bar dataKey="score" radius={[10, 10, 4, 4]} fill="var(--dashboard-accent, #1E3A8A)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                Analyze a few jobs to unlock a recent match trend chart here.
+              </div>
+            )}
+          </Card>
+
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="mb-5">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Evidence Signal Mix</h3>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                How strongly your saved work history supports the skills showing up in recent job analyses.
+                The types of evidence currently contributing to your profile depth.
               </p>
             </div>
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/app/analytics/skills">Open analytics</Link>
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {portfolioVisualMetrics.map((metric) => (
-              <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/60">
-                <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{metric.label}</p>
-                <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">{metric.value}</p>
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{metric.detail}</p>
+            {summary.portfolioTypeDistribution.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                Add evidence to start visualizing how your work history is distributed.
               </div>
-            ))}
-          </div>
-          {summary.recentMatchTrend.length > 0 ? (
-            <div className="mt-5 h-52 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={summary.recentMatchTrend} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-                  <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    cursor={{ fill: "rgba(148, 163, 184, 0.12)" }}
-                    formatter={(value: number) => [`${Math.round(Number(value) || 0)}%`, "Match score"]}
-                    labelFormatter={(label) => String(label)}
-                  />
-                  <Bar dataKey="score" radius={[10, 10, 4, 4]} fill="var(--dashboard-accent, #1E3A8A)" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="mt-6 rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
-              Analyze a few jobs to unlock a recent match trend chart here.
-            </div>
-          )}
-        </Card>
-
-        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mb-5">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Evidence Signal Mix</h3>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              The types of evidence currently contributing to your profile depth.
-            </p>
-          </div>
-          {summary.portfolioTypeDistribution.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
-              Add evidence to start visualizing how your work history is distributed.
-            </div>
-          ) : (
-            <div className="max-h-[22rem] space-y-4 overflow-y-auto pr-1">
-              {summary.portfolioTypeDistribution.map((entry) => {
-                const maxCount = Math.max(...summary.portfolioTypeDistribution.map((item) => item.count), 1);
-                const width = (entry.count / maxCount) * 100;
-                return (
-                  <div key={entry.type} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium capitalize text-slate-900 dark:text-slate-100">{entry.type}</span>
-                      <span className="text-slate-600 dark:text-slate-300">{entry.count}</span>
+            ) : (
+              <div className="max-h-[22rem] space-y-4 overflow-y-auto pr-1">
+                {summary.portfolioTypeDistribution.map((entry) => {
+                  const maxCount = Math.max(...summary.portfolioTypeDistribution.map((item) => item.count), 1);
+                  const width = (entry.count / maxCount) * 100;
+                  return (
+                    <div key={entry.type} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium capitalize text-slate-900 dark:text-slate-100">{entry.type}</span>
+                        <span className="text-slate-600 dark:text-slate-300">{entry.count}</span>
+                      </div>
+                      <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-800">
+                        <div className={`h-3 rounded-full ${activeHeaderTheme.barClass}`} style={{ width: `${width}%` }} />
+                      </div>
                     </div>
-                    <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-800">
-                      <div className={`h-3 rounded-full ${activeHeaderTheme.barClass}`} style={{ width: `${width}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-      </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
+      ) : null}
 
     </div>
   );

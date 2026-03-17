@@ -12,6 +12,7 @@ import type { JobMatchHistoryEntry, ResumeSnapshotListEntry } from "../services/
 import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateCw, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
+import { useHeaderTheme } from "../lib/headerTheme";
 
 type RetrievedContextItem = {
   source_type: string;
@@ -105,6 +106,7 @@ function formatResumeTemplateLabel(snapshot: ResumeSnapshotListEntry) {
 
 export function Jobs() {
   const { recordActivity } = useActivity();
+  const { activeHeaderTheme } = useHeaderTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const [jobDescription, setJobDescription] = useState("");
@@ -632,15 +634,53 @@ export function Jobs() {
 
   if (!analysis) {
     return (
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="text-center">
-          <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-slate-100">Job Match</h1>
-          <p className="text-gray-600 dark:text-slate-300">Paste a job description to get a detailed job match breakdown and generate a tailored resume</p>
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
+          <div className="px-6 py-6 md:px-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                  Job Match Workspace
+                </div>
+                <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Run a grounded job-fit analysis</h1>
+                <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  Paste a posting to get a fit score, required-skill coverage, retrieval-backed reasoning, and a tailored resume path in the same design system as the rest of the app.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Saved Runs</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">{history.length}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Templates</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">{resumeSnapshots.length + 1}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Focus</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Skill coverage</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Output</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Tailored resume</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="space-y-5">
+            <div className="flex items-center gap-3">
+              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+                <Sparkles className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Start a new analysis</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-300">Capture the role details and full posting before running the model.</p>
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="job-title">Job Title (Optional)</Label>
@@ -696,7 +736,7 @@ export function Jobs() {
             <Button
               onClick={handleAnalyze}
               disabled={analyzing || !jobDescription.trim()}
-              className="w-full bg-[#1E3A8A] hover:bg-[#1e3a8a]/90 h-12 text-base"
+              className={`h-12 w-full text-base ${activeHeaderTheme.buttonClass}`}
             >
               {analyzing ? (
                 <>
@@ -713,10 +753,15 @@ export function Jobs() {
           </div>
         </Card>
 
-        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
-            <History className="h-5 w-5 text-[#1E3A8A]" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Last Analyzed Jobs</h3>
+            <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+              <History className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Last Analyzed Jobs</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300">Restore, rerun, or export from recent job-match sessions.</p>
+            </div>
           </div>
           {historyLoading ? (
             <p className="text-sm text-gray-500 dark:text-slate-400">Loading previous analyses...</p>
@@ -725,7 +770,7 @@ export function Jobs() {
           ) : (
             <div className="max-h-[34rem] space-y-3 overflow-y-auto pr-2">
               {history.map((entry) => (
-                <div key={entry.id} className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 md:flex-row md:items-center md:justify-between dark:border-slate-800 dark:bg-slate-950/60">
+                <div key={entry.id} className="flex flex-col gap-3 rounded-2xl border border-gray-200 p-4 md:flex-row md:items-center md:justify-between dark:border-slate-800 dark:bg-slate-950/60">
                   <div>
                     <p className="font-semibold text-gray-900 dark:text-slate-100">{entry.title || entry.company || "Saved job match"}</p>
                     <p className="text-sm text-gray-600 dark:text-slate-300">{[entry.company, entry.location].filter(Boolean).join(" • ")}</p>
@@ -772,24 +817,52 @@ export function Jobs() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Job Match</h1>
-          <p className="text-gray-600 dark:text-slate-300">Detailed score, skill gaps, and tailored resume generation</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleReanalyzeCurrent} disabled={reanalyzingCurrent || !jobId}>
-            <RotateCw className={`mr-2 h-4 w-4 ${reanalyzingCurrent ? "animate-spin" : ""}`} />
-            {reanalyzingCurrent ? "Updating..." : "Reanalyze"}
-          </Button>
-          <Button variant="outline" onClick={handleReset}>
-            New Analysis
-          </Button>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
+        <div className="px-6 py-6 md:px-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                Active Analysis
+              </div>
+              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{jobTitle || company || "Job Match"}</h1>
+              <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                Detailed score, skill gaps, semantic overlap, and tailored resume generation in the same visual system as the rest of SkillBridge.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={handleReanalyzeCurrent} disabled={reanalyzingCurrent || !jobId}>
+                <RotateCw className={`mr-2 h-4 w-4 ${reanalyzingCurrent ? "animate-spin" : ""}`} />
+                {reanalyzingCurrent ? "Updating..." : "Reanalyze"}
+              </Button>
+              <Button variant="outline" onClick={handleReset}>
+                New Analysis
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <Card className="p-4 dark:border-slate-800 dark:bg-slate-900/80">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Match Score</p>
+          <p className={`mt-2 text-2xl font-semibold ${getScoreColor(normalized.matchScore)}`}>{normalized.matchScore}%</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Confidence</p>
+          <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{normalized.confidenceLabel} Fit</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Matched Skills</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">{normalized.matchedSkillCount}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/80">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Missing Skills</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">{normalized.missingSkillCount}</p>
+        </div>
+      </div>
+
+      <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-wrap gap-2">
           {[
             ["#job-summary", "Summary"],
@@ -805,9 +878,9 @@ export function Jobs() {
         </div>
       </Card>
 
-      <Card id="job-summary" className="p-8 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="grid gap-6 lg:grid-cols-[220px_1fr] lg:items-center">
-          <div className="flex flex-col items-center rounded-2xl bg-slate-50 p-6 text-center dark:bg-slate-950/70">
+      <Card id="job-summary" className="scroll-mt-24 border-slate-200 p-8 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="grid gap-6 lg:grid-cols-[240px_1fr] lg:items-center">
+          <div className={`flex flex-col items-center rounded-2xl p-6 text-center ${activeHeaderTheme.softPanelClass}`}>
             <span className={`text-5xl font-bold ${getScoreColor(normalized.matchScore)}`}>{normalized.matchScore}%</span>
             <span className="mt-1 text-sm text-gray-600 dark:text-slate-300">Match Score</span>
             <Badge className="mt-4 border-gray-200 bg-white text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">{normalized.confidenceLabel} Fit</Badge>
@@ -825,42 +898,42 @@ export function Jobs() {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <p className="text-sm text-gray-500 dark:text-slate-400">Extracted Job Skills</p>
           <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.extractedSkillCount}</p>
         </Card>
-        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <p className="text-sm text-gray-500 dark:text-slate-400">Required Skills Covered</p>
           <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">
             {normalized.requiredMatchedCount}/{normalized.requiredSkillCount || normalized.extractedSkillCount || 0}
           </p>
         </Card>
-        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <p className="text-sm text-gray-500 dark:text-slate-400">Matched Job Skills</p>
           <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.matchedSkillCount}</p>
         </Card>
-        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <p className="text-sm text-gray-500 dark:text-slate-400">Missing Job Skills</p>
           <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.missingSkillCount}</p>
         </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <p className="text-sm text-gray-500 dark:text-slate-400">Semantic Alignment</p>
           <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.semanticAlignmentScore}%</p>
           <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
             {normalized.semanticAlignmentExplanation || "Semantic alignment looks beyond exact keyword matches and estimates how similar your saved work is to the role's themes and responsibilities."}
           </p>
         </Card>
-        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <p className="text-sm text-gray-500 dark:text-slate-400">Personal Skill Vector</p>
           <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.personalSkillVectorScore}%</p>
           <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
             {normalized.personalSkillVectorExplanation || "This compares the job vector against your combined user profile vector built from confirmed skills, evidence, and resume context."}
           </p>
         </Card>
-        <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <p className="text-sm text-gray-500 dark:text-slate-400">Coverage Snapshot</p>
           <div className="mt-3 space-y-2 text-sm text-gray-700 dark:text-slate-200">
             <p>Matched job skills: {normalized.matchedSkillCount} of {normalized.extractedSkillCount}</p>
@@ -885,7 +958,7 @@ export function Jobs() {
         </Card>
       </div>
 
-      <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm text-gray-500 dark:text-slate-400">Retrieved Evidence</p>
@@ -923,7 +996,7 @@ export function Jobs() {
         )}
       </Card>
 
-      <Card className="p-5 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
         <p className="text-sm text-gray-500 dark:text-slate-400">Semantic Alignment Examples</p>
         {normalized.semanticAlignmentExamples.length === 0 ? (
           <p className="mt-3 text-sm text-gray-600 dark:text-slate-300">No concrete examples yet. Add more evidence or projects tied to your confirmed skills to strengthen semantic matching.</p>
@@ -969,7 +1042,7 @@ export function Jobs() {
       </Card>
 
       <div id="job-skills" className="grid grid-cols-1 md:grid-cols-3 gap-6 scroll-mt-24">
-        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
             <h3 className="font-semibold text-gray-900 dark:text-slate-100">Matched Skills</h3>
@@ -1002,7 +1075,7 @@ export function Jobs() {
           </div>
         </Card>
 
-        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
             <AlertCircle className="h-5 w-5 text-orange-600" />
             <h3 className="font-semibold text-gray-900 dark:text-slate-100">Missing Skills</h3>
@@ -1043,9 +1116,9 @@ export function Jobs() {
           </div>
         </Card>
 
-        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="h-5 w-5 text-[#1E3A8A]" />
+            <Sparkles className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
             <h3 className="font-semibold text-gray-900 dark:text-slate-100">Strength Areas</h3>
           </div>
           <div className="max-h-[18rem] overflow-y-auto">
@@ -1065,7 +1138,7 @@ export function Jobs() {
       </div>
 
       {normalized.ignoredSkills.length > 0 ? (
-        <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
             <Trash2 className="h-5 w-5 text-slate-500" />
             <h3 className="font-semibold text-gray-900 dark:text-slate-100">Ignored Skills</h3>
@@ -1090,10 +1163,10 @@ export function Jobs() {
       ) : null}
 
       <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="flex items-center gap-2 mb-4">
-          <Sparkles className="h-5 w-5 text-[#1E3A8A]" />
-          <h3 className="font-semibold text-gray-900 dark:text-slate-100">Related Skills</h3>
-        </div>
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+            <h3 className="font-semibold text-gray-900 dark:text-slate-100">Related Skills</h3>
+          </div>
         <div className="flex flex-wrap gap-2">
           {normalized.relatedSkills.length === 0 ? (
             <span className="text-sm text-gray-500 dark:text-slate-400">No semantic skill matches returned.</span>
@@ -1108,10 +1181,10 @@ export function Jobs() {
       </Card>
 
       <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="flex items-center gap-2 mb-4">
-          <AlertCircle className="h-5 w-5 text-[#1E3A8A]" />
-          <h3 className="font-semibold text-gray-900 dark:text-slate-100">Recommended Next Steps</h3>
-        </div>
+          <div className="flex items-center gap-2 mb-4">
+            <AlertCircle className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+            <h3 className="font-semibold text-gray-900 dark:text-slate-100">Recommended Next Steps</h3>
+          </div>
         {normalized.nextSteps.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-slate-400">No immediate next steps. Your saved profile data is already aligned well with this job.</p>
         ) : (
@@ -1126,10 +1199,10 @@ export function Jobs() {
       </Card>
 
       <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="flex items-center gap-2 mb-4">
-          <AlertCircle className="h-5 w-5 text-[#1E3A8A]" />
-          <h3 className="font-semibold text-gray-900 dark:text-slate-100">Gap Reasoning</h3>
-        </div>
+          <div className="flex items-center gap-2 mb-4">
+            <AlertCircle className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+            <h3 className="font-semibold text-gray-900 dark:text-slate-100">Gap Reasoning</h3>
+          </div>
         <p className="mb-4 text-sm text-gray-600 dark:text-slate-300">
           {normalized.gapReasoningSummary || "The backend did not return a detailed gap rationale for this analysis."}
         </p>
@@ -1162,7 +1235,7 @@ export function Jobs() {
         )}
       </Card>
 
-      <Card id="job-resume" className="p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card id="job-resume" className="scroll-mt-24 border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Tailored Resume</h3>
@@ -1190,7 +1263,7 @@ export function Jobs() {
             <Button
               onClick={handleGenerateResume}
               disabled={generating || !jobId}
-              className="bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
+              className={activeHeaderTheme.buttonClass}
             >
               <Download className="mr-2 h-4 w-4" />
               {generating ? "Generating PDF..." : "Generate PDF"}
@@ -1211,11 +1284,11 @@ export function Jobs() {
         )}
       </Card>
 
-      <Card id="job-history" className="p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card id="job-history" className="scroll-mt-24 border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <History className="h-5 w-5 text-[#1E3A8A]" />
+              <History className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Saved Job Match History</h3>
             </div>
             <p className="text-sm text-gray-600 dark:text-slate-300">Compare recent job analyses and see how match quality changes across postings.</p>
