@@ -1,5 +1,7 @@
 """Tests that validate owner-only admin flows and access control enforcement."""
 
+from datetime import datetime, timezone
+
 from bson import ObjectId
 
 def test_admin_workspace_endpoints(test_context):
@@ -50,6 +52,272 @@ def test_admin_workspace_endpoints(test_context):
     )
     assert moderation.status_code == 200
     assert moderation.json()["moderation_status"] == "approved"
+
+
+def test_admin_mlflow_endpoints(test_context, monkeypatch):
+    client = test_context["client"]
+    db = test_context["db"]
+
+    db["users"].docs[0]["role"] = "owner"
+    now = datetime.now(timezone.utc)
+
+    monkeypatch.setattr(
+        "app.routers.admin.get_mlflow_overview",
+        lambda: {
+            "available": True,
+            "tracking_uri": "sqlite:///backend/ml_sandbox/artifacts/mlflow.db",
+            "experiment_count": 1,
+            "registered_model_count": 1,
+            "latest_run_started_at": now,
+            "experiments": [
+                {
+                    "id": "1",
+                    "name": "skillbridge-eval",
+                    "lifecycle_stage": "active",
+                    "creation_time": now,
+                    "last_update_time": now,
+                    "run_count": 1,
+                    "latest_run_started_at": now,
+                    "latest_runs": [
+                        {
+                            "run_id": "run-1",
+                            "run_name": "baseline",
+                            "status": "FINISHED",
+                            "experiment_id": "1",
+                            "artifact_uri": "mlflow-artifacts:/1/run-1/artifacts",
+                            "start_time": now,
+                            "end_time": now,
+                            "duration_seconds": 12.5,
+                            "metrics": {"ranking.map": 0.81},
+                            "params": {"inference_mode": "local-fallback"},
+                            "tags": {"mlflow.runName": "baseline"},
+                            "primary_metric_key": "ranking.map",
+                            "primary_metric_value": 0.81,
+                        }
+                    ],
+                }
+            ],
+            "registered_models": [
+                {
+                    "name": "skillbridge-ranker",
+                    "description": "Ranking model",
+                    "latest_versions": [
+                        {
+                            "name": "skillbridge-ranker",
+                            "version": "3",
+                            "current_stage": "Staging",
+                            "run_id": "run-1",
+                            "source": "/tmp/model",
+                            "creation_timestamp": now,
+                        }
+                    ],
+                }
+            ],
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        "app.routers.admin.get_mlflow_experiment_runs",
+        lambda experiment_id, limit=25: [
+            {
+                "run_id": "run-1",
+                "run_name": f"baseline-{experiment_id}",
+                "status": "FINISHED",
+                "experiment_id": experiment_id,
+                "artifact_uri": "mlflow-artifacts:/1/run-1/artifacts",
+                "start_time": now,
+                "end_time": now,
+                "duration_seconds": 12.5,
+                "metrics": {"ranking.map": 0.81, "extraction.f1": 0.77},
+                "params": {"limit": str(limit)},
+                "tags": {"mlflow.runName": "baseline"},
+                "primary_metric_key": "ranking.map",
+                "primary_metric_value": 0.81,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        "app.routers.admin.get_mlflow_run_detail",
+        lambda experiment_id, run_id: {
+            "run_id": run_id,
+            "run_name": "baseline-detail",
+            "status": "FINISHED",
+            "experiment_id": experiment_id,
+            "artifact_uri": "mlflow-artifacts:/1/run-1/artifacts",
+            "start_time": now,
+            "end_time": now,
+            "duration_seconds": 12.5,
+            "metrics": {"ranking.map": 0.81},
+            "params": {"dataset": "bundled-samples"},
+            "tags": {"mlflow.runName": "baseline-detail"},
+            "primary_metric_key": "ranking.map",
+            "primary_metric_value": 0.81,
+            "parent_run_id": None,
+            "child_runs": [],
+            "artifacts": [{"path": "evaluations", "is_dir": True, "file_size": None}],
+        },
+    )
+    monkeypatch.setattr(
+        "app.routers.admin.list_available_eval_datasets",
+        lambda: [
+            {
+                "id": "bundled-samples",
+                "label": "Bundled sample evals",
+                "kind": "sample",
+                "path": "/tmp/datasets",
+                "manifest_path": None,
+                "extraction_dataset": "/tmp/datasets/extraction.jsonl",
+                "ranking_dataset": "/tmp/datasets/ranking.jsonl",
+                "rewrite_dataset": "/tmp/datasets/rewrite.jsonl",
+                "created_at": now,
+                "counts": {"extraction": 12},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        "app.routers.admin.get_local_model_options",
+        lambda: {
+            "available_inference_modes": ["auto", "local-transformer", "local-fallback"],
+            "embedding_models": ["sentence-transformers/all-MiniLM-L6-v2"],
+            "zero_shot_models": ["MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33"],
+            "rewrite_models": ["google/flan-t5-small"],
+            "default_inference_mode": "local-transformer",
+            "default_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            "default_zero_shot_model": "MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33",
+            "default_rewrite_model": "google/flan-t5-small",
+            "presets": [
+                {
+                    "id": "edge-candidate",
+                    "label": "Edge Candidate",
+                    "description": "Small local stack",
+                    "inference_modes": ["local-transformer"],
+                    "embedding_models": ["sentence-transformers/all-MiniLM-L6-v2"],
+                    "zero_shot_models": ["MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33"],
+                    "rewrite_models": ["google/flan-t5-small"],
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        "app.routers.admin.list_mlflow_jobs",
+        lambda limit=20: [
+            {
+                "id": "job-1",
+                "kind": "experiment_run",
+                "status": "running",
+                "created_at": now,
+                "started_at": now,
+                "finished_at": None,
+                "command": ["python", "run_mlflow_experiment.py"],
+                "summary": {"experiment_name": "skillbridge-eval"},
+                "log_lines": ["starting"],
+                "return_code": None,
+                "error": None,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        "app.routers.admin.get_mlflow_job",
+        lambda job_id: {
+            "id": job_id,
+            "kind": "dataset_export",
+            "status": "succeeded",
+            "created_at": now,
+            "started_at": now,
+            "finished_at": now,
+            "command": ["python", "export_eval_sets.py"],
+            "summary": {"max_users": "50"},
+            "log_lines": ["done"],
+            "return_code": 0,
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        "app.routers.admin.launch_eval_export_job",
+        lambda payload: {
+            "id": "export-1",
+            "kind": "dataset_export",
+            "status": "queued",
+            "created_at": now,
+            "started_at": None,
+            "finished_at": None,
+            "command": ["python", "export_eval_sets.py"],
+            "summary": {"max_users": str(payload["max_users"])},
+            "log_lines": [],
+            "return_code": None,
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        "app.routers.admin.launch_mlflow_experiment_job",
+        lambda payload: {
+            "id": "run-queue-1",
+            "kind": "experiment_run",
+            "status": "queued",
+            "created_at": now,
+            "started_at": None,
+            "finished_at": None,
+            "command": ["python", "run_mlflow_experiment.py"],
+            "summary": {"experiment_name": payload["experiment_name"]},
+            "log_lines": [],
+            "return_code": None,
+            "error": None,
+        },
+    )
+
+    overview = client.get("/admin/mlflow/overview", headers=test_context["headers"])
+    assert overview.status_code == 200
+    assert overview.json()["available"] is True
+    assert overview.json()["experiments"][0]["latest_runs"][0]["primary_metric_key"] == "ranking.map"
+
+    runs = client.get("/admin/mlflow/experiments/1/runs?limit=10", headers=test_context["headers"])
+    assert runs.status_code == 200
+    assert runs.json()[0]["experiment_id"] == "1"
+    assert runs.json()[0]["params"]["limit"] == "10"
+
+    run_detail = client.get("/admin/mlflow/experiments/1/runs/run-1", headers=test_context["headers"])
+    assert run_detail.status_code == 200
+    assert run_detail.json()["artifacts"][0]["path"] == "evaluations"
+
+    datasets = client.get("/admin/mlflow/datasets", headers=test_context["headers"])
+    assert datasets.status_code == 200
+    assert datasets.json()[0]["id"] == "bundled-samples"
+
+    local_options = client.get("/admin/mlflow/local-options", headers=test_context["headers"])
+    assert local_options.status_code == 200
+    assert local_options.json()["default_rewrite_model"] == "google/flan-t5-small"
+
+    jobs = client.get("/admin/mlflow/jobs?limit=5", headers=test_context["headers"])
+    assert jobs.status_code == 200
+    assert jobs.json()[0]["kind"] == "experiment_run"
+
+    job = client.get("/admin/mlflow/jobs/job-1", headers=test_context["headers"])
+    assert job.status_code == 200
+    assert job.json()["status"] == "succeeded"
+
+    export_job = client.post(
+        "/admin/mlflow/datasets/export",
+        headers=test_context["headers"],
+        json={"max_users": 40, "max_per_user": 5, "negative_count": 2},
+    )
+    assert export_job.status_code == 200
+    assert export_job.json()["summary"]["max_users"] == "40"
+
+    run_job = client.post(
+        "/admin/mlflow/experiments/run",
+        headers=test_context["headers"],
+        json={
+            "experiment_name": "skillbridge-admin-sweep",
+            "dataset_id": "bundled-samples",
+            "inference_modes": ["auto"],
+            "embedding_models": ["sentence-transformers/all-MiniLM-L6-v2"],
+            "zero_shot_models": ["MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33"],
+            "rewrite_models": ["google/flan-t5-small"],
+            "top_k": [1, 3, 5],
+        },
+    )
+    assert run_job.status_code == 200
+    assert run_job.json()["summary"]["experiment_name"] == "skillbridge-admin-sweep"
 
 
 def test_admin_can_deactivate_user_without_deleting_row(test_context):

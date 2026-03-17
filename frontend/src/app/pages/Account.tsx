@@ -1,20 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
+import { Lock, Mail, Settings2, Sparkles, Trash2, User, Wand2 } from "lucide-react";
+import { toast } from "sonner";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { Separator } from "../components/ui/separator";
-import { User, Mail, Lock, LogOut, Trash2, Upload } from "lucide-react";
-import { toast } from "sonner";
-import { api } from "../services/api";
-import { useActivity } from "../context/ActivityContext";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,19 +18,30 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
-import { useHeaderTheme } from "../lib/headerTheme";
-import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
-import { AVATAR_PRESETS, avatarPresetClass, type AvatarPresetValue } from "../lib/avatarPresets";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { useActivity } from "../context/ActivityContext";
+import { useHeaderTheme } from "../lib/headerTheme";
+import { avatarPresetClass } from "../lib/avatarPresets";
+import { AccountSectionNav } from "../components/AccountSectionNav";
 
 export function Account() {
   const { refreshUser } = useAuth();
   const { recordActivity } = useActivity();
+  const { activeHeaderTheme } = useHeaderTheme();
+
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [aiSettings, setAiSettings] = useState<any>(null);
   const [savingAI, setSavingAI] = useState(false);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [aiSettings, setAiSettings] = useState<any>(null);
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -48,16 +51,12 @@ export function Account() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const { headerTheme, setHeaderTheme, activeHeaderTheme, themes } = useHeaderTheme();
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const [me, settings] = await Promise.all([
-          api.me(),
-          api.getAIPreferences().catch(() => null),
-        ]);
+        const [me, settings] = await Promise.all([api.me(), api.getAIPreferences().catch(() => null)]);
         setUsername(me?.username || "");
         setEmail(me?.email || "");
         setAvatarUrl(me?.avatar_url || null);
@@ -73,9 +72,9 @@ export function Account() {
   }, []);
 
   const initials = useMemo(() => {
-    const u = (username || "").trim();
-    if (!u) return "SB";
-    const parts = u.split(/[\s._-]+/).filter(Boolean);
+    const raw = (username || "").trim();
+    if (!raw) return "SB";
+    const parts = raw.split(/[\s._-]+/).filter(Boolean);
     const a = parts[0]?.[0] ?? "S";
     const b = parts[1]?.[0] ?? parts[0]?.[1] ?? "B";
     return (a + b).toUpperCase();
@@ -86,12 +85,7 @@ export function Account() {
     try {
       await api.patchMe({ username: username || undefined });
       await refreshUser();
-      recordActivity({
-        id: "account:username",
-        type: "account",
-        action: "updated",
-        name: "Username updated",
-      });
+      recordActivity({ id: "account:username", type: "account", action: "updated", name: "Username updated" });
       toast.success("Username updated");
     } catch (e: any) {
       toast.error(e?.message || "Failed to update username");
@@ -105,12 +99,7 @@ export function Account() {
     try {
       await api.patchMe({ email: email || undefined });
       await refreshUser();
-      recordActivity({
-        id: "account:email",
-        type: "account",
-        action: "updated",
-        name: "Email updated",
-      });
+      recordActivity({ id: "account:email", type: "account", action: "updated", name: "Email updated" });
       toast.success("Email updated");
     } catch (e: any) {
       toast.error(e?.message || "Failed to update email");
@@ -143,9 +132,7 @@ export function Account() {
     }
   };
 
-  // NOTE: Your backend patch_me currently supports username/email. It does NOT change password.
-  // Keep this UI as a stub until you add a password-change endpoint.
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       toast.error("Please fill in all password fields");
       return;
@@ -154,19 +141,27 @@ export function Account() {
       toast.error("New passwords do not match");
       return;
     }
-    toast.error("Password change is not implemented on the backend yet");
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-  };
-
-  const handleLogout = async () => {
+    setSavingPassword(true);
     try {
-      await api.logout();
+      await api.changeMyPassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      await refreshUser();
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      recordActivity({
+        id: `account:password:${Date.now()}`,
+        type: "account",
+        action: "updated",
+        name: "Password changed",
+      });
+      toast.success("Password changed");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to change password");
     } finally {
-      api.clearToken();
-      // ✅ redirect to landing page
-      window.location.href = "/";
+      setSavingPassword(false);
     }
   };
 
@@ -180,38 +175,11 @@ export function Account() {
     }
   };
 
-  const handleSelectAvatarPreset = async (preset: AvatarPresetValue) => {
-    try {
-      const updated = await api.patchMe({ avatar_preset: preset });
-      setAvatarPreset(updated.avatar_preset || preset);
-      setAvatarUrl(updated.avatar_url || null);
-      await refreshUser();
-      toast.success("Profile icon updated");
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to update profile icon");
-    }
-  };
-
-  const handleAvatarUpload = async (file: File | null) => {
-    if (!file) return;
-    setUploadingAvatar(true);
-    try {
-      const updated = await api.uploadMyAvatar(file);
-      setAvatarUrl(updated.avatar_url || null);
-      setAvatarPreset(updated.avatar_preset || null);
-      await refreshUser();
-      toast.success("Profile photo updated");
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to upload profile photo");
-    } finally {
-      setUploadingAvatar(false);
-    }
-  };
-
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
-        <Card className="p-8 dark:border-slate-800 dark:bg-slate-900/80">
+      <div className="max-w-6xl space-y-6">
+        <AccountSectionNav />
+        <Card className="border-slate-200 p-8 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="text-gray-500 dark:text-slate-400">Loading account...</div>
         </Card>
       </div>
@@ -219,394 +187,277 @@ export function Account() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <Card className="overflow-hidden border-slate-200 p-0 dark:border-slate-800 dark:bg-slate-950">
-        <div className={`${activeHeaderTheme.heroClass} px-8 py-8`}>
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <div className="max-w-6xl space-y-6">
+      <AccountSectionNav />
+
+      <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
+        <div className="px-6 py-6 md:px-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex items-center gap-4">
-              <Avatar className="h-20 w-20 shadow-sm">
+              <Avatar className="h-20 w-20 shadow-sm ring-4 ring-white/70 dark:ring-slate-950/50">
                 {avatarUrl ? <AvatarImage src={avatarUrl} alt={`${username || "Account"} avatar`} /> : null}
                 <AvatarFallback className={`text-2xl font-bold ${avatarPresetClass(avatarPreset) ?? activeHeaderTheme.avatarClass} text-white`}>
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Account Settings</div>
-                <h2 className="mt-2 text-2xl font-bold text-gray-900 dark:text-slate-100">{username || "Account"}</h2>
-                <p className="text-gray-600 dark:text-slate-300">{email || ""}</p>
-                <div className="mt-3 inline-flex rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-                  {aiSettings?.provider_mode ?? "Inference unavailable"}
+                <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                  Account
                 </div>
+                <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{username || "Account"}</h1>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{email || ""}</p>
               </div>
             </div>
-            <div className="flex w-full justify-start lg:w-auto lg:justify-end">
-              <Select value={headerTheme} onValueChange={(value) => setHeaderTheme(value as typeof headerTheme)}>
-                <SelectTrigger
-                  id="account-header-style"
-                  aria-label="Edit header style"
-                  className="h-9 w-24 border-slate-200 bg-white/85 px-3 text-sm font-medium dark:border-slate-700 dark:bg-slate-900/75 dark:text-slate-100"
-                >
-                  <span>Edit</span>
-                </SelectTrigger>
-                <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
-                  {themes.map((theme) => (
-                    <SelectItem key={theme.value} value={theme.value}>
-                      {theme.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Profile</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Identity + contact</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Security</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Password management</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Customize</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Moved to a separate page</p>
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="space-y-6 p-8">
-
-          {/* Username Section */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <User className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Username</h3>
-            </div>
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="mt-1"
-                />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-6">
+          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="mb-5 flex items-center gap-3">
+              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+                <User className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
-              <div className="flex items-end">
-                <Button onClick={handleUpdateUsername} disabled={savingProfile} className={activeHeaderTheme.buttonClass}>
-                  Update
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Profile Details</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">Keep your account identity up to date across the app.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                <div className="mb-3 flex items-center gap-2">
+                  <User className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                  <Label htmlFor="username" className="text-sm font-semibold text-slate-900 dark:text-slate-100">Username</Label>
+                </div>
+                <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} className="bg-white dark:bg-slate-950/70" />
+                <Button onClick={handleUpdateUsername} disabled={savingProfile} className={`mt-3 w-full ${activeHeaderTheme.buttonClass}`}>
+                  Update Username
+                </Button>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                <div className="mb-3 flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                  <Label htmlFor="email" className="text-sm font-semibold text-slate-900 dark:text-slate-100">Email Address</Label>
+                </div>
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="bg-white dark:bg-slate-950/70" />
+                <Button onClick={handleUpdateEmail} disabled={savingProfile} className={`mt-3 w-full ${activeHeaderTheme.buttonClass}`}>
+                  Update Email
                 </Button>
               </div>
             </div>
-          </div>
+          </Card>
 
-          <Separator />
-
-          {/* Email Section */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Mail className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Email Address</h3>
-            </div>
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1"
-                />
+          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="mb-5 flex items-center gap-3">
+              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+                <Sparkles className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
-              <div className="flex items-end">
-                <Button onClick={handleUpdateEmail} disabled={savingProfile} className={activeHeaderTheme.buttonClass}>
-                  Update
-                </Button>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">AI Settings</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">Choose how your account runs future semantic analysis and evidence skill extraction.</p>
               </div>
             </div>
-          </div>
 
-          <Separator />
-
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Upload className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Profile Icon</h3>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/80">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16">
-                    {avatarUrl ? <AvatarImage src={avatarUrl} alt={`${username || "Account"} avatar preview`} /> : null}
-                    <AvatarFallback className={`text-lg font-bold ${avatarPresetClass(avatarPreset) ?? activeHeaderTheme.avatarClass} text-white`}>
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100">Upload a photo or choose a default style</p>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">Supported formats: PNG, JPG, JPEG, WEBP up to 5 MB.</p>
-                    <Input
-                      type="file"
-                      accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
-                      className="mt-3 max-w-sm bg-white dark:bg-slate-950/70"
-                      disabled={uploadingAvatar}
-                      onChange={(event) => {
-                        handleAvatarUpload(event.target.files?.[0] ?? null);
-                        event.currentTarget.value = "";
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="w-full max-w-md">
-                  <div className="grid grid-cols-3 gap-3">
-                    {AVATAR_PRESETS.map((preset) => {
-                      const selected = !avatarUrl && avatarPreset === preset.value;
-                      return (
-                        <button
-                          type="button"
-                          key={preset.value}
-                          onClick={() => handleSelectAvatarPreset(preset.value)}
-                          className={`rounded-2xl border p-3 text-left transition ${selected ? "border-slate-900 dark:border-slate-100" : "border-slate-200 dark:border-slate-700"}`}
-                        >
-                          <div className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold ${preset.className}`}>
-                            {initials}
-                          </div>
-                          <div className="mt-2 text-sm font-medium text-gray-900 dark:text-slate-100">{preset.label}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">AI Settings</h3>
-            <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">Choose how your account runs Job Match semantic analysis and evidence skill extraction. Changes here affect future analyses, not already saved results.</p>
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
               {aiSettings ? (
-              <>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Inference Mode</p>
-                  <Select
-                    value={aiSettings?.preferences?.inference_mode ?? "auto"}
-                    onValueChange={(value) =>
-                      setAiSettings((current: any) =>
-                        current
-                          ? {
-                              ...current,
-                              preferences: { ...current.preferences, inference_mode: value },
-                            }
-                          : current
-                      )
-                    }
-                  >
-                    <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
-                      <SelectValue placeholder="Select inference mode" />
-                    </SelectTrigger>
-                    <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
-                      {(aiSettings?.preferences?.available_inference_modes ?? []).map((mode: string) => (
-                        <SelectItem key={mode} value={mode}>
-                          {mode}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Embedding Model</p>
-                  <Select
-                    value={aiSettings?.preferences?.embedding_model ?? ""}
-                    onValueChange={(value) =>
-                      setAiSettings((current: any) =>
-                        current
-                          ? {
-                              ...current,
-                              preferences: { ...current.preferences, embedding_model: value },
-                            }
-                          : current
-                      )
-                    }
-                  >
-                    <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
-                      <SelectValue placeholder="Select embedding model" />
-                    </SelectTrigger>
-                    <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
-                      {(aiSettings?.preferences?.available_embedding_models ?? []).map((model: string) => (
-                        <SelectItem key={model} value={model}>
-                          {model}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Zero-Shot Model</p>
-                  <Select
-                    value={aiSettings?.preferences?.zero_shot_model ?? ""}
-                    onValueChange={(value) =>
-                      setAiSettings((current: any) =>
-                        current
-                          ? {
-                              ...current,
-                              preferences: { ...current.preferences, zero_shot_model: value },
-                            }
-                          : current
-                      )
-                    }
-                  >
-                    <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
-                      <SelectValue placeholder="Select zero-shot model" />
-                    </SelectTrigger>
-                    <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
-                      {(aiSettings?.preferences?.available_zero_shot_models ?? []).map((model: string) => (
-                        <SelectItem key={model} value={model}>
-                          {model}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Mode</p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiSettings?.provider_mode ?? "Unavailable"}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Embeddings</p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiSettings?.embeddings_provider ?? "Unavailable"}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Active Embedding Runtime</p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiSettings?.embedding_model ?? "Unavailable"}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Rewrite Provider</p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiSettings?.rewrite_provider ?? "Unavailable"}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Rewrite Model</p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-slate-100">{aiSettings?.rewrite_model ?? "Unavailable"}</p>
-                </div>
-              </div>
-              <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300">
-                <p>Switch to `local-fallback` if you want faster, lighter analysis without transformer loading.</p>
-                <Button onClick={handleSaveAISettings} disabled={savingAI} className={activeHeaderTheme.buttonClass}>
-                  {savingAI ? "Saving..." : "Save AI Settings"}
-                </Button>
-              </div>
-              </>
+                <>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Inference Mode</p>
+                      <Select
+                        value={aiSettings?.preferences?.inference_mode ?? "auto"}
+                        onValueChange={(value) =>
+                          setAiSettings((current: any) =>
+                            current ? { ...current, preferences: { ...current.preferences, inference_mode: value } } : current
+                          )
+                        }
+                      >
+                        <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
+                          <SelectValue placeholder="Select inference mode" />
+                        </SelectTrigger>
+                        <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                          {(aiSettings?.preferences?.available_inference_modes ?? []).map((mode: string) => (
+                            <SelectItem key={mode} value={mode}>
+                              {mode}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Embedding Model</p>
+                      <Select
+                        value={aiSettings?.preferences?.embedding_model ?? ""}
+                        onValueChange={(value) =>
+                          setAiSettings((current: any) =>
+                            current ? { ...current, preferences: { ...current.preferences, embedding_model: value } } : current
+                          )
+                        }
+                      >
+                        <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
+                          <SelectValue placeholder="Select embedding model" />
+                        </SelectTrigger>
+                        <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                          {(aiSettings?.preferences?.available_embedding_models ?? []).map((model: string) => (
+                            <SelectItem key={model} value={model}>
+                              {model}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Zero-Shot Model</p>
+                      <Select
+                        value={aiSettings?.preferences?.zero_shot_model ?? ""}
+                        onValueChange={(value) =>
+                          setAiSettings((current: any) =>
+                            current ? { ...current, preferences: { ...current.preferences, zero_shot_model: value } } : current
+                          )
+                        }
+                      >
+                        <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
+                          <SelectValue placeholder="Select zero-shot model" />
+                        </SelectTrigger>
+                        <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                          {(aiSettings?.preferences?.available_zero_shot_models ?? []).map((model: string) => (
+                            <SelectItem key={model} value={model}>
+                              {model}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Runtime</p>
+                      <p className="mt-2 font-medium text-slate-900 dark:text-slate-100">{aiSettings?.provider_mode ?? "Unavailable"}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                    <p>Switch to `local-fallback` if you want faster, lighter analysis without transformer loading.</p>
+                    <Button onClick={handleSaveAISettings} disabled={savingAI} className={activeHeaderTheme.buttonClass}>
+                      {savingAI ? "Saving..." : "Save AI Settings"}
+                    </Button>
+                  </div>
+                </>
               ) : (
                 <p className="text-sm text-gray-600 dark:text-slate-300">AI settings are unavailable right now.</p>
               )}
             </div>
-          </div>
+          </Card>
 
-          <Separator />
-
-          {/* Password Section (stub until backend exists) */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Lock className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Change Password</h3>
-            </div>
-            <div className="space-y-4">
+          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="mb-5 flex items-center gap-3">
+              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+                <Lock className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+              </div>
               <div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Password</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">Change your password securely with current-password verification and automatic session rotation.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
                 <Label htmlFor="current-password">Current Password</Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Enter current password"
-                />
+                <Input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Enter current password" className="mt-1 bg-white dark:bg-slate-950/70" />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="new-password">New Password</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Enter new password"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="confirm-password">Confirm New Password</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="new-password">New Password</Label>
+                <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Enter new password" className="mt-1 bg-white dark:bg-slate-950/70" />
               </div>
-              <Button onClick={handleChangePassword} className={activeHeaderTheme.buttonClass}>
-                Change Password
+              <div>
+                <Label htmlFor="confirm-password">Confirm New Password</Label>
+                <Input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" className="mt-1 bg-white dark:bg-slate-950/70" />
+              </div>
+            </div>
+            <Button onClick={handleChangePassword} disabled={savingPassword} className={`mt-4 ${activeHeaderTheme.buttonClass}`}>
+              {savingPassword ? "Changing Password..." : "Change Password"}
+            </Button>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="mb-5 flex items-center gap-3">
+              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+                <Wand2 className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Personalization</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">Theme colors, avatar presets, dashboard panels, and navigation defaults now live on their own page.</p>
+              </div>
+            </div>
+
+            <div className={`rounded-2xl border p-5 ${activeHeaderTheme.softPanelClass}`}>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Open workspace personalization</p>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                Use the dedicated page to adjust appearance, upload a profile photo, and tune how the app behaves day to day.
+              </p>
+              <Button asChild className={`mt-4 ${activeHeaderTheme.buttonClass}`}>
+                <Link to="/app/account/personalization">
+                  <Settings2 className="h-4 w-4" />
+                  Manage Personalization
+                </Link>
               </Button>
             </div>
-          </div>
-        </div>
-      </Card>
+          </Card>
 
-      {/* Actions Card */}
-      <Card className="border-slate-200 p-8 dark:border-slate-800 dark:bg-slate-900/80">
-        <h3 className="mb-6 text-lg font-semibold text-gray-900 dark:text-slate-100">Account Actions</h3>
-
-        <div className="space-y-4">
-          {/* Logout */}
-          <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
-            <div className="flex items-center gap-3">
-              <LogOut className="h-5 w-5 text-gray-600 dark:text-slate-300" />
-              <div>
-                <p className="font-medium text-gray-900 dark:text-slate-100">Logout</p>
-                <p className="text-sm text-gray-600 dark:text-slate-300">Sign out of your account</p>
-              </div>
-            </div>
-            <Button variant="outline" onClick={handleLogout}>
-              Logout
-            </Button>
-          </div>
-
-          {/* Delete Account */}
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3">
-                <Trash2 className="h-5 w-5 text-red-600 mt-1" />
-                <div>
-                  <p className="font-medium text-red-900 dark:text-red-200">Danger Zone</p>
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-300">
-                    Once you delete your account, there is no going back. Please be certain.
-                  </p>
+          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+            <h3 className="mb-5 text-lg font-semibold text-slate-900 dark:text-slate-100">Account Actions</h3>
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <Trash2 className="mt-1 h-5 w-5 text-red-600" />
+                  <div>
+                    <p className="font-medium text-red-900 dark:text-red-200">Danger Zone</p>
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+                      Once you delete your account, there is no going back. Please be certain.
+                    </p>
+                  </div>
                 </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">Delete Account</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete your account and remove all your data.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDeleteAccount} className="bg-red-600 hover:bg-red-700">
+                        Yes, delete my account
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="ml-4">
-                    Delete Account
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete your account and remove all your data.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleDeleteAccount}
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      Yes, delete my account
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
             </div>
-          </div>
+          </Card>
         </div>
-      </Card>
-
-      {/* Info Card */}
-      <Card className={`p-6 ${activeHeaderTheme.softPanelClass}`}>
-        <p className="text-sm text-gray-600 dark:text-slate-300">
-          <span className={`font-semibold ${activeHeaderTheme.accentTextClass}`}>Note:</span> Your data is securely stored and encrypted.
-        </p>
-      </Card>
+      </div>
     </div>
   );
 }

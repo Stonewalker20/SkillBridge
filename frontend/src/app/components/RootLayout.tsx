@@ -23,6 +23,7 @@ import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { avatarPresetClass } from "../lib/avatarPresets";
+import { useAccountPreferences } from "../context/AccountPreferencesContext";
 
 const baseNavigation = [
   { name: "Dashboard", href: "/app", icon: LayoutDashboard },
@@ -37,6 +38,7 @@ export function RootLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { activeHeaderTheme } = useHeaderTheme();
+  const { preferences } = useAccountPreferences();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -71,10 +73,17 @@ export function RootLayout() {
   };
 
   const isDark = mounted && resolvedTheme === "dark";
+  const isCompactSidebar = preferences.sidebarDensity === "compact";
 
   const currentPageTitle =
     location.pathname === "/app/account"
       ? "Account"
+      : location.pathname.startsWith("/app/account/personalization")
+        ? "Personalization"
+      : location.pathname.startsWith("/app/admin/mlflow")
+        ? "Admin MLflow"
+      : location.pathname === "/app/admin"
+        ? "Admin"
       : location.pathname === "/app/analytics/skills"
         ? "Skill Analytics"
       : location.pathname.startsWith("/app/analytics/career-paths/")
@@ -82,7 +91,7 @@ export function RootLayout() {
         : navigation.find((item) => item.href === location.pathname)?.name || "Page";
 
   return (
-    <div className="flex h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)] text-slate-900 dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_48%,_#020617)] dark:text-slate-100">
+    <div className="flex min-h-svh bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)] text-slate-900 dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_48%,_#020617)] dark:text-slate-100 lg:h-svh lg:overflow-hidden">
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div 
@@ -93,35 +102,57 @@ export function RootLayout() {
 
       {/* Sidebar */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200/70 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.96)_52%,_rgba(241,245,249,0.98))] backdrop-blur-xl transition-transform duration-300 ease-in-out dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.96))] lg:static lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex h-svh flex-col overflow-hidden border-r border-slate-200/70 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.96)_52%,_rgba(241,245,249,0.98))] text-[clamp(0.82rem,0.76rem+0.18vh,0.96rem)] backdrop-blur-xl ease-in-out dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.96))] lg:sticky lg:top-0 lg:h-svh lg:translate-x-0",
+        preferences.reducedMotion ? "transition-none" : "transition-transform duration-300",
+        isCompactSidebar ? "w-56" : "w-64",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Close button for mobile */}
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-4 right-4 lg:hidden"
+          type="button"
+          className="absolute right-3 top-3 z-20 rounded-full border border-slate-200/80 bg-white/90 shadow-sm dark:border-slate-700 dark:bg-slate-900/90 lg:hidden"
           onClick={() => setMobileMenuOpen(false)}
+          aria-label="Close sidebar"
         >
-          <X className="h-6 w-6" />
+          <X className="h-5 w-5" />
         </Button>
 
-        <div className="border-b border-slate-200/80 bg-white/55 px-6 py-6 dark:border-slate-800/80 dark:bg-slate-950/35">
+        <div className={cn(
+          "shrink-0 border-b border-slate-200/80 bg-white/55 dark:border-slate-800/80 dark:bg-slate-950/35",
+          isCompactSidebar
+            ? "px-3 py-3"
+            : "px-[clamp(1rem,0.8rem+0.9vh,1.5rem)] py-[clamp(0.75rem,0.45rem+1.2vh,1.5rem)]"
+        )}>
           <Link
             to="/app"
-            className="flex items-center justify-center rounded-2xl bg-white/90 px-1 py-2 shadow-sm ring-1 ring-slate-200/80 transition-opacity hover:opacity-90 dark:bg-slate-950/80 dark:ring-slate-800/80"
+            className="flex items-center justify-center rounded-2xl bg-white/90 px-1 py-[clamp(0.35rem,0.2rem+0.6vh,0.75rem)] shadow-sm ring-1 ring-slate-200/80 transition-opacity hover:opacity-90 dark:bg-slate-950/80 dark:ring-slate-800/80"
           >
             <img
               src={LogoImage}
               alt="SkillBridge Logo"
-              className="h-28 w-full max-w-[220px] scale-[1.6] object-contain"
+              className={cn(
+                "w-full object-contain",
+                isCompactSidebar
+                  ? "h-[4.3rem] max-w-[180px] scale-[1.2]"
+                  : "h-[clamp(4.75rem,3.6rem+6vh,7rem)] max-w-[210px] scale-[1.35]"
+              )}
             />
           </Link>
         </div>
         
-        <nav className="flex-1 space-y-1 p-4">
+        <nav className={cn(
+          "flex flex-1 flex-col",
+          isCompactSidebar
+            ? "gap-1.5 px-2.5 py-2.5"
+            : "gap-[clamp(0.4rem,0.2rem+0.5vh,0.9rem)] px-[clamp(0.75rem,0.5rem+0.7vh,1rem)] py-[clamp(0.6rem,0.35rem+0.75vh,1rem)]"
+        )}>
           {navigation.map((item) => {
-            const isActive = location.pathname === item.href;
+            const isActive =
+              item.href === "/app"
+                ? location.pathname === "/app"
+                : location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.name}
@@ -131,30 +162,35 @@ export function RootLayout() {
                   navigateFromSidebar(item.href);
                 }}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl px-4 py-3 transition-all",
+                  "flex items-center gap-3 rounded-xl transition-all",
+                  isCompactSidebar ? "px-3 py-2.5" : "px-[clamp(0.8rem,0.55rem+0.65vh,1rem)] py-[clamp(0.55rem,0.35rem+0.65vh,0.8rem)]",
                   isActive
                     ? activeHeaderTheme.sidebarActiveClass
                     : "text-slate-700 hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
                 )}
               >
-                <item.icon className="h-5 w-5" />
+                <item.icon className={cn(isCompactSidebar ? "h-4.5 w-4.5" : "h-[clamp(1rem,0.9rem+0.25vh,1.2rem)] w-[clamp(1rem,0.9rem+0.25vh,1.2rem)]")} />
                 <span className="font-medium">{item.name}</span>
               </Link>
             );
           })}
 
-          <div className="mt-6 border-t border-slate-200/80 pt-4 dark:border-slate-800/80">
-            <p className="px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quick Actions</p>
-            <div className="mt-2 space-y-1">
+          {preferences.showQuickActions ? (
+            <div className={cn("mt-auto border-t border-slate-200/80 dark:border-slate-800/80", isCompactSidebar ? "pt-3" : "pt-[clamp(0.5rem,0.25rem+0.65vh,1rem)]")}>
+              <p className={cn("text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400", isCompactSidebar ? "px-3" : "px-[clamp(0.8rem,0.55rem+0.65vh,1rem)]")}>Quick Actions</p>
+              <div className={cn(isCompactSidebar ? "mt-2 space-y-1.5" : "mt-[clamp(0.3rem,0.15rem+0.45vh,0.55rem)] space-y-[clamp(0.15rem,0.08rem+0.2vh,0.3rem)]")}>
               <Link
                 to="/app/skills?add=1"
                 onClick={(event) => {
                   event.preventDefault();
                   navigateFromSidebar("/app/skills?add=1");
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
+                className={cn(
+                  "flex items-center gap-3 rounded-xl text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white",
+                  isCompactSidebar ? "px-3 py-2.5" : "px-[clamp(0.8rem,0.55rem+0.65vh,1rem)] py-[clamp(0.5rem,0.3rem+0.55vh,0.75rem)]"
+                )}
               >
-                <Target className="h-5 w-5" />
+                <Target className={cn(isCompactSidebar ? "h-4.5 w-4.5" : "h-[clamp(1rem,0.9rem+0.25vh,1.2rem)] w-[clamp(1rem,0.9rem+0.25vh,1.2rem)]")} />
                 <span className="font-medium">Add Skill</span>
               </Link>
               <Link
@@ -163,9 +199,12 @@ export function RootLayout() {
                   event.preventDefault();
                   navigateFromSidebar("/app/evidence?add=1");
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
+                className={cn(
+                  "flex items-center gap-3 rounded-xl text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white",
+                  isCompactSidebar ? "px-3 py-2.5" : "px-[clamp(0.8rem,0.55rem+0.65vh,1rem)] py-[clamp(0.5rem,0.3rem+0.55vh,0.75rem)]"
+                )}
               >
-                <FolderOpen className="h-5 w-5" />
+                <FolderOpen className={cn(isCompactSidebar ? "h-4.5 w-4.5" : "h-[clamp(1rem,0.9rem+0.25vh,1.2rem)] w-[clamp(1rem,0.9rem+0.25vh,1.2rem)]")} />
                 <span className="font-medium">Upload Evidence</span>
               </Link>
               <Link
@@ -174,9 +213,12 @@ export function RootLayout() {
                   event.preventDefault();
                   navigateFromSidebar("/app/jobs?analyze=1");
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
+                className={cn(
+                  "flex items-center gap-3 rounded-xl text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white",
+                  isCompactSidebar ? "px-3 py-2.5" : "px-[clamp(0.8rem,0.55rem+0.65vh,1rem)] py-[clamp(0.5rem,0.3rem+0.55vh,0.75rem)]"
+                )}
               >
-                <Briefcase className="h-5 w-5" />
+                <Briefcase className={cn(isCompactSidebar ? "h-4.5 w-4.5" : "h-[clamp(1rem,0.9rem+0.25vh,1.2rem)] w-[clamp(1rem,0.9rem+0.25vh,1.2rem)]")} />
                 <span className="font-medium">Analyze New Job</span>
               </Link>
               <Link
@@ -185,20 +227,24 @@ export function RootLayout() {
                   event.preventDefault();
                   navigateFromSidebar("/app/resumes");
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white"
+                className={cn(
+                  "flex items-center gap-3 rounded-xl text-slate-700 transition-all hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white",
+                  isCompactSidebar ? "px-3 py-2.5" : "px-[clamp(0.8rem,0.55rem+0.65vh,1rem)] py-[clamp(0.5rem,0.3rem+0.55vh,0.75rem)]"
+                )}
               >
-                <FileText className="h-5 w-5" />
+                <FileText className={cn(isCompactSidebar ? "h-4.5 w-4.5" : "h-[clamp(1rem,0.9rem+0.25vh,1.2rem)] w-[clamp(1rem,0.9rem+0.25vh,1.2rem)]")} />
                 <span className="font-medium">View Tailored Resumes</span>
               </Link>
+              </div>
             </div>
-          </div>
+          ) : <div className="mt-auto" />}
         </nav>
 
-        <div className="border-t border-slate-200/80 p-4 dark:border-slate-800/80">
-          <div className="mb-3 flex items-center justify-between rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
+        <div className="shrink-0 border-t border-slate-200/80 px-[clamp(0.75rem,0.5rem+0.7vh,1rem)] py-[clamp(0.6rem,0.35rem+0.75vh,1rem)] dark:border-slate-800/80">
+          <div className="mb-[clamp(0.35rem,0.15rem+0.45vh,0.75rem)] flex items-center justify-between rounded-xl border border-slate-200 bg-white/80 px-[clamp(0.65rem,0.45rem+0.45vh,0.8rem)] py-[clamp(0.45rem,0.3rem+0.4vh,0.7rem)] text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
             <div className="flex items-center gap-2">
-              {isDark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              <span className="text-sm font-medium">{isDark ? "Dark Mode" : "Light Mode"}</span>
+              {isDark ? <Moon className="h-4 w-4 shrink-0" /> : <Sun className="h-4 w-4 shrink-0" />}
+              <span className="text-[clamp(0.74rem,0.68rem+0.15vh,0.86rem)] font-medium">{isDark ? "Dark Mode" : "Light Mode"}</span>
             </div>
             <Switch
               checked={isDark}
@@ -209,7 +255,7 @@ export function RootLayout() {
           </div>
           <Button
             variant="outline"
-            className="w-full justify-start border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
+            className="h-[clamp(2.25rem,2rem+0.45vh,2.5rem)] w-full justify-start border-slate-200 bg-white/80 text-[clamp(0.78rem,0.72rem+0.16vh,0.9rem)] text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
             onClick={handleLogout}
           >
             <LogOut className="mr-2 h-4 w-4" />
@@ -219,7 +265,7 @@ export function RootLayout() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="border-b border-white/70 bg-white/70 px-4 py-4 backdrop-blur-xl sm:px-8 dark:border-slate-800/80 dark:bg-slate-950/55">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -256,8 +302,10 @@ export function RootLayout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 sm:p-8">
-          <Outlet />
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-8">
+          <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

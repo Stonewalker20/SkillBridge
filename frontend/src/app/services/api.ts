@@ -23,6 +23,23 @@ function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+function resolveAssetUrl(url: unknown): string | null {
+  const raw = String(url ?? "").trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw) || raw.startsWith("blob:") || raw.startsWith("data:")) {
+    return raw;
+  }
+  if (!raw.startsWith("/")) return raw;
+  if (/^https?:\/\//i.test(API_BASE)) {
+    try {
+      return new URL(raw, API_BASE).toString();
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
+}
+
 type RequestOptions = {
   skipAuth?: boolean;
   allow401?: boolean;
@@ -155,7 +172,18 @@ function normalizeEvidence(raw: any): Evidence {
 
 export type AuthUser = { id: string; email: string; username: string; role: string; avatar_url?: string | null; avatar_preset?: string | null };
 export type AuthOut = { token: string; user: AuthUser };
-export type UserPatch = { email?: string; username?: string; password?: string; avatar_preset?: string | null };
+export type UserPatch = { email?: string; username?: string; avatar_preset?: string | null };
+
+function normalizeAuthUser(raw: any): AuthUser {
+  return {
+    id: String(raw?.id ?? raw?._id ?? "").trim(),
+    email: String(raw?.email ?? "").trim(),
+    username: String(raw?.username ?? "").trim(),
+    role: String(raw?.role ?? "user").trim() || "user",
+    avatar_url: resolveAssetUrl(raw?.avatar_url),
+    avatar_preset: raw?.avatar_preset ? String(raw.avatar_preset).trim() : null,
+  };
+}
 
 export type Skill = {
   id: string;
@@ -527,6 +555,143 @@ export type AdminJob = {
   updated_at?: string;
 };
 
+export type AdminMlflowRun = {
+  run_id: string;
+  run_name: string;
+  status: string;
+  experiment_id: string;
+  artifact_uri: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  duration_seconds?: number | null;
+  metrics: Record<string, number>;
+  params: Record<string, string>;
+  tags: Record<string, string>;
+  primary_metric_key?: string | null;
+  primary_metric_value?: number | null;
+};
+
+export type AdminMlflowExperiment = {
+  id: string;
+  name: string;
+  lifecycle_stage: string;
+  creation_time?: string | null;
+  last_update_time?: string | null;
+  run_count: number;
+  latest_run_started_at?: string | null;
+  latest_runs: AdminMlflowRun[];
+};
+
+export type AdminMlflowModelVersion = {
+  name: string;
+  version: string;
+  current_stage: string;
+  run_id: string;
+  source: string;
+  creation_timestamp?: string | null;
+};
+
+export type AdminMlflowRegisteredModel = {
+  name: string;
+  description?: string | null;
+  latest_versions: AdminMlflowModelVersion[];
+};
+
+export type AdminMlflowOverview = {
+  available: boolean;
+  tracking_uri: string;
+  experiment_count: number;
+  registered_model_count: number;
+  latest_run_started_at?: string | null;
+  experiments: AdminMlflowExperiment[];
+  registered_models: AdminMlflowRegisteredModel[];
+  error?: string | null;
+};
+
+export type AdminMlflowArtifact = {
+  path: string;
+  is_dir: boolean;
+  file_size?: number | null;
+};
+
+export type AdminMlflowRunDetail = AdminMlflowRun & {
+  parent_run_id?: string | null;
+  child_runs: AdminMlflowRun[];
+  artifacts: AdminMlflowArtifact[];
+};
+
+export type AdminMlflowDataset = {
+  id: string;
+  label: string;
+  kind: string;
+  path: string;
+  manifest_path?: string | null;
+  extraction_dataset?: string | null;
+  ranking_dataset?: string | null;
+  rewrite_dataset?: string | null;
+  created_at?: string | null;
+  counts: Record<string, number>;
+};
+
+export type AdminMlflowJob = {
+  id: string;
+  kind: string;
+  status: string;
+  created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  command: string[];
+  summary: Record<string, string>;
+  log_lines: string[];
+  return_code?: number | null;
+  error?: string | null;
+};
+
+export type AdminMlflowPreset = {
+  id: string;
+  label: string;
+  description: string;
+  inference_modes: string[];
+  embedding_models: string[];
+  zero_shot_models: string[];
+  rewrite_models: string[];
+};
+
+export type AdminMlflowLocalOptions = {
+  available_inference_modes: string[];
+  embedding_models: string[];
+  zero_shot_models: string[];
+  rewrite_models: string[];
+  default_inference_mode: string;
+  default_embedding_model: string;
+  default_zero_shot_model: string;
+  default_rewrite_model: string;
+  presets: AdminMlflowPreset[];
+};
+
+export type AdminMlflowRunLaunchPayload = {
+  experiment_name: string;
+  run_name?: string;
+  dataset_id?: string;
+  inference_modes?: string[];
+  embedding_models?: string[];
+  zero_shot_models?: string[];
+  rewrite_models?: string[];
+  max_candidates?: number;
+  top_k?: number[];
+  skip_extraction?: boolean;
+  skip_ranking?: boolean;
+  skip_rewrite?: boolean;
+  tags?: Record<string, string>;
+};
+
+export type AdminMlflowExportLaunchPayload = {
+  max_users?: number;
+  max_per_user?: number;
+  negative_count?: number;
+  mongo_db?: string;
+};
+
 export const api = {
   getToken,
   setToken,
@@ -537,22 +702,33 @@ export const api = {
 
   register: async (payload: { username: string; email: string; password: string }) => {
     const out = await request<AuthOut>("/auth/register", "POST", payload, {}, { skipAuth: true });
+    out.user = normalizeAuthUser(out.user);
     setToken(out.token);
     return out;
   },
 
   login: async (payload: { email: string; password: string }) => {
     const out = await request<AuthOut>("/auth/login", "POST", payload, {}, { skipAuth: true });
+    out.user = normalizeAuthUser(out.user);
     setToken(out.token);
     return out;
   },
 
-  me: () => request<AuthUser | null>("/auth/me", "GET", undefined, {}, { allow401: true, returnOn401: null }),
-  patchMe: (payload: UserPatch) => request<AuthUser>("/auth/me", "PATCH", payload),
+  me: async () => {
+    const out = await request<AuthUser | null>("/auth/me", "GET", undefined, {}, { allow401: true, returnOn401: null });
+    return out ? normalizeAuthUser(out) : null;
+  },
+  patchMe: async (payload: UserPatch) => normalizeAuthUser(await request<AuthUser>("/auth/me", "PATCH", payload)),
+  changeMyPassword: async (payload: { current_password: string; new_password: string }) => {
+    const out = await request<AuthOut>("/auth/me/password", "POST", payload);
+    out.user = normalizeAuthUser(out.user);
+    setToken(out.token);
+    return out;
+  },
   uploadMyAvatar: async (file: File) => {
     const form = new FormData();
     form.append("file", file);
-    return request<AuthUser>("/auth/me/avatar", "POST", undefined, {}, { body: form });
+    return normalizeAuthUser(await request<AuthUser>("/auth/me/avatar", "POST", undefined, {}, { body: form }));
   },
   deleteAccount: () => request<{ ok: boolean }>("/auth/me", "DELETE"),
   logout: async () => {
@@ -936,6 +1112,26 @@ export const api = {
   },
   moderateAdminJob: (jobId: string, payload: { moderation_status: string; moderation_reason?: string | null }) =>
     request<AdminJob>(`/admin/jobs/${jobId}/moderation`, "PATCH", payload),
+  getAdminMlflowOverview: () => request<AdminMlflowOverview>("/admin/mlflow/overview", "GET"),
+  listAdminMlflowExperimentRuns: (experimentId: string, limit = 25) =>
+    request<AdminMlflowRun[]>(
+      `/admin/mlflow/experiments/${encodeURIComponent(experimentId)}/runs?limit=${encodeURIComponent(String(limit))}`,
+      "GET"
+    ),
+  getAdminMlflowRunDetail: (experimentId: string, runId: string) =>
+    request<AdminMlflowRunDetail>(
+      `/admin/mlflow/experiments/${encodeURIComponent(experimentId)}/runs/${encodeURIComponent(runId)}`,
+      "GET"
+    ),
+  listAdminMlflowDatasets: () => request<AdminMlflowDataset[]>("/admin/mlflow/datasets", "GET"),
+  getAdminMlflowLocalOptions: () => request<AdminMlflowLocalOptions>("/admin/mlflow/local-options", "GET"),
+  listAdminMlflowJobs: (limit = 20) =>
+    request<AdminMlflowJob[]>(`/admin/mlflow/jobs?limit=${encodeURIComponent(String(limit))}`, "GET"),
+  getAdminMlflowJob: (jobId: string) => request<AdminMlflowJob>(`/admin/mlflow/jobs/${encodeURIComponent(jobId)}`, "GET"),
+  launchAdminMlflowDatasetExport: (payload: AdminMlflowExportLaunchPayload) =>
+    request<AdminMlflowJob>("/admin/mlflow/datasets/export", "POST", payload),
+  launchAdminMlflowExperiment: (payload: AdminMlflowRunLaunchPayload) =>
+    request<AdminMlflowJob>("/admin/mlflow/experiments/run", "POST", payload),
 
   previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; resume_snapshot_id?: string | null; ignored_skill_names?: string[]; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
     return request<any>("/tailor/preview", "POST", payload);

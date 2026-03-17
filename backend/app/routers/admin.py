@@ -9,8 +9,33 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 
 from app.core.auth import require_admin_user
 from app.core.db import get_db
-from app.models.admin import AdminJobOut, AdminSummaryOut, AdminUserOut, AdminUserRolePatch
+from app.models.admin import (
+    AdminMlflowDatasetOut,
+    AdminMlflowExportLaunchIn,
+    AdminJobOut,
+    AdminMlflowLocalOptionsOut,
+    AdminMlflowOverviewOut,
+    AdminMlflowJobOut,
+    AdminMlflowRunDetailOut,
+    AdminMlflowRunLaunchIn,
+    AdminMlflowRunOut,
+    AdminSummaryOut,
+    AdminUserOut,
+    AdminUserRolePatch,
+)
 from app.utils.ai import get_inference_status
+from app.utils.mlflow_admin import (
+    MlflowAdminUnavailable,
+    get_mlflow_experiment_runs,
+    get_mlflow_job,
+    get_mlflow_overview,
+    get_mlflow_run_detail,
+    get_local_model_options,
+    launch_eval_export_job,
+    launch_mlflow_experiment_job,
+    list_available_eval_datasets,
+    list_mlflow_jobs,
+)
 from app.utils.mongo import oid_str
 
 router = APIRouter()
@@ -186,3 +211,77 @@ async def admin_moderate_job(job_id: str, payload: dict, _user=Depends(require_a
 
     updated = await db["jobs"].find_one({"_id": job_oid})
     return serialize_job(updated)
+
+
+@router.get("/mlflow/overview", response_model=AdminMlflowOverviewOut)
+async def admin_mlflow_overview(_user=Depends(require_admin_user)):
+    return AdminMlflowOverviewOut(**get_mlflow_overview())
+
+
+@router.get("/mlflow/experiments/{experiment_id}/runs", response_model=list[AdminMlflowRunOut])
+async def admin_mlflow_experiment_runs(
+    experiment_id: str,
+    limit: int = Query(default=25, ge=1, le=100),
+    _user=Depends(require_admin_user),
+):
+    try:
+        runs = get_mlflow_experiment_runs(experiment_id=experiment_id, limit=limit)
+    except MlflowAdminUnavailable as exc:
+        raise HTTPException(status_code=503, detail=exc.message) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Unable to query MLflow runs: {exc}") from exc
+    return [AdminMlflowRunOut(**run) for run in runs]
+
+
+@router.get("/mlflow/experiments/{experiment_id}/runs/{run_id}", response_model=AdminMlflowRunDetailOut)
+async def admin_mlflow_run_detail(experiment_id: str, run_id: str, _user=Depends(require_admin_user)):
+    try:
+        detail = get_mlflow_run_detail(experiment_id=experiment_id, run_id=run_id)
+    except MlflowAdminUnavailable as exc:
+        raise HTTPException(status_code=503, detail=exc.message) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Unable to query MLflow run detail: {exc}") from exc
+    return AdminMlflowRunDetailOut(**detail)
+
+
+@router.get("/mlflow/datasets", response_model=list[AdminMlflowDatasetOut])
+async def admin_mlflow_datasets(_user=Depends(require_admin_user)):
+    return [AdminMlflowDatasetOut(**dataset) for dataset in list_available_eval_datasets()]
+
+
+@router.get("/mlflow/local-options", response_model=AdminMlflowLocalOptionsOut)
+async def admin_mlflow_local_options(_user=Depends(require_admin_user)):
+    return AdminMlflowLocalOptionsOut(**get_local_model_options())
+
+
+@router.get("/mlflow/jobs", response_model=list[AdminMlflowJobOut])
+async def admin_mlflow_jobs(limit: int = Query(default=20, ge=1, le=100), _user=Depends(require_admin_user)):
+    return [AdminMlflowJobOut(**job) for job in list_mlflow_jobs(limit=limit)]
+
+
+@router.get("/mlflow/jobs/{job_id}", response_model=AdminMlflowJobOut)
+async def admin_mlflow_job(job_id: str, _user=Depends(require_admin_user)):
+    try:
+        return AdminMlflowJobOut(**get_mlflow_job(job_id))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="MLflow job not found") from exc
+
+
+@router.post("/mlflow/datasets/export", response_model=AdminMlflowJobOut)
+async def admin_launch_mlflow_dataset_export(payload: AdminMlflowExportLaunchIn, _user=Depends(require_admin_user)):
+    try:
+        return AdminMlflowJobOut(**launch_eval_export_job(payload.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Unable to launch dataset export: {exc}") from exc
+
+
+@router.post("/mlflow/experiments/run", response_model=AdminMlflowJobOut)
+async def admin_launch_mlflow_experiment(payload: AdminMlflowRunLaunchIn, _user=Depends(require_admin_user)):
+    try:
+        return AdminMlflowJobOut(**launch_mlflow_experiment_job(payload.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Unable to launch MLflow experiment: {exc}") from exc

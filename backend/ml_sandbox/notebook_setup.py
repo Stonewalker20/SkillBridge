@@ -17,11 +17,30 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.core.config import settings  # noqa: E402
 from app.utils.ai import cosine_similarity, embed_texts, extract_skill_candidates, get_inference_status  # noqa: E402
+from ml_sandbox.pipeline import (  # noqa: E402
+    evaluate_extraction_samples,
+    evaluate_ranking_samples,
+    evaluate_rewrite_samples,
+    load_extraction_samples,
+    load_ranking_samples,
+    load_rewrite_samples,
+    runtime_status as pipeline_runtime_status,
+)
 
 
 def read_json(path: str | Path):
     with Path(path).open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def generated_dataset_paths(output_dir: str | Path) -> dict[str, str]:
+    root = Path(output_dir)
+    return {
+        "extraction": str(root / "extraction_eval.jsonl"),
+        "ranking": str(root / "ranking_eval.jsonl"),
+        "rewrite": str(root / "rewrite_eval.jsonl"),
+        "manifest": str(root / "manifest.json"),
+    }
 
 
 def benchmark_extraction(texts: Iterable[str], max_candidates: int = 25) -> list[dict]:
@@ -89,3 +108,19 @@ def runtime_status() -> dict:
         "zero_shot_model": settings.local_zero_shot_model,
         "device": settings.local_model_device,
     }
+
+
+def evaluate_extraction_dataset(path: str | Path, preferences: dict | None = None, max_candidates: int = 25) -> dict:
+    return evaluate_extraction_samples(load_extraction_samples(path), preferences=preferences, max_candidates=max_candidates)
+
+
+def evaluate_ranking_dataset(path: str | Path, preferences: dict | None = None, ks: tuple[int, ...] = (1, 3, 5)) -> dict:
+    return evaluate_ranking_samples(load_ranking_samples(path), preferences=preferences, ks=ks)
+
+
+def evaluate_rewrite_dataset(path: str | Path, preferences: dict | None = None) -> dict:
+    return evaluate_rewrite_samples(load_rewrite_samples(path), preferences=preferences)
+
+
+def sandbox_runtime_status(preferences: dict | None = None) -> dict:
+    return pipeline_runtime_status(preferences)

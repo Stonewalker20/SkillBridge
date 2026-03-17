@@ -26,6 +26,28 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ''),
       },
+      '/media': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+    },
+  },
+
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('recharts')) return 'charts'
+          if (id.includes('@radix-ui')) return 'radix'
+          if (id.includes('@mui') || id.includes('@emotion')) return 'mui'
+          if (id.includes('react-dnd')) return 'dnd'
+          if (id.includes('react-router')) return 'router'
+          if (id.includes('next-themes') || id.includes('sonner')) return 'app-shell'
+          if (id.includes('lucide-react')) return 'icons'
+          return 'vendor'
+        },
+      },
     },
   },
 
