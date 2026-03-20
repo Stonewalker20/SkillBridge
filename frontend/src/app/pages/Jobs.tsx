@@ -705,22 +705,18 @@ export function Jobs() {
                   Paste a posting to get a fit score, required-skill coverage, retrieval-backed reasoning, and a tailored resume path in the same design system as the rest of the app.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Saved Runs</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">{history.length}</p>
+              <div className="grid grid-cols-2 gap-3 sm:w-[20rem] lg:w-[22rem]">
+                <div className="min-w-0 rounded-2xl border border-slate-200 bg-white/80 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/70">
+                  <p className="text-[10px] font-semibold uppercase leading-tight tracking-[0.12em] text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">
+                    Saved Runs
+                  </p>
+                  <p className="mt-2 break-words text-2xl font-semibold text-slate-900 dark:text-slate-100">{history.length}</p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Templates</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">{resumeSnapshots.length + 1}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Focus</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Skill coverage</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Output</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Tailored resume</p>
+                <div className="min-w-0 rounded-2xl border border-slate-200 bg-white/80 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/70">
+                  <p className="text-[10px] font-semibold uppercase leading-tight tracking-[0.12em] text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">
+                    Templates
+                  </p>
+                  <p className="mt-2 break-words text-2xl font-semibold text-slate-900 dark:text-slate-100">{resumeSnapshots.length + 1}</p>
                 </div>
               </div>
             </div>

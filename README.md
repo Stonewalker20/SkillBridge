@@ -102,14 +102,17 @@ cd skillbridge
 Create `backend/.env` with at least:
 
 ```env
+APP_ENV=development
+ALLOWED_ORIGINS=http://localhost:5173
 MONGO_URI=mongodb://localhost:27017
 MONGO_DB=skillbridge
+PUBLIC_APP_URL=http://localhost:5173
+PUBLIC_API_URL=http://localhost:8000
 ```
 
 Optional variables you may want during development:
 
 ```env
-ALLOWED_ORIGINS=http://localhost:5173
 LOCAL_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 LOCAL_ZERO_SHOT_MODEL=MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33
 LOCAL_MODEL_DEVICE=-1
@@ -123,6 +126,7 @@ Notes:
 - `LOCAL_MODEL_DEVICE=-1` keeps inference on CPU.
 - `LOCAL_MODEL_PREWARM=true` loads transformer models during backend startup.
 - `ADMIN_OWNER_EMAILS` and `ADMIN_TEAM_EMAILS` bootstrap admin access on registration.
+- Use `backend/.env.staging.example` and `backend/.env.production.example` as the starting point for deployed environments.
 
 ### 3. Start MongoDB
 
@@ -170,6 +174,7 @@ Frontend URL:
 - App: `http://localhost:5173`
 
 The Vite dev server proxies `/api/*` requests to the backend at `http://localhost:8000`.
+For deployed frontend environments, start from `frontend/.env.staging.example` or `frontend/.env.production.example` and set `VITE_API_BASE` to the deployed backend URL.
 
 Frontend quality commands:
 
@@ -290,6 +295,8 @@ At minimum, a production deployment needs:
 - correct `ALLOWED_ORIGINS` configuration for the deployed frontend domain
 
 If you deploy with Docker, the current compose assets live in `infra/` and the service Dockerfiles live under `backend/` and `frontend/`.
+
+For the current launch plan and ship-progress tracker, see [docs/ship_checklist.md](/Users/cordellstonecipher/OU_Undergrad/skillbridge/docs/ship_checklist.md).
 
 ## Version
 
