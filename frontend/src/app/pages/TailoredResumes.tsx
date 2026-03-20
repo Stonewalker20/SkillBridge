@@ -11,6 +11,19 @@ import { useHeaderTheme } from "../lib/headerTheme";
 
 const RESUMES_PER_PAGE = 15;
 const TAILORED_RESUME_FETCH_LIMIT = 1000;
+const TAILORED_RESUME_TEMPLATE_LABELS: Record<string, string> = {
+  ats_v1: "ATS Classic",
+  professional_v1: "Professional",
+  modern_v1: "Modern Impact",
+  project_focused_v1: "Project Forward",
+  experience_focused_v1: "Experience Forward",
+  uploaded_resume_reword_v1: "Uploaded Resume Reword",
+};
+
+function getTailoredResumeTemplateLabel(template?: string | null) {
+  const key = String(template ?? "").trim();
+  return TAILORED_RESUME_TEMPLATE_LABELS[key] || key || "Custom";
+}
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -304,6 +317,11 @@ export function TailoredResumes() {
                       <p className="truncate text-xs text-slate-600 dark:text-slate-300">
                         {[item.company, item.location].filter(Boolean).join(" • ") || "Saved job target"}
                       </p>
+                      <div className="mt-2">
+                        <Badge variant="outline" className="border-slate-200 bg-white/80 text-[11px] uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                          {getTailoredResumeTemplateLabel(item.template)}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
                 </div>

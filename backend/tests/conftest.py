@@ -55,7 +55,7 @@ async def _async_fake_extract_skill_candidates(text: str, max_candidates: int = 
     return candidates[:max_candidates], "test-transformer"
 
 
-async def _async_fake_rewrite(job_text: str, bullets: list[str], focus: str):
+async def _async_fake_rewrite(job_text: str, bullets: list[str], focus: str, preferences: dict | None = None):
     return [f"- Rewritten ({focus}): {bullet[2:] if bullet.startswith('- ') else bullet}" for bullet in bullets], "test-rewriter"
 
 
@@ -75,6 +75,10 @@ def _seed(fake_db: FakeDatabase):
             "password_salt": password_parts["salt"],
             "password_hash": password_parts["hash"],
             "role": "user",
+            "subscription_status": "active",
+            "subscription_plan": "pro",
+            "subscription_started_at": now_utc(),
+            "subscription_renewal_at": now_utc() + timedelta(days=30),
             "created_at": now_utc(),
         }
     ]

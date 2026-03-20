@@ -31,6 +31,7 @@ import { useActivity } from "../context/ActivityContext";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { avatarPresetClass } from "../lib/avatarPresets";
 import { AccountSectionNav } from "../components/AccountSectionNav";
+import { SubscriptionGate } from "../components/SubscriptionGate";
 
 export function Account() {
   const { refreshUser } = useAuth();
@@ -41,10 +42,15 @@ export function Account() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingAI, setSavingAI] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [activatingSubscription, setActivatingSubscription] = useState(false);
   const [aiSettings, setAiSettings] = useState<any>(null);
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [accountRole, setAccountRole] = useState("user");
+  const [subscriptionStatus, setSubscriptionStatus] = useState("inactive");
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null);
+  const [subscriptionRenewalAt, setSubscriptionRenewalAt] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarPreset, setAvatarPreset] = useState<string | null>("midnight");
 
@@ -56,12 +62,17 @@ export function Account() {
     const load = async () => {
       setLoading(true);
       try {
-        const [me, settings] = await Promise.all([api.me(), api.getAIPreferences().catch(() => null)]);
+        const me = await api.me();
         setUsername(me?.username || "");
         setEmail(me?.email || "");
+        setAccountRole(me?.role || "user");
+        setSubscriptionStatus(me?.subscription_status || "inactive");
+        setSubscriptionPlan(me?.subscription_plan || null);
+        setSubscriptionRenewalAt(me?.subscription_renewal_at || null);
         setAvatarUrl(me?.avatar_url || null);
         setAvatarPreset(me?.avatar_preset || "midnight");
-        setAiSettings(settings);
+        const hasAccess = ["owner", "admin", "team"].includes(String(me?.role ?? "").toLowerCase()) || String(me?.subscription_status ?? "").toLowerCase() === "active";
+        setAiSettings(hasAccess ? await api.getAIPreferences().catch(() => null) : null);
       } catch (e: any) {
         toast.error(e?.message || "Failed to load account");
       } finally {
@@ -79,6 +90,33 @@ export function Account() {
     const b = parts[1]?.[0] ?? parts[0]?.[1] ?? "B";
     return (a + b).toUpperCase();
   }, [username]);
+
+  const isAdminRole = ["owner", "admin", "team"].includes(String(accountRole).toLowerCase());
+  const hasSubscriptionAccess = isAdminRole || subscriptionStatus === "active";
+
+  const handleActivateSubscription = async () => {
+    setActivatingSubscription(true);
+    try {
+      const updated = await api.activateSubscription();
+      setSubscriptionStatus(updated.subscription_status || "active");
+      setSubscriptionPlan(updated.subscription_plan || "pro");
+      setSubscriptionRenewalAt(updated.subscription_renewal_at || null);
+      const settings = await api.getAIPreferences().catch(() => null);
+      setAiSettings(settings);
+      await refreshUser();
+      recordActivity({
+        id: `account:subscription:${Date.now()}`,
+        type: "account",
+        action: "activated",
+        name: "Subscription activated",
+      });
+      toast.success("Subscription activated");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to activate subscription");
+    } finally {
+      setActivatingSubscription(false);
+    }
+  };
 
   const handleUpdateUsername = async () => {
     setSavingProfile(true);
@@ -227,6 +265,17 @@ export function Account() {
         </div>
       </div>
 
+      <SubscriptionGate
+        active={hasSubscriptionAccess}
+        plan={subscriptionPlan}
+        renewalAt={subscriptionRenewalAt}
+        role={accountRole}
+        compact
+        onActivate={hasSubscriptionAccess ? undefined : handleActivateSubscription}
+        activating={activatingSubscription}
+        ctaLabel="Activate subscription"
+      />
+
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
           <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
@@ -277,7 +326,8 @@ export function Account() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-              {aiSettings ? (
+              {hasSubscriptionAccess ? (
+                aiSettings ? (
                 <>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
@@ -358,8 +408,18 @@ export function Account() {
                     </Button>
                   </div>
                 </>
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-slate-300">AI settings are unavailable right now.</p>
+                )
               ) : (
-                <p className="text-sm text-gray-600 dark:text-slate-300">AI settings are unavailable right now.</p>
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
+                    AI settings unlock after you activate the subscription. That keeps the core workspace gated until the account is subscribed.
+                  </p>
+                  <Button onClick={handleActivateSubscription} disabled={activatingSubscription} className={activeHeaderTheme.buttonClass}>
+                    {activatingSubscription ? "Activating..." : "Activate subscription"}
+                  </Button>
+                </div>
               )}
             </div>
           </Card>

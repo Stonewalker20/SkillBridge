@@ -24,6 +24,7 @@ import { useTheme } from "next-themes";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { avatarPresetClass } from "../lib/avatarPresets";
 import { useAccountPreferences } from "../context/AccountPreferencesContext";
+import { SubscriptionGate } from "./SubscriptionGate";
 
 const baseNavigation = [
   { name: "Dashboard", href: "/app", icon: LayoutDashboard },
@@ -49,9 +50,13 @@ export function RootLayout() {
 
   const displayName = user?.username || user?.email?.split("@")[0] || "Account";
   const isAdminUser = ["owner", "admin", "team"].includes(String(user?.role ?? "").toLowerCase());
-  const navigation = isAdminUser
+  const hasPlatformAccess = isAdminUser || String(user?.subscription_status ?? "").toLowerCase() === "active";
+  const isAccountPage =
+    location.pathname === "/app/account" || location.pathname.startsWith("/app/account/personalization");
+  const isSubscriptionLocked = !hasPlatformAccess;
+  const navigation = hasPlatformAccess
     ? [...baseNavigation, { name: "Admin", href: "/app/admin", icon: Shield }]
-    : baseNavigation;
+    : [];
   const initials = (() => {
     const parts = String(displayName).trim().split(/[\s._-]+/).filter(Boolean);
     const a = parts[0]?.[0] ?? "S";
@@ -75,20 +80,24 @@ export function RootLayout() {
   const isDark = mounted && resolvedTheme === "dark";
   const isCompactSidebar = preferences.sidebarDensity === "compact";
 
-  const currentPageTitle =
-    location.pathname === "/app/account"
-      ? "Account"
-      : location.pathname.startsWith("/app/account/personalization")
-        ? "Personalization"
-      : location.pathname.startsWith("/app/admin/mlflow")
-        ? "Admin MLflow"
-      : location.pathname === "/app/admin"
-        ? "Admin"
-      : location.pathname === "/app/analytics/skills"
-        ? "Skill Analytics"
-      : location.pathname.startsWith("/app/analytics/career-paths/")
-        ? "Career Path"
-        : navigation.find((item) => item.href === location.pathname)?.name || "Page";
+  let currentPageTitle = "Page";
+  if (isSubscriptionLocked && !isAccountPage) {
+    currentPageTitle = "Subscription required";
+  } else if (location.pathname === "/app/account") {
+    currentPageTitle = "Account";
+  } else if (location.pathname.startsWith("/app/account/personalization")) {
+    currentPageTitle = "Personalization";
+  } else if (location.pathname.startsWith("/app/admin/mlflow")) {
+    currentPageTitle = "Admin MLflow";
+  } else if (location.pathname === "/app/admin") {
+    currentPageTitle = "Admin";
+  } else if (location.pathname === "/app/analytics/skills") {
+    currentPageTitle = "Skill Analytics";
+  } else if (location.pathname.startsWith("/app/analytics/career-paths/")) {
+    currentPageTitle = "Career Path";
+  } else {
+    currentPageTitle = navigation.find((item) => item.href === location.pathname)?.name || "Page";
+  }
 
   return (
     <div className="flex min-h-svh bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)] text-slate-900 dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_48%,_#020617)] dark:text-slate-100 lg:h-svh lg:overflow-hidden">
@@ -175,7 +184,17 @@ export function RootLayout() {
             );
           })}
 
-          {preferences.showQuickActions ? (
+          {isSubscriptionLocked ? (
+            <div className="px-3 py-3">
+              <SubscriptionGate
+                active={false}
+                role={user?.role}
+                compact
+                ctaHref="/app/account"
+                ctaLabel="Manage subscription"
+              />
+            </div>
+          ) : preferences.showQuickActions ? (
             <div className={cn("mt-auto border-t border-slate-200/80 dark:border-slate-800/80", isCompactSidebar ? "pt-3" : "pt-[clamp(0.5rem,0.25rem+0.65vh,1rem)]")}>
               <p className={cn("text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400", isCompactSidebar ? "px-3" : "px-[clamp(0.8rem,0.55rem+0.65vh,1rem)]")}>Quick Actions</p>
               <div className={cn(isCompactSidebar ? "mt-2 space-y-1.5" : "mt-[clamp(0.3rem,0.15rem+0.45vh,0.55rem)] space-y-[clamp(0.15rem,0.08rem+0.2vh,0.3rem)]")}>
@@ -304,7 +323,20 @@ export function RootLayout() {
 
         <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-8">
           <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col">
-            <Outlet />
+            {isSubscriptionLocked && !isAccountPage ? (
+              <div className="flex min-h-full items-start justify-center py-6 sm:py-10">
+                <div className="w-full max-w-3xl">
+                  <SubscriptionGate
+                    active={false}
+                    role={user?.role}
+                    ctaHref="/app/account"
+                    ctaLabel="Open account"
+                  />
+                </div>
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </div>
         </main>
       </div>

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type Skill, type ConfirmationOut } from "../services/api";
+import { api, type Skill, type ConfirmationOut, type RewardAchievement, type RewardsSummary } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
 import { Card } from "../components/ui/card";
-import { Target, FolderOpen, TrendingUp, FileText, X } from "lucide-react";
+import { Award, FileText, FolderOpen, Rocket, Target, TrendingUp, X } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
@@ -55,6 +55,41 @@ const EMPTY_SUMMARY: DashboardSummary = {
   portfolioTypeDistribution: [],
   recentMatchTrend: [],
 };
+
+const EMPTY_REWARDS: RewardsSummary = {
+  counters: {
+    evidence_saved: 0,
+    profile_skills_confirmed: 0,
+    resume_snapshots_uploaded: 0,
+    job_matches_run: 0,
+    tailored_resumes_generated: 0,
+  },
+  unlockedCount: 0,
+  totalCount: 0,
+  achievements: [],
+  nextAchievement: null,
+  recentUnlocks: [],
+};
+
+const REWARD_ACTIONS: Record<string, { href: string; label: string }> = {
+  evidence_saved: { href: "/app/evidence", label: "Add evidence" },
+  profile_skills_confirmed: { href: "/app/skills", label: "Confirm skills" },
+  resume_snapshots_uploaded: { href: "/app/jobs", label: "Upload resume" },
+  job_matches_run: { href: "/app/jobs", label: "Run match" },
+  tailored_resumes_generated: { href: "/app/jobs", label: "Generate resume" },
+};
+
+function rewardProgressLabel(achievement: RewardAchievement): string {
+  const labels: Record<string, string> = {
+    evidence_saved: "evidence items",
+    profile_skills_confirmed: "confirmed skills",
+    resume_snapshots_uploaded: "resume templates",
+    job_matches_run: "job matches",
+    tailored_resumes_generated: "tailored resumes",
+  };
+  const unit = labels[achievement.counter_key] ?? "steps";
+  return `${achievement.current_value}/${achievement.target_value} ${unit}`;
+}
 
 const TAILORED_RESUME_FETCH_LIMIT = 1000;
 
@@ -142,6 +177,7 @@ export function Dashboard() {
   const { activeHeaderTheme } = useHeaderTheme();
   const { preferences } = useAccountPreferences();
   const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
+  const [rewards, setRewards] = useState<RewardsSummary>(EMPTY_REWARDS);
   const [loading, setLoading] = useState(true);
   const [hiddenRecentActivityKeys, setHiddenRecentActivityKeys] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
@@ -232,10 +268,11 @@ export function Dashboard() {
         //    - profile confirmation = resume_snapshot_id null
         //    - total skills = confirmed length
         //    - top categories computed from confirmed skill ids -> global skills list mapping
-        const [skillsLib, profileConf, tailoredResumeRows] = await Promise.all([
+        const [skillsLib, profileConf, tailoredResumeRows, rewardSummary] = await Promise.all([
           loadAllSkills(),
           api.getProfileConfirmation().catch(() => null as ConfirmationOut | null),
           api.listTailoredResumes(TAILORED_RESUME_FETCH_LIMIT).catch(() => []),
+          api.getRewardsSummary().catch(() => EMPTY_REWARDS),
         ]);
         const confirmed = Array.isArray(profileConf?.confirmed) ? profileConf!.confirmed : [];
         const confirmedIds = new Set(confirmed.map((c) => (c?.skill_id ?? "").trim()).filter(Boolean));
@@ -280,9 +317,11 @@ export function Dashboard() {
           recentActivity: mergedRecentActivity,
           topSkillCategories,
         });
+        setRewards(rewardSummary ?? EMPTY_REWARDS);
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
         setSummary(EMPTY_SUMMARY);
+        setRewards(EMPTY_REWARDS);
       } finally {
         setLoading(false);
       }
@@ -409,6 +448,109 @@ export function Dashboard() {
           </Card>
         ))}
       </div>
+
+      <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Award className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Achievements</h3>
+            </div>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
+              Milestones unlock as you save evidence, confirm skills, run job matches, and generate tailored resumes.
+            </p>
+          </div>
+          <Badge variant="outline" className="w-fit dark:border-slate-700 dark:text-slate-200">
+            {rewards.unlockedCount}/{Math.max(rewards.totalCount, rewards.achievements.length)} unlocked
+          </Badge>
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
+            {rewards.nextAchievement ? (
+              <>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next Unlock</div>
+                    <div className="mt-2 text-xl font-semibold text-slate-900 dark:text-slate-100">{rewards.nextAchievement.title}</div>
+                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.description}</p>
+                    <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">{rewardProgressLabel(rewards.nextAchievement)}</p>
+                  </div>
+                  {REWARD_ACTIONS[rewards.nextAchievement.counter_key] ? (
+                    <Button asChild size="sm" className={activeHeaderTheme.buttonClass}>
+                      <Link to={REWARD_ACTIONS[rewards.nextAchievement.counter_key].href}>
+                        {REWARD_ACTIONS[rewards.nextAchievement.counter_key].label}
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="mt-4 h-2.5 rounded-full bg-slate-200 dark:bg-slate-700">
+                  <div
+                    className={`h-2.5 rounded-full ${activeHeaderTheme.barClass}`}
+                    style={{ width: `${Math.max(6, Math.min(100, rewards.nextAchievement.progress_pct))}%` }}
+                  />
+                </div>
+                <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.reward}</p>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                  <Rocket className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+                  <span className="text-lg font-semibold">All current milestones unlocked</span>
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  You have cleared the current progression track. New milestones can be added on top of this reward system without changing the existing history.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/30">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recent Unlocks</div>
+            {rewards.recentUnlocks.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">No milestones unlocked yet. Your first reward appears as soon as you save evidence or confirm a skill.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {rewards.recentUnlocks.map((achievement) => (
+                  <div key={achievement.key} className="rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{achievement.title}</div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{achievement.reward}</div>
+                      </div>
+                      <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
+                        Unlocked
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {rewards.achievements.length > 0 ? (
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {rewards.achievements.map((achievement) => (
+              <div key={achievement.key} className="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{achievement.title}</div>
+                    <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{achievement.description}</p>
+                  </div>
+                  <Badge variant={achievement.unlocked ? "secondary" : "outline"} className="shrink-0 dark:border-slate-700 dark:text-slate-200">
+                    {achievement.unlocked ? "Done" : `${Math.round(achievement.progress_pct)}%`}
+                  </Badge>
+                </div>
+                <div className="mt-4 h-2 rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div className={`h-2 rounded-full ${activeHeaderTheme.barClass}`} style={{ width: `${Math.max(4, achievement.progress_pct)}%` }} />
+                </div>
+                <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">{rewardProgressLabel(achievement)}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </Card>
 
       <div className={`grid grid-cols-1 gap-6 ${preferences.showRecentActivity ? "lg:grid-cols-2" : ""}`}>
         {preferences.showRecentActivity ? (

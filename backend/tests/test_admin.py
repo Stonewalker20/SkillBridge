@@ -14,6 +14,7 @@ def test_admin_workspace_endpoints(test_context):
     if job_id is None:
         inserted = client.post(
             "/jobs/submit",
+            headers=test_context["headers"],
             json={
                 "title": "Pending Role",
                 "company": "Acme",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
-import { api, type CareerPathDetail } from "../services/api";
+import { api, type CareerPathDetail as CareerPathDetailRecord } from "../services/api";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -10,7 +10,7 @@ import { useHeaderTheme } from "../lib/headerTheme";
 export function CareerPathDetail() {
   const { activeHeaderTheme } = useHeaderTheme();
   const { roleId } = useParams();
-  const [detail, setDetail] = useState<CareerPathDetail | null>(null);
+  const [detail, setDetail] = useState<CareerPathDetailRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

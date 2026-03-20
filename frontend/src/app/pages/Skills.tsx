@@ -1,5 +1,5 @@
 // frontend/src/app/pages/Skills.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type Skill, type ConfirmationOut } from "../services/api";
 import { useActivity } from "../context/ActivityContext";
 import { useAuth } from "../context/AuthContext";
@@ -64,7 +64,7 @@ export function Skills() {
   const [autoConfirmAfterCreate, setAutoConfirmAfterCreate] = useState(true);
   const [newSkill, setNewSkill] = useState({ name: "", category: "", aliases: "" });
 
-  const refreshSkills = async () => {
+  const refreshSkills = useCallback(async () => {
     const pageSize = 200;
     const allSkills: Skill[] = [];
     let skip = 0;
@@ -78,14 +78,14 @@ export function Skills() {
     }
 
     setSkills(allSkills);
-  };
+  }, []);
 
-  const refreshConfirmation = async () => {
+  const refreshConfirmation = useCallback(async () => {
     const c = await api.getProfileConfirmation();
     setConfirmation(c);
-  };
+  }, []);
 
-  const refreshEvidenceSkills = async () => {
+  const refreshEvidenceSkills = useCallback(async () => {
     if (!user?.id) {
       setEvidenceSkillIds([]);
       return;
@@ -97,7 +97,7 @@ export function Skills() {
       )
     );
     setEvidenceSkillIds(ids);
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     const boot = async () => {
@@ -112,7 +112,7 @@ export function Skills() {
       }
     };
     boot();
-  }, [user?.id]);
+  }, [refreshConfirmation, refreshEvidenceSkills, refreshSkills]);
 
   useEffect(() => {
     if (searchParams.get("add") === "1") {

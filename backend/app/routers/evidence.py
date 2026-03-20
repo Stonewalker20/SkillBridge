@@ -9,6 +9,7 @@ from app.core.db import get_db
 from app.models.evidence import EvidenceIn, EvidenceOut, EvidencePatch
 from app.utils.ai import extract_skill_candidates, embed_texts, cosine_similarity, normalize_ai_preferences
 from app.utils.rag import delete_rag_document, sync_rag_document
+from app.utils.rewards import increment_reward_counter
 from app.utils.skill_catalog import (
     build_canonical_skill_index,
     lexical_skill_similarity,
@@ -475,6 +476,7 @@ async def create_evidence(payload: EvidenceIn, user=Depends(require_user)):
         preferences=ai_preferences,
         metadata={"evidence_type": doc.get("type", "other"), "origin": doc.get("origin", "user")},
     )
+    await increment_reward_counter(db, oid_str(user["_id"]), "evidence_saved")
 
     return EvidenceOut(
         **serialize_evidence({"_id": res.inserted_id, **doc}),

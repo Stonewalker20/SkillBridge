@@ -44,16 +44,17 @@ def test_jobs_roles_projects_and_portfolio_endpoints(test_context):
     assert portfolio_patch.status_code == 200
     assert portfolio_patch.json()["title"] == "Updated Portfolio Item"
 
-    role_list = client.get("/roles/")
+    role_list = client.get("/roles/", headers=headers)
     assert role_list.status_code == 200
     assert role_list.json()
 
-    new_role = client.post("/roles/", json={"name": "Backend Engineer", "description": "APIs"})
+    new_role = client.post("/roles/", headers=headers, json={"name": "Backend Engineer", "description": "APIs"})
     assert new_role.status_code == 200
     role_id = new_role.json()["id"]
 
     job_submit = client.post(
         "/jobs/submit",
+        headers=headers,
         json={
             "title": "ML Engineer",
             "company": "Acme",
@@ -68,16 +69,20 @@ def test_jobs_roles_projects_and_portfolio_endpoints(test_context):
     assert job_submit.status_code == 200
     job_id = job_submit.json()["id"]
 
-    moderated = client.patch(f"/jobs/{job_id}/moderate", json={"moderation_status": "approved", "moderation_reason": None})
+    moderated = client.patch(
+        f"/jobs/{job_id}/moderate",
+        headers=headers,
+        json={"moderation_status": "approved", "moderation_reason": None},
+    )
     assert moderated.status_code == 200
 
-    tagged = client.post(f"/jobs/{job_id}/roles", json={"role_id": role_id})
+    tagged = client.post(f"/jobs/{job_id}/roles", headers=headers, json={"role_id": role_id})
     assert tagged.status_code == 200
 
-    weights = client.post(f"/roles/{role_id}/compute_weights")
+    weights = client.post(f"/roles/{role_id}/compute_weights", headers=headers)
     assert weights.status_code == 200
 
-    role_weights = client.get(f"/roles/{role_id}/weights")
+    role_weights = client.get(f"/roles/{role_id}/weights", headers=headers)
     assert role_weights.status_code == 200
 
     portfolio_delete = client.delete(f"/portfolio/items/{portfolio_id}", headers=headers)

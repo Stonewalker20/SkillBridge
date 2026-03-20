@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../services/api";
+import { api, type RewardsSummary } from "../services/api";
 import { useActivity } from "../context/ActivityContext";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import type { JobMatchHistoryEntry, ResumeSnapshotListEntry } from "../services/api";
 import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateCw, Plus, X } from "lucide-react";
 import { toast } from "sonner";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { useHeaderTheme } from "../lib/headerTheme";
 
 type RetrievedContextItem = {
@@ -76,6 +76,14 @@ type MatchResult = {
 
 const asArray = <T,>(v: any): T[] => (Array.isArray(v) ? v : []);
 
+const REWARD_ACTIONS: Record<string, { href: string; label: string }> = {
+  evidence_saved: { href: "/app/evidence", label: "Add evidence" },
+  profile_skills_confirmed: { href: "/app/skills", label: "Confirm skills" },
+  resume_snapshots_uploaded: { href: "/app/jobs", label: "Upload resume" },
+  job_matches_run: { href: "/app/jobs", label: "Run match" },
+  tailored_resumes_generated: { href: "/app/jobs", label: "Generate resume" },
+};
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -95,6 +103,8 @@ function formatResumeTemplateLabel(snapshot: ResumeSnapshotListEntry) {
   const sourceLabel =
     sourceType === "pdf"
       ? "PDF Resume"
+      : sourceType === "docx"
+        ? "Word Resume"
       : sourceType === "paste"
         ? "Pasted Resume"
         : `${sourceType.charAt(0).toUpperCase()}${sourceType.slice(1)} Resume`;
@@ -103,6 +113,20 @@ function formatResumeTemplateLabel(snapshot: ResumeSnapshotListEntry) {
 
   return `Updated Resume from Evidence • ${sourceLabel} • ${new Date(snapshot.created_at).toLocaleDateString()}`;
 }
+
+const tailoredResumeTemplates = [
+  { value: "ats_v1", label: "ATS Classic", description: "Straightforward, recruiter-safe ordering with skills near the top." },
+  { value: "professional_v1", label: "Professional", description: "Traditional summary-first layout for polished applications." },
+  { value: "modern_v1", label: "Modern Impact", description: "Leans into impact and selected highlights before deeper detail." },
+  { value: "project_focused_v1", label: "Project Forward", description: "Moves strong project work earlier for technical or portfolio-heavy roles." },
+  { value: "experience_focused_v1", label: "Experience Forward", description: "Pushes work history up front when experience should lead the story." },
+];
+
+const uploadedResumeRewordTemplate = {
+  value: "uploaded_resume_reword_v1",
+  label: "Reword My Resume",
+  description: "Keeps your uploaded resume section order and headings, while rewriting the bullets in place.",
+};
 
 export function Jobs() {
   const { recordActivity } = useActivity();
@@ -118,6 +142,7 @@ export function Jobs() {
   const [analyzing, setAnalyzing] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<MatchResult | null>(null);
+  const [rewards, setRewards] = useState<RewardsSummary | null>(null);
 
   const [lastTailoredId, setLastTailoredId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -125,6 +150,7 @@ export function Jobs() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [resumeSnapshots, setResumeSnapshots] = useState<ResumeSnapshotListEntry[]>([]);
   const [selectedResumeTemplate, setSelectedResumeTemplate] = useState<string>("default");
+  const [selectedResumeLayout, setSelectedResumeLayout] = useState<string>("ats_v1");
   const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
   const [reanalyzingHistoryId, setReanalyzingHistoryId] = useState<string | null>(null);
@@ -186,6 +212,21 @@ export function Jobs() {
     };
   }, [analysis]);
 
+  const availableResumeLayouts = useMemo(
+    () =>
+      selectedResumeTemplate === "default"
+        ? tailoredResumeTemplates
+        : [...tailoredResumeTemplates, uploadedResumeRewordTemplate],
+    [selectedResumeTemplate]
+  );
+  const selectedResumeSnapshot = useMemo(
+    () => resumeSnapshots.find((snapshot) => snapshot.snapshot_id === selectedResumeTemplate) ?? null,
+    [resumeSnapshots, selectedResumeTemplate]
+  );
+  const downloadsEditableDocx =
+    selectedResumeLayout === uploadedResumeRewordTemplate.value &&
+    String(selectedResumeSnapshot?.source_type ?? "").toLowerCase() === "docx";
+
   const handleReset = () => {
     setJobDescription("");
     setIsJobDescriptionExpanded(false);
@@ -196,6 +237,7 @@ export function Jobs() {
     setLastTailoredId(null);
     setJobId(null);
     setSelectedResumeTemplate("default");
+    setSelectedResumeLayout("ats_v1");
   };
 
   useEffect(() => {
@@ -203,6 +245,12 @@ export function Jobs() {
     if (resumeSnapshots.some((snapshot) => snapshot.snapshot_id === selectedResumeTemplate)) return;
     setSelectedResumeTemplate("default");
   }, [resumeSnapshots, selectedResumeTemplate]);
+
+  useEffect(() => {
+    if (selectedResumeTemplate !== "default") return;
+    if (selectedResumeLayout !== uploadedResumeRewordTemplate.value) return;
+    setSelectedResumeLayout("ats_v1");
+  }, [selectedResumeLayout, selectedResumeTemplate]);
 
   useEffect(() => {
     const resetToken = searchParams.get("new") ?? searchParams.get("_nav");
@@ -314,6 +362,7 @@ export function Jobs() {
         job_id: jobId,
         resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
         ignored_skill_names: normalized.ignoredSkills,
+        template: selectedResumeLayout,
       });
       const previewId = String((preview as any)?.id ?? (preview as any)?.tailored_id ?? (preview as any)?.tailoredId ?? "").trim();
       if (!previewId) {
@@ -321,8 +370,13 @@ export function Jobs() {
       }
       setLastTailoredId(previewId);
       setAnalysis((current) => (current ? { ...current, tailored_resume_id: previewId } : current));
-      const blob = await api.downloadTailoredPdf(previewId);
-      downloadBlob(blob, "tailored_resume.pdf");
+      if (downloadsEditableDocx) {
+        const blob = await api.downloadTailoredDocx(previewId);
+        downloadBlob(blob, "tailored_resume.docx");
+      } else {
+        const blob = await api.downloadTailoredPdf(previewId);
+        downloadBlob(blob, "tailored_resume.pdf");
+      }
       try {
         await refreshHistory();
       } catch (historyError) {
@@ -335,15 +389,15 @@ export function Jobs() {
         name: jobTitle || company || "Tailored resume",
       });
       recordActivity({
-        id: `jobs:export:pdf:${previewId}`,
+        id: `jobs:export:${downloadsEditableDocx ? "docx" : "pdf"}:${previewId}`,
         type: "resume",
         action: "exported",
-        name: `${jobTitle || company || "Tailored resume"} (PDF)`,
+        name: `${jobTitle || company || "Tailored resume"} (${downloadsEditableDocx ? "DOCX" : "PDF"})`,
       });
-      toast.success("Tailored resume PDF downloaded");
+      toast.success(`Tailored resume ${downloadsEditableDocx ? "DOCX" : "PDF"} downloaded`);
     } catch (error: any) {
       console.error("Failed to generate resume:", error);
-      toast.error(error?.message || "Failed to generate tailored resume PDF");
+      toast.error(error?.message || `Failed to generate tailored resume ${downloadsEditableDocx ? "DOCX" : "PDF"}`);
     } finally {
       setGenerating(false);
     }
@@ -632,6 +686,10 @@ export function Jobs() {
     return "text-orange-600";
   };
 
+  useEffect(() => {
+    api.getRewardsSummary().then(setRewards).catch(() => setRewards(null));
+  }, [history.length, analysis?.tailored_resume_id]);
+
   if (!analysis) {
     return (
       <div className="mx-auto max-w-6xl space-y-6">
@@ -668,6 +726,34 @@ export function Jobs() {
             </div>
           </div>
         </div>
+
+        {rewards?.nextAchievement ? (
+          <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next achievement</div>
+                <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">{rewards.nextAchievement.title}</div>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.description}</p>
+                <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {rewards.nextAchievement.current_value}/{rewards.nextAchievement.target_value} toward unlock
+                </p>
+                <div className="mt-3 h-2 rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div
+                    className={`h-2 rounded-full ${activeHeaderTheme.barClass}`}
+                    style={{ width: `${Math.max(6, rewards.nextAchievement.progress_pct)}%` }}
+                  />
+                </div>
+              </div>
+              {REWARD_ACTIONS[rewards.nextAchievement.counter_key] ? (
+                <Button asChild className={activeHeaderTheme.buttonClass}>
+                  <Link to={REWARD_ACTIONS[rewards.nextAchievement.counter_key].href}>
+                    {REWARD_ACTIONS[rewards.nextAchievement.counter_key].label}
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
+          </Card>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
@@ -1240,12 +1326,12 @@ export function Jobs() {
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Tailored Resume</h3>
             <p className="text-sm text-gray-600 dark:text-slate-300">
-              Choose whether to generate from your uploaded updated resume or the default template, then download the tailored PDF.
+              Choose your resume source, then pick the resume style below it. Uploaded resumes can also be reworded while keeping their structure intact.
             </p>
           </div>
 
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <div className="min-w-[240px]">
+            <div className="min-w-[260px] space-y-3">
               <Select value={selectedResumeTemplate} onValueChange={setSelectedResumeTemplate}>
                 <SelectTrigger className="h-10">
                   <SelectValue placeholder="Choose resume source" />
@@ -1259,6 +1345,19 @@ export function Jobs() {
                   ))}
                 </SelectContent>
               </Select>
+
+              <Select value={selectedResumeLayout} onValueChange={setSelectedResumeLayout}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Choose resume style" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableResumeLayouts.map((template) => (
+                    <SelectItem key={template.value} value={template.value}>
+                      {template.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <Button
               onClick={handleGenerateResume}
@@ -1266,9 +1365,19 @@ export function Jobs() {
               className={activeHeaderTheme.buttonClass}
             >
               <Download className="mr-2 h-4 w-4" />
-              {generating ? "Generating PDF..." : "Generate PDF"}
+              {generating ? `Generating ${downloadsEditableDocx ? "DOCX" : "PDF"}...` : `Generate ${downloadsEditableDocx ? "DOCX" : "PDF"}`}
             </Button>
           </div>
+        </div>
+
+        <div className={`mt-4 rounded-2xl border p-4 ${activeHeaderTheme.softPanelClass}`}>
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {availableResumeLayouts.find((template) => template.value === selectedResumeLayout)?.label ?? "Resume style"}
+          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
+            {availableResumeLayouts.find((template) => template.value === selectedResumeLayout)?.description ??
+              "Choose the layout that best fits the role you are targeting."}
+          </p>
         </div>
 
         {lastTailoredId ? (
@@ -1278,8 +1387,8 @@ export function Jobs() {
         ) : (
           <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">
             {resumeSnapshots.length > 0
-              ? "Select your updated resume from evidence or use the default template, then generate the PDF."
-              : "Generate PDF to create and download your tailored resume with the default template."}
+              ? "Pick a resume source and layout. Uploaded resumes can also be reworded without changing their section layout, and Word resumes will download as editable DOCX."
+              : "Pick a layout, then generate the PDF from the default resume structure."}
           </div>
         )}
       </Card>

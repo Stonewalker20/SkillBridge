@@ -170,9 +170,47 @@ function normalizeEvidence(raw: any): Evidence {
   };
 }
 
-export type AuthUser = { id: string; email: string; username: string; role: string; avatar_url?: string | null; avatar_preset?: string | null };
+export type AuthUser = {
+  id: string;
+  email: string;
+  username: string;
+  role: string;
+  avatar_url?: string | null;
+  avatar_preset?: string | null;
+  subscription_status: string;
+  subscription_plan?: string | null;
+  subscription_started_at?: string | null;
+  subscription_renewal_at?: string | null;
+};
 export type AuthOut = { token: string; user: AuthUser };
 export type UserPatch = { email?: string; username?: string; avatar_preset?: string | null };
+export type RewardCounters = {
+  evidence_saved: number;
+  profile_skills_confirmed: number;
+  resume_snapshots_uploaded: number;
+  job_matches_run: number;
+  tailored_resumes_generated: number;
+};
+export type RewardAchievement = {
+  key: string;
+  title: string;
+  description: string;
+  reward: string;
+  counter_key: keyof RewardCounters;
+  current_value: number;
+  target_value: number;
+  progress_pct: number;
+  unlocked: boolean;
+  unlocked_at?: string | null;
+};
+export type RewardsSummary = {
+  counters: RewardCounters;
+  unlockedCount: number;
+  totalCount: number;
+  achievements: RewardAchievement[];
+  nextAchievement: RewardAchievement | null;
+  recentUnlocks: RewardAchievement[];
+};
 
 function normalizeAuthUser(raw: any): AuthUser {
   return {
@@ -182,6 +220,42 @@ function normalizeAuthUser(raw: any): AuthUser {
     role: String(raw?.role ?? "user").trim() || "user",
     avatar_url: resolveAssetUrl(raw?.avatar_url),
     avatar_preset: raw?.avatar_preset ? String(raw.avatar_preset).trim() : null,
+    subscription_status: String(raw?.subscription_status ?? "inactive").trim() || "inactive",
+    subscription_plan: raw?.subscription_plan ? String(raw.subscription_plan).trim() : null,
+    subscription_started_at: raw?.subscription_started_at ? String(raw.subscription_started_at) : null,
+    subscription_renewal_at: raw?.subscription_renewal_at ? String(raw.subscription_renewal_at) : null,
+  };
+}
+
+function normalizeRewardAchievement(raw: any): RewardAchievement {
+  return {
+    key: String(raw?.key ?? "").trim(),
+    title: String(raw?.title ?? "").trim(),
+    description: String(raw?.description ?? "").trim(),
+    reward: String(raw?.reward ?? "").trim(),
+    counter_key: String(raw?.counter_key ?? "evidence_saved").trim() as keyof RewardCounters,
+    current_value: Number(raw?.current_value ?? 0) || 0,
+    target_value: Number(raw?.target_value ?? 0) || 0,
+    progress_pct: Number(raw?.progress_pct ?? 0) || 0,
+    unlocked: Boolean(raw?.unlocked),
+    unlocked_at: raw?.unlocked_at ? String(raw.unlocked_at) : null,
+  };
+}
+
+function normalizeRewardsSummary(raw: any): RewardsSummary {
+  return {
+    counters: {
+      evidence_saved: Number(raw?.counters?.evidence_saved ?? 0) || 0,
+      profile_skills_confirmed: Number(raw?.counters?.profile_skills_confirmed ?? 0) || 0,
+      resume_snapshots_uploaded: Number(raw?.counters?.resume_snapshots_uploaded ?? 0) || 0,
+      job_matches_run: Number(raw?.counters?.job_matches_run ?? 0) || 0,
+      tailored_resumes_generated: Number(raw?.counters?.tailored_resumes_generated ?? 0) || 0,
+    },
+    unlockedCount: Number(raw?.unlocked_count ?? 0) || 0,
+    totalCount: Number(raw?.total_count ?? 0) || 0,
+    achievements: asArray(raw?.achievements).map(normalizeRewardAchievement),
+    nextAchievement: raw?.next_achievement ? normalizeRewardAchievement(raw.next_achievement) : null,
+    recentUnlocks: asArray(raw?.recent_unlocks).map(normalizeRewardAchievement),
   };
 }
 
@@ -719,6 +793,7 @@ export const api = {
     return out ? normalizeAuthUser(out) : null;
   },
   patchMe: async (payload: UserPatch) => normalizeAuthUser(await request<AuthUser>("/auth/me", "PATCH", payload)),
+  activateSubscription: async () => normalizeAuthUser(await request<AuthUser>("/auth/me/subscription", "POST")),
   changeMyPassword: async (payload: { current_password: string; new_password: string }) => {
     const out = await request<AuthOut>("/auth/me/password", "POST", payload);
     out.user = normalizeAuthUser(out.user);
@@ -748,6 +823,19 @@ export const api = {
     form.append("file", payload.file);
     return request<{ snapshot_id: string; preview: string }>(
       "/ingest/resume/pdf",
+      "POST",
+      undefined,
+      {},
+      { body: form }
+    );
+  },
+
+  submitResumeDocx: async (payload: { user_id: string; file: File }) => {
+    const form = new FormData();
+    form.append("user_id", payload.user_id);
+    form.append("file", payload.file);
+    return request<{ snapshot_id: string; preview: string }>(
+      "/ingest/resume/docx",
       "POST",
       undefined,
       {},
@@ -1026,6 +1114,10 @@ export const api = {
         created_at: entry?.created_at,
       })),
     };
+  },
+  getRewardsSummary: async (): Promise<RewardsSummary> => {
+    const raw = await request<any>("/rewards/summary", "GET");
+    return normalizeRewardsSummary(raw);
   },
 
   listRoles: () => request<any[]>("/roles/", "GET"),

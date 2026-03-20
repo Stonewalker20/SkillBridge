@@ -2,6 +2,7 @@
 
 from io import BytesIO
 from bson import ObjectId
+from docx import Document
 
 
 def _create_confirmation_and_evidence(client, headers, user_id, skill_python, skill_ml):
@@ -28,6 +29,19 @@ def _create_confirmation_and_evidence(client, headers, user_id, skill_python, sk
             "source": "manual-entry",
             "text_excerpt": "Built Python ML dashboards and APIs.",
             "skill_ids": [skill_python, skill_ml],
+            "origin": "user",
+        },
+    )
+    client.post(
+        "/evidence/",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "type": "project",
+            "title": "Reporting API",
+            "source": "manual-entry",
+            "text_excerpt": "Implemented reporting APIs, analytics data flows, and stakeholder-ready dashboards.",
+            "skill_ids": [skill_python],
             "origin": "user",
         },
     )
@@ -182,17 +196,17 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     compare = client.get("/tailor/history/compare", headers=headers, params={"user_id": user_id, "left_id": history_id, "right_id": history_id})
     assert compare.status_code == 200
 
-    settings = client.get("/tailor/settings/status")
+    settings = client.get("/tailor/settings/status", headers=headers)
     assert settings.status_code == 200
     assert settings.json()["provider_mode"] == "test"
 
-    rewrite = client.post(f"/tailor/{tailored_id}/rewrite", json={"focus": "ats"})
+    rewrite = client.post(f"/tailor/{tailored_id}/rewrite", headers=headers, json={"focus": "ats"})
     assert rewrite.status_code == 200
 
-    docx = client.get(f"/tailor/{tailored_id}/export/docx")
+    docx = client.get(f"/tailor/{tailored_id}/export/docx", headers=headers)
     assert docx.status_code == 200
 
-    pdf = client.get(f"/tailor/{tailored_id}/export/pdf")
+    pdf = client.get(f"/tailor/{tailored_id}/export/pdf", headers=headers)
     assert pdf.status_code == 200
 
     delete_history = client.delete(f"/tailor/history/{history_id}", headers=headers, params={"user_id": user_id})
@@ -252,6 +266,19 @@ def test_tailored_resume_uses_user_resume_template_and_ai_preferences(test_conte
             "origin": "user",
         },
     )
+    client.post(
+        "/evidence/",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "type": "project",
+            "title": "Reporting API",
+            "source": "manual-entry",
+            "text_excerpt": "Implemented reporting APIs, analytics data flows, and stakeholder-ready dashboards.",
+            "skill_ids": [test_context["skill_python"]],
+            "origin": "user",
+        },
+    )
 
     ai_settings = client.get("/tailor/settings/preferences", headers=headers)
     assert ai_settings.status_code == 200
@@ -286,23 +313,192 @@ def test_tailored_resume_uses_user_resume_template_and_ai_preferences(test_conte
     preview = client.post(
         "/tailor/preview",
         headers=headers,
-        json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id},
+        json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id, "template": "modern_v1"},
     )
     assert preview.status_code == 200
     payload = preview.json()
     assert payload["resume_snapshot_id"] == snapshot_id
     assert payload["template_source"] == "user_resume"
+    assert payload["template"] == "modern_v1"
     assert payload["retrieved_context"]
+    assert len(payload["selected_item_ids"]) >= 2
     section_titles = [section["title"] for section in payload["sections"]]
-    assert "Summary" in section_titles
+    assert "Profile" in section_titles
     assert "Education" in section_titles
-    assert any(section["title"] == "Targeted Highlights" for section in payload["sections"])
-    summary_section = next(section for section in payload["sections"] if section["title"] == "Summary")
+    assert any(section["title"] == "Selected Impact" for section in payload["sections"])
+    summary_section = next(section for section in payload["sections"] if section["title"] == "Profile")
     assert any("Analytics Engineer at SkillBridge" in line for line in summary_section["lines"])
+    assert any(
+        line.startswith("- Rewritten (impact):")
+        for section in payload["sections"]
+        for line in section["lines"]
+    )
+
+    ats_preview = client.post(
+        "/tailor/preview",
+        headers=headers,
+        json={"user_id": user_id, "job_id": job_id, "resume_snapshot_id": snapshot_id, "template": "ats_v1"},
+    )
+    assert ats_preview.status_code == 200
+    ats_payload = ats_preview.json()
+    assert any(
+        line.startswith("- Rewritten (ats):")
+        for section in ats_payload["sections"]
+        for line in section["lines"]
+    )
 
     stored_resume = next(doc for doc in db["tailored_resumes"].docs if str(doc["_id"]) == payload["id"])
     assert str(stored_resume["resume_snapshot_id"]) == snapshot_id
     assert stored_resume["template_source"] == "user_resume"
+    assert stored_resume["template"] == "modern_v1"
+
+    rewrite = client.post(f"/tailor/{payload['id']}/rewrite", headers=headers, json={"focus": "ats"})
+    assert rewrite.status_code == 200
+    assert rewrite.json()["rewritten_count"] > 0
+
+
+def test_tailored_resume_can_reword_uploaded_resume_without_changing_section_layout(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    user_id = test_context["user_id"]
+    db = test_context["db"]
+
+    resume_text = "\n".join(
+        [
+            "Taylor Candidate",
+            "SUMMARY",
+            "Product-minded engineer with strong analytics communication.",
+            "SKILLS",
+            "Python, SQL, Dashboards",
+            "EXPERIENCE",
+            "Analytics Engineer Intern",
+            "- Built internal dashboards for operations teams.",
+            "- Delivered API endpoints for reporting workflows.",
+            "EDUCATION",
+            "BS Computer Science",
+        ]
+    )
+    ingest = client.post("/ingest/resume/text", headers=headers, json={"user_id": user_id, "text": resume_text})
+    assert ingest.status_code == 200
+    snapshot_id = ingest.json()["snapshot_id"]
+
+    job = client.post(
+        "/tailor/job/ingest",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "title": "Analytics Platform Engineer",
+            "company": "SkillBridge",
+            "location": "Remote",
+            "text": "Need strong dashboard delivery, analytics APIs, stakeholder communication, and Python experience." * 2,
+        },
+    )
+    assert job.status_code == 200
+
+    preview = client.post(
+        "/tailor/preview",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "job_id": job.json()["id"],
+            "resume_snapshot_id": snapshot_id,
+            "template": "uploaded_resume_reword_v1",
+        },
+    )
+    assert preview.status_code == 200
+    payload = preview.json()
+    section_titles = [section["title"] for section in payload["sections"]]
+    assert section_titles == ["Header", "Summary", "Skills", "Experience", "Education"]
+    assert "Targeted Highlights" not in section_titles
+    assert payload["plain_text"].startswith("Taylor Candidate\nSUMMARY\n")
+    assert "HEADER\n" not in payload["plain_text"]
+    experience_section = next(section for section in payload["sections"] if section["title"] == "Experience")
+    assert any(line.startswith("- Rewritten (balanced):") for line in experience_section["lines"])
+    assert payload["template"] == "uploaded_resume_reword_v1"
+
+    stored_resume = next(doc for doc in db["tailored_resumes"].docs if str(doc["_id"]) == payload["id"])
+    assert stored_resume["template"] == "uploaded_resume_reword_v1"
+    assert stored_resume["plain_text"].startswith("Taylor Candidate\nSUMMARY\n")
+
+    rewrite = client.post(f"/tailor/{payload['id']}/rewrite", headers=headers, json={"focus": "ats"})
+    assert rewrite.status_code == 200
+    assert "- Rewritten (ats):" in rewrite.json()["plain_text"]
+
+    docx = client.get(f"/tailor/{payload['id']}/export/docx", headers=headers)
+    assert docx.status_code == 200
+
+    pdf = client.get(f"/tailor/{payload['id']}/export/pdf", headers=headers)
+    assert pdf.status_code == 200
+
+
+def test_tailored_resume_can_preserve_editable_docx_formatting(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    user_id = test_context["user_id"]
+
+    source_doc = Document()
+    source_doc.add_paragraph("Taylor Candidate")
+    source_doc.add_paragraph("SUMMARY")
+    source_doc.add_paragraph("Product-minded engineer with strong analytics communication.")
+    source_doc.add_paragraph("EXPERIENCE")
+    source_doc.add_paragraph("Analytics Engineer Intern")
+    source_doc.add_paragraph("Built internal dashboards for operations teams.", style="List Bullet")
+    source_doc.add_paragraph("Delivered API endpoints for reporting workflows.", style="List Bullet")
+    buffer = BytesIO()
+    source_doc.save(buffer)
+    buffer.seek(0)
+
+    ingest = client.post(
+        "/ingest/resume/docx",
+        headers=headers,
+        files={
+            "file": (
+                "resume.docx",
+                buffer.getvalue(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+        data={"user_id": user_id},
+    )
+    assert ingest.status_code == 200
+    snapshot_id = ingest.json()["snapshot_id"]
+
+    job = client.post(
+        "/tailor/job/ingest",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "title": "Analytics Platform Engineer",
+            "company": "SkillBridge",
+            "location": "Remote",
+            "text": "Need strong dashboard delivery, analytics APIs, stakeholder communication, and Python experience." * 2,
+        },
+    )
+    assert job.status_code == 200
+
+    preview = client.post(
+        "/tailor/preview",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "job_id": job.json()["id"],
+            "resume_snapshot_id": snapshot_id,
+            "template": "uploaded_resume_reword_v1",
+        },
+    )
+    assert preview.status_code == 200
+    tailored_id = preview.json()["id"]
+
+    rewrite = client.post(f"/tailor/{tailored_id}/rewrite", headers=headers, json={"focus": "ats"})
+    assert rewrite.status_code == 200
+
+    exported = client.get(f"/tailor/{tailored_id}/export/docx", headers=headers)
+    assert exported.status_code == 200
+
+    exported_doc = Document(BytesIO(exported.content))
+    list_paragraphs = [paragraph for paragraph in exported_doc.paragraphs if str(getattr(paragraph.style, "name", "")).startswith("List")]
+    assert len(list_paragraphs) >= 2
+    assert any("Rewritten (ats):" in paragraph.text for paragraph in list_paragraphs)
 
 
 def test_job_match_required_coverage_and_missing_skills_are_populated(test_context):

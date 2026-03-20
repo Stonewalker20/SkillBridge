@@ -171,6 +171,13 @@ Frontend URL:
 
 The Vite dev server proxies `/api/*` requests to the backend at `http://localhost:8000`.
 
+Frontend quality commands:
+
+```bash
+npm run lint
+npm test
+```
+
 ## First-Run Checklist
 
 After both services are up:
@@ -232,6 +239,14 @@ pytest -q
 ```
 
 The current backend tests cover route surface validation plus major API flows including auth, admin access, dashboard, skills, evidence, projects, portfolio, and tailoring endpoints.
+
+Run the frontend baseline checks:
+
+```bash
+cd frontend
+npm run lint
+npm test
+```
 
 ## Local Transformer Inference
 

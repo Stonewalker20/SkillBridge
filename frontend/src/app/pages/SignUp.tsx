@@ -52,7 +52,7 @@ export function SignUp() {
     try {
       await signup(formData.username, formData.email, formData.password);
       setShowSuccessDialog(true);
-    } catch (error) {
+    } catch (_error) {
       toast.error("Failed to create account. Please try again.");
     } finally {
       setLoading(false);

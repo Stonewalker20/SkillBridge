@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Briefcase, Database, RefreshCw, Shield, Sparkles, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../components/ui/card";
@@ -25,7 +25,7 @@ export function Admin() {
   const [deactivatingUserId, setDeactivatingUserId] = useState("");
   const [moderatingJobId, setModeratingJobId] = useState("");
 
-  const load = async (status = jobFilter) => {
+  const load = useCallback(async (status = jobFilter) => {
     setLoading(true);
     try {
       const [summaryData, userData, jobData] = await Promise.all([
@@ -41,11 +41,11 @@ export function Admin() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [jobFilter]);
 
   useEffect(() => {
-    load(jobFilter);
-  }, [jobFilter]);
+    void load();
+  }, [load]);
 
   const collectionRows = useMemo(
     () => Object.entries(summary?.collections ?? {}).sort((a, b) => a[0].localeCompare(b[0])),

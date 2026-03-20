@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { api, type Evidence, type EvidenceAnalysis } from "../services/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, type Evidence as EvidenceRecord, type EvidenceAnalysis, type RewardsSummary } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
 import { Card } from "../components/ui/card";
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Checkbox } from "../components/ui/checkbox";
 import { Plus, ExternalLink, FileText, Upload, ScanSearch, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { useHeaderTheme } from "../lib/headerTheme";
 
 const EVIDENCE_TYPES = [
@@ -29,6 +29,14 @@ const DRAFT_TEXT_COLLAPSED_ROWS = 8;
 const DRAFT_TEXT_EXPANDED_ROWS = 18;
 
 type AnalysisSelectionMap = Record<string, string[]>;
+
+const REWARD_ACTIONS: Record<string, { href: string; label: string }> = {
+  evidence_saved: { href: "/app/evidence", label: "Add another" },
+  profile_skills_confirmed: { href: "/app/skills", label: "Confirm skills" },
+  resume_snapshots_uploaded: { href: "/app/jobs", label: "Upload resume" },
+  job_matches_run: { href: "/app/jobs", label: "Run job match" },
+  tailored_resumes_generated: { href: "/app/jobs", label: "Generate resume" },
+};
 
 function errMsg(error: any) {
   return String(error?.message || error || "Unknown error");
@@ -48,9 +56,10 @@ export function Evidence() {
   const { recordActivity } = useActivity();
   const { activeHeaderTheme } = useHeaderTheme();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [items, setItems] = useState<Evidence[]>([]);
+  const [items, setItems] = useState<EvidenceRecord[]>([]);
   const [skillNameById, setSkillNameById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [rewards, setRewards] = useState<RewardsSummary | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -72,16 +81,16 @@ export function Evidence() {
   const [analysisTextVisibleChars, setAnalysisTextVisibleChars] = useState<Record<string, number>>({});
   const [isDraftTextExpanded, setIsDraftTextExpanded] = useState(false);
 
-  const loadEvidence = async () => {
+  const loadEvidence = useCallback(async () => {
     if (!user?.id) {
       setItems([]);
       return;
     }
     const rows = await api.listEvidence({ user_id: user.id, origin: "user" });
     setItems(Array.isArray(rows) ? rows : []);
-  };
+  }, [user?.id]);
 
-  const loadSkillNames = async () => {
+  const loadSkillNames = useCallback(async () => {
     const allSkills: Awaited<ReturnType<typeof api.listSkills>> = [];
     let skip = 0;
     const limit = 200;
@@ -102,7 +111,7 @@ export function Evidence() {
       next[id] = name;
     }
     setSkillNameById(next);
-  };
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -118,13 +127,17 @@ export function Evidence() {
       }
     };
     fetchData();
-  }, [user?.id]);
+  }, [loadEvidence, loadSkillNames]);
 
   useEffect(() => {
     if (searchParams.get("add") === "1") {
       setIsAddOpen(true);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    api.getRewardsSummary().then(setRewards).catch(() => setRewards(null));
+  }, [items.length]);
 
   const filteredItems = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -469,6 +482,34 @@ export function Evidence() {
           </div>
         </div>
       </div>
+
+      {rewards?.nextAchievement ? (
+        <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next achievement</div>
+              <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">{rewards.nextAchievement.title}</div>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.description}</p>
+              <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+                {rewards.nextAchievement.current_value}/{rewards.nextAchievement.target_value} toward unlock
+              </p>
+              <div className="mt-3 h-2 rounded-full bg-slate-100 dark:bg-slate-800">
+                <div
+                  className={`h-2 rounded-full ${activeHeaderTheme.barClass}`}
+                  style={{ width: `${Math.max(6, rewards.nextAchievement.progress_pct)}%` }}
+                />
+              </div>
+            </div>
+            {REWARD_ACTIONS[rewards.nextAchievement.counter_key] ? (
+              <Button asChild className={activeHeaderTheme.buttonClass}>
+                <Link to={REWARD_ACTIONS[rewards.nextAchievement.counter_key].href}>
+                  {REWARD_ACTIONS[rewards.nextAchievement.counter_key].label}
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-3">

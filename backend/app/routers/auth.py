@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from bson import ObjectId
 from pathlib import Path
@@ -13,6 +14,7 @@ from app.core.auth import (
     verify_password,
     create_session,
     require_user,
+    has_subscription_access,
     now_utc,
 )
 from app.models.auth import RegisterIn, LoginIn, AuthOut, UserOut, UserPatch, PasswordChangeIn
@@ -37,9 +39,18 @@ AVATAR_PRESETS = {
     "orchid",
 }
 ALLOWED_AVATAR_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+SUBSCRIPTION_DEFAULT_PLAN = "pro"
+SUBSCRIPTION_DEFAULT_STATUS = "inactive"
 
 
 def serialize_user_out(user: dict) -> UserOut:
+    subscription_status = str(user.get("subscription_status") or SUBSCRIPTION_DEFAULT_STATUS).strip().lower() or SUBSCRIPTION_DEFAULT_STATUS
+    subscription_plan = str(user.get("subscription_plan") or "").strip() or None
+    if has_subscription_access(user):
+        subscription_status = "active"
+        subscription_plan = subscription_plan or "admin"
+    elif subscription_status == "active" and not subscription_plan:
+        subscription_plan = SUBSCRIPTION_DEFAULT_PLAN
     return UserOut(
         id=oid_str(user["_id"]),
         email=user["email"],
@@ -47,6 +58,10 @@ def serialize_user_out(user: dict) -> UserOut:
         role=user.get("role", "user"),
         avatar_url=str(user.get("avatar_url") or "").strip() or None,
         avatar_preset=str(user.get("avatar_preset") or "").strip() or None,
+        subscription_status=subscription_status,
+        subscription_plan=subscription_plan,
+        subscription_started_at=user.get("subscription_started_at"),
+        subscription_renewal_at=user.get("subscription_renewal_at"),
     )
 
 
@@ -101,6 +116,10 @@ async def register(payload: RegisterIn):
         "role": bootstrap_role_for_email(payload.email),
         "is_active": True,
         "avatar_preset": "midnight",
+        "subscription_status": SUBSCRIPTION_DEFAULT_STATUS,
+        "subscription_plan": None,
+        "subscription_started_at": None,
+        "subscription_renewal_at": None,
         "created_at": now_utc(),
     }
 
@@ -174,6 +193,33 @@ async def patch_me(payload: UserPatch, user=Depends(require_user)):
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")
 
+    return serialize_user_out(updated)
+
+
+@router.post("/me/subscription", response_model=UserOut)
+async def activate_subscription(user=Depends(require_user)):
+    db = get_db()
+    current_status = str(user.get("subscription_status") or SUBSCRIPTION_DEFAULT_STATUS).strip().lower()
+    if has_subscription_access(user) and current_status == "active":
+        return serialize_user_out(user)
+
+    activated_at = now_utc()
+    renewal_at = activated_at + timedelta(days=30)
+    await db["users"].update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {
+                "subscription_status": "active",
+                "subscription_plan": SUBSCRIPTION_DEFAULT_PLAN,
+                "subscription_started_at": user.get("subscription_started_at") or activated_at,
+                "subscription_renewal_at": renewal_at,
+                "updated_at": activated_at,
+            }
+        },
+    )
+    updated = await db["users"].find_one({"_id": user["_id"]})
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
     return serialize_user_out(updated)
 
 

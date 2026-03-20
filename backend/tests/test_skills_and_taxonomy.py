@@ -20,21 +20,22 @@ def test_skill_crud_and_taxonomy_routes(test_context):
     assert created.status_code == 200
     skill_id = created.json()["id"]
 
-    updated = client.patch(f"/skills/{skill_id}", json={"aliases": ["Fast APIs"], "proficiency": 4})
+    updated = client.patch(f"/skills/{skill_id}", headers=headers, json={"aliases": ["Fast APIs"], "proficiency": 4})
     assert updated.status_code == 200
     assert updated.json()["proficiency"] == 4
 
-    aliases = client.put(f"/taxonomy/aliases/{skill_id}", json={"aliases": ["fastapi", "fast apis"]})
+    aliases = client.put(f"/taxonomy/aliases/{skill_id}", headers=headers, json={"aliases": ["fastapi", "fast apis"]})
     assert aliases.status_code == 200
     assert aliases.json()["aliases"]
 
     relation = client.post(
         "/taxonomy/relations",
+        headers=headers,
         json={"from_skill_id": test_context["skill_python"], "to_skill_id": skill_id, "relation_type": "related_to"},
     )
     assert relation.status_code == 200
 
-    relations = client.get("/taxonomy/relations", params={"skill_id": test_context["skill_python"]})
+    relations = client.get("/taxonomy/relations", headers=headers, params={"skill_id": test_context["skill_python"]})
     assert relations.status_code == 200
     assert len(relations.json()) == 1
 
@@ -48,6 +49,7 @@ def test_skill_crud_and_taxonomy_routes(test_context):
 
     relation_two = client.post(
         "/taxonomy/relations",
+        headers=headers,
         json={"from_skill_id": skill_id, "to_skill_id": mlops_id, "relation_type": "related_to"},
     )
     assert relation_two.status_code == 200
@@ -67,7 +69,11 @@ def test_skill_crud_and_taxonomy_routes(test_context):
         }
     )
 
-    graph = client.get(f"/taxonomy/graph/{test_context['skill_python']}", params={"depth": 2, "limit": 5, "include_inferred": "true"})
+    graph = client.get(
+        f"/taxonomy/graph/{test_context['skill_python']}",
+        headers=headers,
+        params={"depth": 2, "limit": 5, "include_inferred": "true"},
+    )
     assert graph.status_code == 200
     payload = graph.json()
     assert payload["root_skill_id"] == test_context["skill_python"]
@@ -83,6 +89,7 @@ def test_skill_crud_and_taxonomy_routes(test_context):
 
 def test_skill_extraction_and_gap_endpoints(test_context):
     client = test_context["client"]
+    headers = test_context["headers"]
     db = test_context["db"]
 
     snapshot_id = db["resume_snapshots"].docs[0]["_id"] if db["resume_snapshots"].docs else None
@@ -97,12 +104,12 @@ def test_skill_extraction_and_gap_endpoints(test_context):
         )
         snapshot_id = db["resume_snapshots"].docs[0]["_id"]
 
-    extracted = client.post(f"/skills/extract/skills/{snapshot_id}")
+    extracted = client.post(f"/skills/extract/skills/{snapshot_id}", headers=headers)
     assert extracted.status_code == 200
     assert extracted.json()["extracted"]
     assert all(0.0 <= float(item["confidence"]) <= 1.0 for item in extracted.json()["extracted"])
 
-    gaps = client.get("/skills/gaps")
+    gaps = client.get("/skills/gaps", headers=headers)
     assert gaps.status_code == 200
     assert isinstance(gaps.json(), list)
 

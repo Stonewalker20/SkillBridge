@@ -15,6 +15,7 @@ def test_auth_register_login_profile_and_logout(test_context):
     )
     assert register.status_code == 200
     token = register.json()["token"]
+    assert register.json()["user"]["subscription_status"] == "inactive"
 
     login = client.post("/auth/login", json={"email": "newuser@example.com", "password": "password123"})
     assert login.status_code == 200
@@ -57,6 +58,32 @@ def test_auth_register_login_profile_and_logout(test_context):
 
     delete = client.delete("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert delete.status_code == 401
+
+
+def test_subscription_activation_unlocks_core_routes(test_context):
+    client = test_context["client"]
+    register = client.post(
+        "/auth/register",
+        json={"email": "locked@example.com", "username": "lockeduser", "password": "password123"},
+    )
+    assert register.status_code == 200
+    auth_headers = {"Authorization": f"Bearer {register.json()['token']}"}
+
+    me = client.get("/auth/me", headers=auth_headers)
+    assert me.status_code == 200
+    assert me.json()["subscription_status"] == "inactive"
+
+    locked_dashboard = client.get("/dashboard/summary", headers=auth_headers)
+    assert locked_dashboard.status_code == 402
+    assert locked_dashboard.json()["detail"] == "Subscription required"
+
+    activated = client.post("/auth/me/subscription", headers=auth_headers)
+    assert activated.status_code == 200
+    assert activated.json()["subscription_status"] == "active"
+    assert activated.json()["subscription_plan"] == "pro"
+
+    unlocked_dashboard = client.get("/dashboard/summary", headers=auth_headers)
+    assert unlocked_dashboard.status_code == 200
 
 
 def test_deactivated_user_cannot_login_or_use_existing_session(test_context):

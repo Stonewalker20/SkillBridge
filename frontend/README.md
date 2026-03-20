@@ -1,11 +1,20 @@
+# Frontend
 
-  # Proj1
+React + Vite client for SkillBridge.
 
-  This is a code bundle for Proj1. The original project is available at https://www.figma.com/design/uMCgarStfzdzOOB183R4Mx/Proj1.
+## Scripts
 
-  ## Running the code
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run lint:fix
+npm test
+npm run test:watch
+```
 
-  Run `npm i` to install the dependencies.
+## Notes
 
-  Run `npm run dev` to start the development server.
-  
+- The workspace uses npm, backed by `package-lock.json`.
+- The lint setup is flat-config based in `eslint.config.js`.
+- Vitest runs in Node for the current baseline smoke test.
