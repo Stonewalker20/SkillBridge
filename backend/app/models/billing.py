@@ -6,6 +6,22 @@ from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel
+from typing import List
+
+
+class BillingPlanOut(BaseModel):
+    key: str
+    label: str
+    price_monthly: int
+    price_display: str
+    description: str
+    features: List[str]
+    recommended: bool = False
+    checkout_available: bool = False
+
+
+class BillingCheckoutIn(BaseModel):
+    plan: Optional[str] = None
 
 
 class BillingStatusOut(BaseModel):
@@ -17,10 +33,12 @@ class BillingStatusOut(BaseModel):
     dev_fallback_available: bool = False
     message: str = ""
     subscription_status: str = "inactive"
+    current_plan: Optional[str] = None
     billing_provider: Optional[str] = None
     stripe_customer_id: Optional[str] = None
     stripe_subscription_id: Optional[str] = None
     stripe_checkout_session_id: Optional[str] = None
+    plans: List[BillingPlanOut] = []
 
 
 class BillingCheckoutOut(BaseModel):

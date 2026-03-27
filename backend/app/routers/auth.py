@@ -19,7 +19,7 @@ from app.core.auth import (
     now_utc,
     normalize_exp,
 )
-from app.models.auth import RegisterIn, LoginIn, AuthOut, UserOut, UserPatch, PasswordChangeIn
+from app.models.auth import RegisterIn, LoginIn, AuthOut, UserOut, UserPatch, PasswordChangeIn, SubscriptionActivateIn
 from app.utils.mongo import oid_str
 from app.utils.media_storage import avatar_storage_key_from_user, get_avatar_storage_provider
 from app.utils.security import AUTH_RATE_LIMITS, build_rate_limit_identifier, enforce_rate_limit
@@ -45,6 +45,7 @@ AVATAR_PRESETS = {
 ALLOWED_AVATAR_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 SUBSCRIPTION_DEFAULT_PLAN = "pro"
 SUBSCRIPTION_DEFAULT_STATUS = "inactive"
+SUBSCRIPTION_PLAN_KEYS = {"starter", "pro", "elite"}
 
 
 def serialize_user_out(user: dict) -> UserOut:
@@ -239,7 +240,7 @@ async def patch_me(payload: UserPatch, user=Depends(require_user)):
 
 
 @router.post("/me/subscription", response_model=UserOut)
-async def activate_subscription(request: Request, user=Depends(require_user)):
+async def activate_subscription(payload: SubscriptionActivateIn, request: Request, user=Depends(require_user)):
     db = get_db()
     await enforce_rate_limit(
         db,
@@ -258,6 +259,10 @@ async def activate_subscription(request: Request, user=Depends(require_user)):
             detail="Mock subscription activation is only available in development. Use billing checkout in staging or production.",
         )
 
+    requested_plan = str(payload.plan or SUBSCRIPTION_DEFAULT_PLAN).strip().lower() or SUBSCRIPTION_DEFAULT_PLAN
+    if requested_plan not in SUBSCRIPTION_PLAN_KEYS:
+        raise HTTPException(status_code=400, detail="Invalid subscription plan.")
+
     activated_at = now_utc()
     renewal_at = activated_at + timedelta(days=30)
     await db["users"].update_one(
@@ -265,7 +270,7 @@ async def activate_subscription(request: Request, user=Depends(require_user)):
         {
             "$set": {
                 "subscription_status": "active",
-                "subscription_plan": SUBSCRIPTION_DEFAULT_PLAN,
+                "subscription_plan": requested_plan,
                 "subscription_started_at": user.get("subscription_started_at") or activated_at,
                 "subscription_renewal_at": renewal_at,
                 "billing_provider": "mock",
@@ -334,6 +339,8 @@ async def upload_avatar(request: Request, file: UploadFile = File(...), user=Dep
         limit=AUTH_RATE_LIMITS["avatar_upload"][0],
         window_seconds=AUTH_RATE_LIMITS["avatar_upload"][1],
     )
+    if not has_subscription_access(user):
+        raise HTTPException(status_code=402, detail="Active subscription required for profile image uploads")
 
     filename = str(file.filename or "").strip()
     suffix = Path(filename).suffix.lower()

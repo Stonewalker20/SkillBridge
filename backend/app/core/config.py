@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_price_id: str = ""
+    stripe_price_id_starter: str = ""
+    stripe_price_id_pro: str = ""
+    stripe_price_id_elite: str = ""
     stripe_currency: str = "usd"
     stripe_success_url: str = ""
     stripe_cancel_url: str = ""
@@ -62,7 +65,16 @@ class Settings(BaseSettings):
 
     @property
     def stripe_configured(self) -> bool:
-        return bool(self.stripe_secret_key.strip() and self.stripe_price_id.strip())
+        return bool(self.stripe_secret_key.strip() and self.stripe_price_ids)
+
+    @property
+    def stripe_price_ids(self) -> dict[str, str]:
+        price_ids = {
+            "starter": self.stripe_price_id_starter.strip(),
+            "pro": (self.stripe_price_id_pro or self.stripe_price_id).strip(),
+            "elite": self.stripe_price_id_elite.strip(),
+        }
+        return {plan: price_id for plan, price_id in price_ids.items() if price_id}
 
     @property
     def stripe_billing_enabled(self) -> bool:

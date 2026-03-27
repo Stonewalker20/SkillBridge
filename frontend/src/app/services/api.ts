@@ -190,6 +190,16 @@ export type AuthUser = {
 };
 export type AuthOut = { token: string; user: AuthUser };
 export type UserPatch = { email?: string; username?: string; avatar_preset?: string | null };
+export type BillingPlan = {
+  key: string;
+  label: string;
+  price_monthly: number;
+  price_display: string;
+  description: string;
+  features: string[];
+  recommended: boolean;
+  checkout_available: boolean;
+};
 export type BillingStatus = {
   provider: string;
   mode: string;
@@ -199,10 +209,12 @@ export type BillingStatus = {
   dev_fallback_available: boolean;
   message: string;
   subscription_status: string;
+  current_plan?: string | null;
   billing_provider?: string | null;
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
   stripe_checkout_session_id?: string | null;
+  plans?: BillingPlan[];
 };
 export type BillingCheckoutSession = {
   provider: string;
@@ -1060,9 +1072,11 @@ export const api = {
     return out ? normalizeAuthUser(out) : null;
   },
   patchMe: async (payload: UserPatch) => normalizeAuthUser(await request<AuthUser>("/auth/me", "PATCH", payload)),
-  activateSubscription: async () => normalizeAuthUser(await request<AuthUser>("/auth/me/subscription", "POST")),
+  activateSubscription: async (plan?: string | null) =>
+    normalizeAuthUser(await request<AuthUser>("/auth/me/subscription", "POST", plan ? { plan } : {})),
   getBillingStatus: async () => request<BillingStatus>("/billing/status", "GET"),
-  createBillingCheckout: async () => request<BillingCheckoutSession>("/billing/checkout", "POST"),
+  createBillingCheckout: async (plan?: string | null) =>
+    request<BillingCheckoutSession>("/billing/checkout", "POST", plan ? { plan } : {}),
   createBillingPortal: async () => request<BillingPortalSession>("/billing/portal", "POST"),
   changeMyPassword: async (payload: { current_password: string; new_password: string }) => {
     const out = await request<AuthOut>("/auth/me/password", "POST", payload);

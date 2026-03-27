@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from app.core.auth import has_subscription_access, now_utc, require_user
 from app.core.config import settings
 from app.core.db import get_db
-from app.models.billing import BillingCheckoutOut, BillingPortalOut, BillingStatusOut, BillingWebhookAck
+from app.models.billing import BillingCheckoutIn, BillingCheckoutOut, BillingPlanOut, BillingPortalOut, BillingStatusOut, BillingWebhookAck
 from app.utils.mongo import oid_str
 
 try:  # pragma: no cover - optional dependency until Stripe is installed in the runtime.
@@ -20,6 +20,48 @@ except Exception:  # pragma: no cover - keep local development and tests working
     stripe_sdk = None
 
 router = APIRouter()
+
+BILLING_PLANS: list[dict[str, object]] = [
+    {
+        "key": "starter",
+        "label": "Starter",
+        "price_monthly": 9,
+        "price_display": "$9/mo",
+        "description": "Core job-match workflows for individual users who want the essentials unlocked.",
+        "features": [
+            "Access to evidence, skills, jobs, and tailored resumes",
+            "Standard workspace customization",
+            "Profile image upload",
+        ],
+        "recommended": False,
+    },
+    {
+        "key": "pro",
+        "label": "Pro",
+        "price_monthly": 19,
+        "price_display": "$19/mo",
+        "description": "Balanced tier for active job seekers who want the full SkillBridge workflow.",
+        "features": [
+            "Everything in Starter",
+            "Priority billing support",
+            "Best default plan for most users",
+        ],
+        "recommended": True,
+    },
+    {
+        "key": "elite",
+        "label": "Elite",
+        "price_monthly": 39,
+        "price_display": "$39/mo",
+        "description": "Highest tier for power users who want the strongest support and flexibility.",
+        "features": [
+            "Everything in Pro",
+            "Highest-priority support",
+            "Best fit for heavy weekly usage",
+        ],
+        "recommended": False,
+    },
+]
 
 
 def _billing_mode() -> str:
@@ -35,13 +77,39 @@ def _billing_message() -> str:
         return "Stripe checkout is ready."
     if stripe_sdk is None:
         return "Stripe billing is unavailable until the stripe package is installed on the backend."
-    if not settings.stripe_secret_key.strip() and not settings.stripe_price_id.strip():
-        return "Stripe billing is not configured. Set STRIPE_SECRET_KEY and STRIPE_PRICE_ID."
+    if not settings.stripe_secret_key.strip() and not settings.stripe_price_ids:
+        return "Stripe billing is not configured. Set STRIPE_SECRET_KEY and at least one STRIPE_PRICE_ID_* value."
     if not settings.stripe_secret_key.strip():
         return "Stripe billing is missing STRIPE_SECRET_KEY."
-    if not settings.stripe_price_id.strip():
-        return "Stripe billing is missing STRIPE_PRICE_ID."
+    if not settings.stripe_price_ids:
+        return "Stripe billing is missing a plan price id."
     return "Stripe billing is not ready."
+
+
+def _billing_plan_catalog() -> list[BillingPlanOut]:
+    configured = settings.stripe_configured and stripe_sdk is not None
+    price_ids = settings.stripe_price_ids
+    return [
+        BillingPlanOut(
+            key=str(plan["key"]),
+            label=str(plan["label"]),
+            price_monthly=int(plan["price_monthly"]),
+            price_display=str(plan["price_display"]),
+            description=str(plan["description"]),
+            features=[str(feature) for feature in plan["features"]],
+            recommended=bool(plan.get("recommended")),
+            checkout_available=bool(configured and price_ids.get(str(plan["key"]))),
+        )
+        for plan in BILLING_PLANS
+    ]
+
+
+def _normalize_plan_key(plan: str | None, fallback: str = "pro") -> str:
+    value = str(plan or fallback).strip().lower() or fallback
+    plan_keys = {str(plan["key"]) for plan in BILLING_PLANS}
+    if value not in plan_keys:
+        raise HTTPException(status_code=400, detail="Invalid subscription plan.")
+    return value
 
 
 def _user_billing_status(user: dict) -> BillingStatusOut:
@@ -58,10 +126,12 @@ def _user_billing_status(user: dict) -> BillingStatusOut:
         dev_fallback_available=settings.app_env_normalized == "development",
         message=_billing_message(),
         subscription_status=subscription_status,
+        current_plan=str(user.get("subscription_plan") or "").strip() or None,
         billing_provider=str(user.get("billing_provider") or "").strip() or None,
         stripe_customer_id=customer_id,
         stripe_subscription_id=str(user.get("stripe_subscription_id") or "").strip() or None,
         stripe_checkout_session_id=str(user.get("stripe_checkout_session_id") or "").strip() or None,
+        plans=_billing_plan_catalog(),
     )
 
 
@@ -79,14 +149,26 @@ def _renewal_from_now(days: int = 30) -> datetime:
     return now_utc() + timedelta(days=days)
 
 
-async def _create_stripe_checkout(user: dict, success_url: str, cancel_url: str) -> BillingCheckoutOut:
+async def _create_stripe_checkout(user: dict, success_url: str, cancel_url: str, plan_key: str) -> BillingCheckoutOut:
     if not settings.stripe_configured or stripe_sdk is None:
         return BillingCheckoutOut(
             mode=_billing_mode(),
             status="unavailable",
             dev_fallback_available=settings.app_env_normalized == "development",
             subscription_status=str(user.get("subscription_status") or "inactive").strip().lower() or "inactive",
+            plan=plan_key,
             message=_billing_message(),
+        )
+
+    price_id = settings.stripe_price_ids.get(plan_key)
+    if not price_id:
+        return BillingCheckoutOut(
+            mode=_billing_mode(),
+            status="unavailable",
+            dev_fallback_available=settings.app_env_normalized == "development",
+            subscription_status=str(user.get("subscription_status") or "inactive").strip().lower() or "inactive",
+            plan=plan_key,
+            message=f"Stripe billing is not configured for the {plan_key} plan yet.",
         )
 
     stripe_sdk.api_key = settings.stripe_secret_key.strip()
@@ -103,7 +185,7 @@ async def _create_stripe_checkout(user: dict, success_url: str, cancel_url: str)
     session = stripe_sdk.checkout.Session.create(
         mode="subscription",
         customer=customer_id,
-        line_items=[{"price": settings.stripe_price_id.strip(), "quantity": 1}],
+        line_items=[{"price": price_id, "quantity": 1}],
         success_url=success_url,
         cancel_url=cancel_url,
         client_reference_id=oid_str(user["_id"]),
@@ -111,11 +193,13 @@ async def _create_stripe_checkout(user: dict, success_url: str, cancel_url: str)
             "metadata": {
                 "user_id": oid_str(user["_id"]),
                 "user_email": user["email"],
+                "plan": plan_key,
             }
         },
         metadata={
             "user_id": oid_str(user["_id"]),
             "user_email": user["email"],
+            "plan": plan_key,
         },
     )
     updated = await _persist_user_billing(
@@ -135,7 +219,7 @@ async def _create_stripe_checkout(user: dict, success_url: str, cancel_url: str)
         subscription_id=getattr(session, "subscription", None),
         dev_fallback_available=settings.app_env_normalized == "development",
         subscription_status=str(updated.get("subscription_status") or "inactive").strip().lower() or "inactive",
-        plan=str(updated.get("subscription_plan") or "").strip() or None,
+        plan=plan_key,
         renewal_at=updated.get("subscription_renewal_at"),
         message="Checkout session created.",
     )
@@ -216,7 +300,11 @@ async def _handle_webhook_event(event: dict) -> bool:
         return False
 
     subscription_status = str(obj.get("status") or "").strip().lower()
-    subscription_plan = str(user.get("subscription_plan") or "pro").strip() or "pro"
+    metadata = obj.get("metadata") if isinstance(obj.get("metadata"), dict) else {}
+    requested_plan = None
+    if isinstance(metadata, dict):
+        requested_plan = metadata.get("plan")
+    subscription_plan = _normalize_plan_key(requested_plan or user.get("subscription_plan") or "pro")
     if event_type == "checkout.session.completed":
         await _persist_user_billing(
             user["_id"],
@@ -281,7 +369,8 @@ async def billing_status(user=Depends(require_user)):
 
 
 @router.post("/checkout", response_model=BillingCheckoutOut)
-async def create_checkout_session(user=Depends(require_user)):
+async def create_checkout_session(payload: BillingCheckoutIn, user=Depends(require_user)):
+    plan_key = _normalize_plan_key(payload.plan or user.get("subscription_plan") or "pro")
     if has_subscription_access(user):
         return BillingCheckoutOut(
             mode=_billing_mode(),
@@ -290,14 +379,14 @@ async def create_checkout_session(user=Depends(require_user)):
             subscription_id=str(user.get("stripe_subscription_id") or "").strip() or None,
             dev_fallback_available=settings.app_env_normalized == "development",
             subscription_status=str(user.get("subscription_status") or "active").strip().lower() or "active",
-            plan=str(user.get("subscription_plan") or "").strip() or None,
+            plan=str(user.get("subscription_plan") or "").strip() or plan_key,
             renewal_at=user.get("subscription_renewal_at"),
             message="Subscription is already active.",
         )
 
     success_url = settings.stripe_success_url.strip() or f"{settings.public_app_url.rstrip('/')}/app/account?billing=success"
     cancel_url = settings.stripe_cancel_url.strip() or f"{settings.public_app_url.rstrip('/')}/app/account?billing=cancelled"
-    return await _create_stripe_checkout(user, success_url=success_url, cancel_url=cancel_url)
+    return await _create_stripe_checkout(user, success_url=success_url, cancel_url=cancel_url, plan_key=plan_key)
 
 
 @router.post("/portal", response_model=BillingPortalOut)

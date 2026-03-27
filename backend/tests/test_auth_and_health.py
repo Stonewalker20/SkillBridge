@@ -39,6 +39,18 @@ def test_auth_register_login_profile_and_logout(test_context):
     assert preset.json()["avatar_preset"] == "ember"
     assert preset.json()["avatar_url"] is None
 
+    locked_upload = client.post(
+        "/auth/me/avatar",
+        headers=auth_headers,
+        files={"file": ("avatar.png", b"fake-image-content", "image/png")},
+    )
+    assert locked_upload.status_code == 402
+    assert locked_upload.json()["detail"] == "Active subscription required for profile image uploads"
+
+    activated = client.post("/auth/me/subscription", headers=auth_headers, json={"plan": "starter"})
+    assert activated.status_code == 200
+    assert activated.json()["subscription_plan"] == "starter"
+
     uploaded = client.post(
         "/auth/me/avatar",
         headers=auth_headers,
@@ -91,10 +103,14 @@ def test_subscription_activation_unlocks_core_routes(test_context):
     assert unlocked_rewards.status_code == 200
     assert unlocked_rewards.json()["total_count"] >= 1
 
-    activated = client.post("/auth/me/subscription", headers=auth_headers)
+    billing_status = client.get("/billing/status", headers=auth_headers)
+    assert billing_status.status_code == 200
+    assert [plan["key"] for plan in billing_status.json()["plans"]] == ["starter", "pro", "elite"]
+
+    activated = client.post("/auth/me/subscription", headers=auth_headers, json={"plan": "elite"})
     assert activated.status_code == 200
     assert activated.json()["subscription_status"] == "active"
-    assert activated.json()["subscription_plan"] == "pro"
+    assert activated.json()["subscription_plan"] == "elite"
 
     unlocked_dashboard = client.get("/dashboard/summary", headers=auth_headers)
     assert unlocked_dashboard.status_code == 200
