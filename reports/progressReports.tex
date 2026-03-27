@@ -176,191 +176,6 @@
 \clearpage
 
 % =========================================================
-% MIDTERM PRESENTATION
-% =========================================================
-\clearpage
-\section*{Midterm Presentation}
-\addcontentsline{toc}{section}{Midterm Presentation}
-
-\noindent\textbf{Presentation Focus:} System progress to date, current architecture, core database schemas, user-to-data relationships, and representative application screens.
-
-\vspace{0.5em}
-\noindent\textbf{Midterm Summary:}
-At the midpoint of the project, SkillBridge has evolved from a backend proof of concept into a working full-stack platform with authenticated users, evidence ingestion, skill confirmation, dashboard analytics, job match analysis, tailored resume generation, and an admin workspace. The system now supports persistent user accounts, MongoDB-backed workflows, transformer-assisted backend analysis, and a React frontend that exposes the major user flows needed for the final product.
-
-\vspace{0.75em}
-\noindent\textbf{What is Complete at Midterm}
-\begin{itemize}
-  \item User authentication with register, login, session-based access, account management, and role-aware routing.
-  \item Skills workflow including catalog browsing, user confirmations, manual proficiency updates, evidence-backed skill support, and cleanup for duplicate and hidden skills.
-  \item Evidence workflow including pasted text, PDF, DOCX, and multi-file upload analysis with extracted skill review.
-  \item Dashboard workflow including total confirmed skills, evidence totals, average job match score, recent activity, and top categories.
-  \item Job Match workflow including job ingestion, skill extraction, required/preferred coverage, semantic alignment, keyword overlap, history, and reanalysis.
-  \item Tailored resume workflow including preview generation, saved tailored resumes, PDF export, and resume management.
-  \item Admin workflow including user-role management, summary metrics, and job moderation endpoints.
-\end{itemize}
-
-\subsection*{Midterm -- Current Technical Architecture}
-\addcontentsline{toc}{subsection}{Midterm -- Current Technical Architecture}
-\begin{itemize}
-  \item \textbf{Frontend:} React + Vite application with authenticated routes for Dashboard, Skills, Evidence, Job Match, Tailored Resumes, Account, and Admin.
-  \item \textbf{Backend:} FastAPI service exposing REST endpoints for auth, skills, confirmations, evidence, jobs, tailoring, dashboard analytics, portfolio/projects, taxonomy, and admin features.
-  \item \textbf{Database:} MongoDB used for users, sessions, evidence, skills, confirmations, job analyses, tailored resumes, and admin-visible moderation state.
-  \item \textbf{ML / Inference Layer:} Local transformer-backed semantic matching and skill extraction with a fallback local rule/hash path.
-\end{itemize}
-
-\subsection*{Midterm -- Core Database Schemas}
-\addcontentsline{toc}{subsection}{Midterm -- Core Database Schemas}
-
-\begin{table}[H]
-  \renewcommand{\arraystretch}{1.2}
-  \begin{tabularx}{\linewidth}{@{}p{1.5in}Y Y@{}}
-    \toprule
-    \textbf{Collection} & \textbf{Primary Fields} & \textbf{Purpose} \\
-    \midrule
-    users & \_id, email, username, password\_salt, password\_hash, role, ai\_preferences, created\_at & Stores authenticated users, role assignments, and account-level AI model preferences. \\
-    sessions & \_id, user\_id, token, created\_at, expires\_at & Tracks active authenticated sessions for API access. \\
-    skills & \_id, name, category/categories, aliases, tags, hidden, origin, created\_by\_user\_id & Canonical skill catalog used across extraction, confirmation, evidence, and job match analysis. \\
-    resume\_skill\_confirmations & \_id, user\_id, resume\_snapshot\_id, confirmed, rejected, edited, created\_at, updated\_at & Stores user-approved skill state, including confirmed skills and profile-level confirmation history. \\
-    evidence & \_id, user\_id, title, type, source, text\_excerpt, skill\_ids, project\_id, origin, created\_at & Stores evidence artifacts from user text or uploaded files and links them to extracted skills. \\
-    job\_ingests & \_id, user\_id, title, company, location, text, extracted\_skills, keywords, created\_at & Stores normalized job postings before scoring and tailoring. \\
-    job\_match\_runs & \_id, user\_id, job\_id, match\_score, semantic\_alignment\_score, matched\_skills, missing\_skills, analysis, created\_at & Stores computed job-match analysis results and history. \\
-    tailored\_resumes & \_id, user\_id, job\_id, selected\_skill\_ids, selected\_item\_ids, sections, plain\_text, created\_at & Stores generated tailored resume outputs and exportable content. \\
-    portfolio\_items / projects & \_id, user\_id, title, description, skill\_ids, visibility, created\_at & Stores supporting portfolio content linked to skills and evidence-backed experience. \\
-    \bottomrule
-  \end{tabularx}
-\end{table}
-
-\subsection*{Midterm -- User Relationships}
-\addcontentsline{toc}{subsection}{Midterm -- User Relationships}
-
-\begin{table}[H]
-  \renewcommand{\arraystretch}{1.2}
-  \begin{tabularx}{\linewidth}{@{}p{1.7in}YY@{}}
-    \toprule
-    \textbf{Relationship} & \textbf{Stored Through} & \textbf{How It Is Used in the Product} \\
-    \midrule
-    User $\rightarrow$ Sessions & sessions.user\_id & Authenticates requests and controls access to protected pages. \\
-    User $\rightarrow$ Confirmed Skills & resume\_skill\_confirmations.user\_id & Drives the Skills page, dashboard totals, and job matching. \\
-    User $\rightarrow$ Evidence & evidence.user\_id & Connects uploaded or pasted artifacts to extracted and supported skills. \\
-    User $\rightarrow$ Job Analyses & job\_ingests.user\_id and job\_match\_runs.user\_id & Lets each user analyze and revisit job postings independently. \\
-    User $\rightarrow$ Tailored Resumes & tailored\_resumes.user\_id & Stores generated resume outputs tied to a specific user's profile and analysis history. \\
-    User $\rightarrow$ Portfolio / Projects & portfolio\_items.user\_id and projects.user\_id & Connects project evidence and public/private portfolio material to the user's profile. \\
-    User $\rightarrow$ Admin Privileges & users.role & Determines whether the user can access moderation and platform management pages. \\
-    \bottomrule
-  \end{tabularx}
-\end{table}
-
-\subsection*{Midterm -- Representative MongoDB Document Shapes}
-\addcontentsline{toc}{subsection}{Midterm -- Representative MongoDB Document Shapes}
-
-\noindent
-\textbf{users}
-\begin{verbatim}
-{
-  _id: ObjectId("..."),
-  email: "student@example.com",
-  username: "student1",
-  role: "user",
-  ai_preferences: {
-    inference_mode: "auto",
-    embedding_model: "sentence-transformers/all-MiniLM-L6-v2",
-    zero_shot_model: "MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33"
-  },
-  created_at: ISODate("2026-03-01T...")
-}
-\end{verbatim}
-
-\noindent
-\textbf{evidence}
-\begin{verbatim}
-{
-  _id: ObjectId("..."),
-  user_id: ObjectId("..."),
-  title: "Research Internship Report",
-  type: "project",
-  source: "internship_report.pdf",
-  text_excerpt: "<full extracted text>",
-  skill_ids: [ObjectId("..."), ObjectId("...")],
-  origin: "user",
-  created_at: ISODate("2026-03-01T...")
-}
-\end{verbatim}
-
-\noindent
-\textbf{job\_match\_runs}
-\begin{verbatim}
-{
-  _id: ObjectId("..."),
-  user_id: ObjectId("..."),
-  job_id: ObjectId("..."),
-  match_score: 82.4,
-  semantic_alignment_score: 76.1,
-  matched_skills: ["Python", "FastAPI", "MongoDB"],
-  missing_skills: ["SQL", "A/B Testing"],
-  created_at: ISODate("2026-03-02T...")
-}
-\end{verbatim}
-
-\subsection*{Midterm -- System Capabilities Demonstrated}
-\addcontentsline{toc}{subsection}{Midterm -- System Capabilities Demonstrated}
-\begin{itemize}
-  \item End-to-end account creation and authenticated navigation.
-  \item Adding evidence from text and uploaded files.
-  \item Extracting skills from evidence and confirming them to the user profile.
-  \item Viewing skill counts, unsupported skills, and evidence-supported skills.
-  \item Running job analyses and inspecting matched skills, missing skills, semantic alignment, and keyword overlap.
-  \item Generating and storing tailored resumes for later retrieval.
-  \item Viewing site-level administrative information from a role-gated admin workspace.
-\end{itemize}
-
-\subsection*{Midterm -- Presentation Screenshot Placeholders}
-\addcontentsline{toc}{subsection}{Midterm -- Presentation Screenshot Placeholders}
-\noindent
-The repository does not currently contain the actual midterm screenshots. The boxes below are compile-safe placeholders for the presentation draft. Replace them with real screenshots once they are exported.
-
-\begin{figure}[H]
-  \centering
-  \begin{tabular}{cc}
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Dashboard Screenshot\\(current metrics, activity, categories)}} &
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Skills Screenshot\\(confirmed skills, evidence-backed skills, proficiency)}} \\
-    \small Website view: Dashboard & \small Website view: Skills \\
-    \\[0.75em]
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Evidence Screenshot\\(multi-file upload, extracted skills review)}} &
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Job Match Screenshot\\(coverage snapshot, matched/missing skills, semantic alignment)}} \\
-    \small Website view: Evidence & \small Website view: Job Match \\
-  \end{tabular}
-  \caption{Midterm presentation website screenshots to replace with actual captured images.}
-\end{figure}
-
-\begin{figure}[H]
-  \centering
-  \begin{tabular}{cc}
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\users / sessions / role assignments}} &
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\evidence / confirmations / skill links}} \\
-    \small Database view: user data and access control & \small Database view: evidence and skill relations \\
-    \\[0.75em]
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\job\_ingests / job\_match\_runs}} &
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\tailored\_resumes / admin-related collections}} \\
-    \small Database view: job analysis history & \small Database view: tailored outputs and admin state \\
-  \end{tabular}
-  \caption{Midterm presentation database screenshots to replace with actual MongoDB Compass captures.}
-\end{figure}
-
-\subsection*{Midterm -- Recommended Live Demo Sequence}
-\addcontentsline{toc}{subsection}{Midterm -- Recommended Live Demo Sequence}
-\begin{enumerate}
-  \item Register or log in as a standard user.
-  \item Show the Dashboard and explain the metric cards and recent activity.
-  \item Open the Evidence page and analyze text or a file to demonstrate extracted skills.
-  \item Confirm extracted skills on the Skills page and show unsupported confirmed skills.
-  \item Open Job Match, analyze a posting, and explain the score breakdown and semantic alignment.
-  \item Generate a tailored resume and show that it appears on the Tailored Resumes page.
-  \item Log in as an owner/team user and briefly show the Admin workspace.
-  \item Close by showing the MongoDB collections that store the corresponding data.
-\end{enumerate}
-
-% =========================================================
 % WEEK 6 (PR6) -- MOST RECENT
 % =========================================================
 \WeekReport{6}{March 11 -- March 17, 2026}{
@@ -658,6 +473,191 @@ db.jobs.updateOne(
 \addcontentsline{toc}{subsection}{Week 4 -- Video Demonstration}
 \noindent
 Video link: To be added for PR4 delivery.
+
+% =========================================================
+% MIDTERM PRESENTATION
+% =========================================================
+\clearpage
+\section*{Midterm Presentation}
+\addcontentsline{toc}{section}{Midterm Presentation}
+
+\noindent\textbf{Presentation Focus:} System progress to date, current architecture, core database schemas, user-to-data relationships, and representative application screens.
+
+\vspace{0.5em}
+\noindent\textbf{Midterm Summary:}
+At the midpoint of the project, SkillBridge has evolved from a backend proof of concept into a working full-stack platform with authenticated users, evidence ingestion, skill confirmation, dashboard analytics, job match analysis, tailored resume generation, and an admin workspace. The system now supports persistent user accounts, MongoDB-backed workflows, transformer-assisted backend analysis, and a React frontend that exposes the major user flows needed for the final product.
+
+\vspace{0.75em}
+\noindent\textbf{What is Complete at Midterm}
+\begin{itemize}
+  \item User authentication with register, login, session-based access, account management, and role-aware routing.
+  \item Skills workflow including catalog browsing, user confirmations, manual proficiency updates, evidence-backed skill support, and cleanup for duplicate and hidden skills.
+  \item Evidence workflow including pasted text, PDF, DOCX, and multi-file upload analysis with extracted skill review.
+  \item Dashboard workflow including total confirmed skills, evidence totals, average job match score, recent activity, and top categories.
+  \item Job Match workflow including job ingestion, skill extraction, required/preferred coverage, semantic alignment, keyword overlap, history, and reanalysis.
+  \item Tailored resume workflow including preview generation, saved tailored resumes, PDF export, and resume management.
+  \item Admin workflow including user-role management, summary metrics, and job moderation endpoints.
+\end{itemize}
+
+\subsection*{Midterm -- Current Technical Architecture}
+\addcontentsline{toc}{subsection}{Midterm -- Current Technical Architecture}
+\begin{itemize}
+  \item \textbf{Frontend:} React + Vite application with authenticated routes for Dashboard, Skills, Evidence, Job Match, Tailored Resumes, Account, and Admin.
+  \item \textbf{Backend:} FastAPI service exposing REST endpoints for auth, skills, confirmations, evidence, jobs, tailoring, dashboard analytics, portfolio/projects, taxonomy, and admin features.
+  \item \textbf{Database:} MongoDB used for users, sessions, evidence, skills, confirmations, job analyses, tailored resumes, and admin-visible moderation state.
+  \item \textbf{ML / Inference Layer:} Local transformer-backed semantic matching and skill extraction with a fallback local rule/hash path.
+\end{itemize}
+
+\subsection*{Midterm -- Core Database Schemas}
+\addcontentsline{toc}{subsection}{Midterm -- Core Database Schemas}
+
+\begin{table}[H]
+  \renewcommand{\arraystretch}{1.2}
+  \begin{tabularx}{\linewidth}{@{}p{1.5in}Y Y@{}}
+    \toprule
+    \textbf{Collection} & \textbf{Primary Fields} & \textbf{Purpose} \\
+    \midrule
+    users & \_id, email, username, password\_salt, password\_hash, role, ai\_preferences, created\_at & Stores authenticated users, role assignments, and account-level AI model preferences. \\
+    sessions & \_id, user\_id, token, created\_at, expires\_at & Tracks active authenticated sessions for API access. \\
+    skills & \_id, name, category/categories, aliases, tags, hidden, origin, created\_by\_user\_id & Canonical skill catalog used across extraction, confirmation, evidence, and job match analysis. \\
+    resume\_skill\_confirmations & \_id, user\_id, resume\_snapshot\_id, confirmed, rejected, edited, created\_at, updated\_at & Stores user-approved skill state, including confirmed skills and profile-level confirmation history. \\
+    evidence & \_id, user\_id, title, type, source, text\_excerpt, skill\_ids, project\_id, origin, created\_at & Stores evidence artifacts from user text or uploaded files and links them to extracted skills. \\
+    job\_ingests & \_id, user\_id, title, company, location, text, extracted\_skills, keywords, created\_at & Stores normalized job postings before scoring and tailoring. \\
+    job\_match\_runs & \_id, user\_id, job\_id, match\_score, semantic\_alignment\_score, matched\_skills, missing\_skills, analysis, created\_at & Stores computed job-match analysis results and history. \\
+    tailored\_resumes & \_id, user\_id, job\_id, selected\_skill\_ids, selected\_item\_ids, sections, plain\_text, created\_at & Stores generated tailored resume outputs and exportable content. \\
+    portfolio\_items / projects & \_id, user\_id, title, description, skill\_ids, visibility, created\_at & Stores supporting portfolio content linked to skills and evidence-backed experience. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection*{Midterm -- User Relationships}
+\addcontentsline{toc}{subsection}{Midterm -- User Relationships}
+
+\begin{table}[H]
+  \renewcommand{\arraystretch}{1.2}
+  \begin{tabularx}{\linewidth}{@{}p{1.7in}YY@{}}
+    \toprule
+    \textbf{Relationship} & \textbf{Stored Through} & \textbf{How It Is Used in the Product} \\
+    \midrule
+    User $\rightarrow$ Sessions & sessions.user\_id & Authenticates requests and controls access to protected pages. \\
+    User $\rightarrow$ Confirmed Skills & resume\_skill\_confirmations.user\_id & Drives the Skills page, dashboard totals, and job matching. \\
+    User $\rightarrow$ Evidence & evidence.user\_id & Connects uploaded or pasted artifacts to extracted and supported skills. \\
+    User $\rightarrow$ Job Analyses & job\_ingests.user\_id and job\_match\_runs.user\_id & Lets each user analyze and revisit job postings independently. \\
+    User $\rightarrow$ Tailored Resumes & tailored\_resumes.user\_id & Stores generated resume outputs tied to a specific user's profile and analysis history. \\
+    User $\rightarrow$ Portfolio / Projects & portfolio\_items.user\_id and projects.user\_id & Connects project evidence and public/private portfolio material to the user's profile. \\
+    User $\rightarrow$ Admin Privileges & users.role & Determines whether the user can access moderation and platform management pages. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection*{Midterm -- Representative MongoDB Document Shapes}
+\addcontentsline{toc}{subsection}{Midterm -- Representative MongoDB Document Shapes}
+
+\noindent
+\textbf{users}
+\begin{verbatim}
+{
+  _id: ObjectId("..."),
+  email: "student@example.com",
+  username: "student1",
+  role: "user",
+  ai_preferences: {
+    inference_mode: "auto",
+    embedding_model: "sentence-transformers/all-MiniLM-L6-v2",
+    zero_shot_model: "MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33"
+  },
+  created_at: ISODate("2026-03-01T...")
+}
+\end{verbatim}
+
+\noindent
+\textbf{evidence}
+\begin{verbatim}
+{
+  _id: ObjectId("..."),
+  user_id: ObjectId("..."),
+  title: "Research Internship Report",
+  type: "project",
+  source: "internship_report.pdf",
+  text_excerpt: "<full extracted text>",
+  skill_ids: [ObjectId("..."), ObjectId("...")],
+  origin: "user",
+  created_at: ISODate("2026-03-01T...")
+}
+\end{verbatim}
+
+\noindent
+\textbf{job\_match\_runs}
+\begin{verbatim}
+{
+  _id: ObjectId("..."),
+  user_id: ObjectId("..."),
+  job_id: ObjectId("..."),
+  match_score: 82.4,
+  semantic_alignment_score: 76.1,
+  matched_skills: ["Python", "FastAPI", "MongoDB"],
+  missing_skills: ["SQL", "A/B Testing"],
+  created_at: ISODate("2026-03-02T...")
+}
+\end{verbatim}
+
+\subsection*{Midterm -- System Capabilities Demonstrated}
+\addcontentsline{toc}{subsection}{Midterm -- System Capabilities Demonstrated}
+\begin{itemize}
+  \item End-to-end account creation and authenticated navigation.
+  \item Adding evidence from text and uploaded files.
+  \item Extracting skills from evidence and confirming them to the user profile.
+  \item Viewing skill counts, unsupported skills, and evidence-supported skills.
+  \item Running job analyses and inspecting matched skills, missing skills, semantic alignment, and keyword overlap.
+  \item Generating and storing tailored resumes for later retrieval.
+  \item Viewing site-level administrative information from a role-gated admin workspace.
+\end{itemize}
+
+\subsection*{Midterm -- Presentation Screenshot Placeholders}
+\addcontentsline{toc}{subsection}{Midterm -- Presentation Screenshot Placeholders}
+\noindent
+The repository does not currently contain the actual midterm screenshots. The boxes below are compile-safe placeholders for the presentation draft. Replace them with real screenshots once they are exported.
+
+\begin{figure}[H]
+  \centering
+  \begin{tabular}{cc}
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Dashboard Screenshot\\(current metrics, activity, categories)}} &
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Skills Screenshot\\(confirmed skills, evidence-backed skills, proficiency)}} \\
+    \small Website view: Dashboard & \small Website view: Skills \\
+    \\[0.75em]
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Evidence Screenshot\\(multi-file upload, extracted skills review)}} &
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Job Match Screenshot\\(coverage snapshot, matched/missing skills, semantic alignment)}} \\
+    \small Website view: Evidence & \small Website view: Job Match \\
+  \end{tabular}
+  \caption{Midterm presentation website screenshots to replace with actual captured images.}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \begin{tabular}{cc}
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\users / sessions / role assignments}} &
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\evidence / confirmations / skill links}} \\
+    \small Database view: user data and access control & \small Database view: evidence and skill relations \\
+    \\[0.75em]
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\job\_ingests / job\_match\_runs}} &
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\tailored\_resumes / admin-related collections}} \\
+    \small Database view: job analysis history & \small Database view: tailored outputs and admin state \\
+  \end{tabular}
+  \caption{Midterm presentation database screenshots to replace with actual MongoDB Compass captures.}
+\end{figure}
+
+\subsection*{Midterm -- Recommended Live Demo Sequence}
+\addcontentsline{toc}{subsection}{Midterm -- Recommended Live Demo Sequence}
+\begin{enumerate}
+  \item Register or log in as a standard user.
+  \item Show the Dashboard and explain the metric cards and recent activity.
+  \item Open the Evidence page and analyze text or a file to demonstrate extracted skills.
+  \item Confirm extracted skills on the Skills page and show unsupported confirmed skills.
+  \item Open Job Match, analyze a posting, and explain the score breakdown and semantic alignment.
+  \item Generate a tailored resume and show that it appears on the Tailored Resumes page.
+  \item Log in as an owner/team user and briefly show the Admin workspace.
+  \item Close by showing the MongoDB collections that store the corresponding data.
+\end{enumerate}
 
 % =========================================================
 % WEEK 3 (PR3) -- MOST RECENT
