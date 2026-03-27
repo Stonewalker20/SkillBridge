@@ -7,7 +7,7 @@ export const AVATAR_PRESETS = [
   {
     value: "sunset",
     label: "Sunset",
-    className: "bg-[linear-gradient(135deg,_#f97316,_#fb7185)] text-white",
+    className: "bg-[linear-gradient(135deg,_#fb7185,_#f97316)] text-white",
   },
   {
     value: "mint",
@@ -17,7 +17,7 @@ export const AVATAR_PRESETS = [
   {
     value: "ember",
     label: "Ember",
-    className: "bg-[linear-gradient(135deg,_#dc2626,_#f59e0b)] text-white",
+    className: "bg-[linear-gradient(135deg,_#7f1d1d,_#f43f5e)] text-white",
   },
   {
     value: "violet",
@@ -37,7 +37,7 @@ export const AVATAR_PRESETS = [
   {
     value: "sunrise",
     label: "Sunrise",
-    className: "bg-[linear-gradient(135deg,_#F59E0B,_#D97706)] text-white",
+    className: "bg-[linear-gradient(135deg,_#f59e0b,_#facc15)] text-white",
   },
   {
     value: "forest",
@@ -47,7 +47,7 @@ export const AVATAR_PRESETS = [
   {
     value: "rosewood",
     label: "Rosewood",
-    className: "bg-[linear-gradient(135deg,_#E11D48,_#F97316)] text-white",
+    className: "bg-[linear-gradient(135deg,_#6d28d9,_#be185d)] text-white",
   },
   {
     value: "cobalt",
@@ -62,7 +62,7 @@ export const AVATAR_PRESETS = [
   {
     value: "sandstone",
     label: "Sandstone",
-    className: "bg-[linear-gradient(135deg,_#B45309,_#EA580C)] text-white",
+    className: "bg-[linear-gradient(135deg,_#78716c,_#d6a77a)] text-white",
   },
   {
     value: "orchid",

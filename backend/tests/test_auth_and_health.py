@@ -87,6 +87,10 @@ def test_subscription_activation_unlocks_core_routes(test_context):
     assert locked_dashboard.status_code == 402
     assert locked_dashboard.json()["detail"] == "Subscription required"
 
+    unlocked_rewards = client.get("/rewards/summary", headers=auth_headers)
+    assert unlocked_rewards.status_code == 200
+    assert unlocked_rewards.json()["total_count"] >= 1
+
     activated = client.post("/auth/me/subscription", headers=auth_headers)
     assert activated.status_code == 200
     assert activated.json()["subscription_status"] == "active"

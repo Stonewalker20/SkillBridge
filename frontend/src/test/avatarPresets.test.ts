@@ -7,6 +7,11 @@ describe("avatarPresetClass", () => {
     expect(avatarPresetClass("aurora")).toBe("bg-[linear-gradient(135deg,_#0EA5E9,_#22C55E)] text-white");
   });
 
+  it("keeps the warmer presets visually distinct", () => {
+    const warmPresetClasses = ["sunset", "ember", "sunrise", "rosewood", "sandstone"].map((value) => avatarPresetClass(value));
+    expect(new Set(warmPresetClasses).size).toBe(warmPresetClasses.length);
+  });
+
   it("returns null for unknown values", () => {
     expect(avatarPresetClass("unknown")).toBeNull();
     expect(avatarPresetClass(null)).toBeNull();

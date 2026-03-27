@@ -22,17 +22,17 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "sunrise",
     label: "Sunrise Gold",
-    swatchColors: ["#F59E0B", "#D97706", "#FDE68A"],
+    swatchColors: ["#B45309", "#F59E0B", "#FEF3C7"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.30),_transparent_42%),linear-gradient(135deg,_#fff8e7,_#fde68a_58%,_#fff7ed)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.20),_transparent_34%),linear-gradient(135deg,_#2a1e06,_#120d03)]",
-    avatarClass: "bg-[linear-gradient(135deg,_#F59E0B,_#D97706)]",
-    buttonClass: "bg-[#D97706] text-white hover:bg-[#b45309]",
-    barClass: "bg-[linear-gradient(90deg,_#F59E0B,_#D97706)]",
-    accentTextClass: "text-[#D97706] dark:text-amber-300",
-    softPanelClass: "bg-[linear-gradient(135deg,_rgba(251,191,36,0.16),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(251,191,36,0.14),_rgba(18,13,3,0.94))]",
+    avatarClass: "bg-[linear-gradient(135deg,_#B45309,_#F59E0B)]",
+    buttonClass: "bg-[#B45309] text-white hover:bg-[#9a3412]",
+    barClass: "bg-[linear-gradient(90deg,_#B45309,_#F59E0B)]",
+    accentTextClass: "text-[#B45309] dark:text-amber-300",
+    softPanelClass: "bg-[linear-gradient(135deg,_rgba(180,83,9,0.16),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(251,191,36,0.14),_rgba(18,13,3,0.94))]",
     sidebarClass:
-      "bg-[linear-gradient(180deg,_rgba(255,248,231,0.98),_rgba(254,240,138,0.88)_52%,_rgba(255,247,237,0.96))] dark:bg-[linear-gradient(180deg,_rgba(39,24,4,0.98),_rgba(18,13,3,0.96))]",
-    sidebarActiveClass: "bg-[linear-gradient(135deg,_#F59E0B,_#D97706)] text-white shadow-sm",
+      "bg-[linear-gradient(180deg,_rgba(255,248,231,0.98),_rgba(254,243,199,0.88)_52%,_rgba(255,247,237,0.96))] dark:bg-[linear-gradient(180deg,_rgba(39,24,4,0.98),_rgba(18,13,3,0.96))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#B45309,_#F59E0B)] text-white shadow-sm",
   },
   {
     value: "forest",
@@ -127,17 +127,17 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "sandstone",
     label: "Sandstone Clay",
-    swatchColors: ["#B45309", "#EA580C", "#FED7AA"],
+    swatchColors: ["#78716C", "#A8A29E", "#F5F5F4"],
     heroClass:
-      "bg-[radial-gradient(circle_at_top_left,_rgba(234,88,12,0.20),_transparent_40%),linear-gradient(135deg,_#fff7ed,_#fed7aa_56%,_#ffedd5)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,146,60,0.14),_transparent_34%),linear-gradient(135deg,_#271205,_#180a04)]",
-    avatarClass: "bg-[linear-gradient(135deg,_#B45309,_#EA580C)]",
-    buttonClass: "bg-[#C2410C] text-white hover:bg-[#9a3412]",
-    barClass: "bg-[linear-gradient(90deg,_#B45309,_#EA580C)]",
-    accentTextClass: "text-orange-700 dark:text-orange-300",
-    softPanelClass: "bg-[linear-gradient(135deg,_rgba(234,88,12,0.12),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(251,146,60,0.10),_rgba(24,10,4,0.94))]",
+      "bg-[radial-gradient(circle_at_top_left,_rgba(120,113,108,0.20),_transparent_40%),linear-gradient(135deg,_#fafaf9,_#f5f5f4_56%,_#e7e5e4)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(168,162,158,0.14),_transparent_34%),linear-gradient(135deg,_#1c1917,_#0c0a09)]",
+    avatarClass: "bg-[linear-gradient(135deg,_#78716C,_#A8A29E)]",
+    buttonClass: "bg-[#78716C] text-white hover:bg-[#57534e]",
+    barClass: "bg-[linear-gradient(90deg,_#78716C,_#A8A29E)]",
+    accentTextClass: "text-[#78716C] dark:text-stone-300",
+    softPanelClass: "bg-[linear-gradient(135deg,_rgba(120,113,108,0.12),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(168,162,158,0.10),_rgba(12,10,9,0.94))]",
     sidebarClass:
-      "bg-[linear-gradient(180deg,_rgba(255,247,237,0.98),_rgba(254,215,170,0.90)_52%,_rgba(255,237,213,0.96))] dark:bg-[linear-gradient(180deg,_rgba(39,18,5,0.98),_rgba(24,10,4,0.96))]",
-    sidebarActiveClass: "bg-[linear-gradient(135deg,_#B45309,_#EA580C)] text-white shadow-sm",
+      "bg-[linear-gradient(180deg,_rgba(250,250,249,0.98),_rgba(245,245,244,0.90)_52%,_rgba(231,229,228,0.96))] dark:bg-[linear-gradient(180deg,_rgba(28,25,23,0.98),_rgba(12,10,9,0.96))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#78716C,_#A8A29E)] text-white shadow-sm",
   },
   {
     value: "orchid",

@@ -131,21 +131,21 @@ export function RootLayout() {
         <div className={cn(
           "shrink-0 border-b border-slate-200/80 bg-white/55 dark:border-slate-800/80 dark:bg-slate-950/35",
           isCompactSidebar
-            ? "px-3 py-3"
-            : "px-[clamp(1rem,0.8rem+0.9vh,1.5rem)] py-[clamp(0.75rem,0.45rem+1.2vh,1.5rem)]"
+            ? "px-2.5 py-2.5"
+            : "px-[clamp(0.85rem,0.65rem+0.8vh,1.25rem)] py-[clamp(0.6rem,0.35rem+1vh,1.15rem)]"
         )}>
           <Link
             to="/app"
-            className="flex items-center justify-center rounded-2xl bg-white/90 px-1 py-[clamp(0.35rem,0.2rem+0.6vh,0.75rem)] shadow-sm ring-1 ring-slate-200/80 transition-opacity hover:opacity-90 dark:bg-slate-950/80 dark:ring-slate-800/80"
+            className="flex items-center justify-center overflow-hidden rounded-2xl bg-white/90 px-0.5 py-[clamp(0.15rem,0.08rem+0.28vh,0.35rem)] shadow-sm ring-1 ring-slate-200/80 transition-opacity hover:opacity-90 dark:bg-slate-950/80 dark:ring-slate-800/80"
           >
             <img
               src={LogoImage}
               alt="SkillBridge Logo"
               className={cn(
-                "w-full object-contain",
+                "w-full object-contain object-center",
                 isCompactSidebar
-                  ? "h-[4.3rem] max-w-[180px] scale-[1.2]"
-                  : "h-[clamp(4.75rem,3.6rem+6vh,7rem)] max-w-[210px] scale-[1.35]"
+                  ? "h-[5.2rem] max-w-[190px] scale-[1.62]"
+                  : "h-[clamp(5.5rem,4.2rem+6.8vh,8rem)] max-w-[226px] scale-[1.78]"
               )}
             />
           </Link>

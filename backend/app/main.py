@@ -113,7 +113,7 @@ app.include_router(roles_router, prefix="/roles", tags=["roles"], dependencies=s
 app.include_router(taxonomy_router, prefix="/taxonomy", tags=["taxonomy"], dependencies=subscription_gate)
 app.include_router(tailor_router, prefix="/tailor", tags=["tailor"], dependencies=subscription_gate)
 app.include_router(portfolio_router, prefix="/portfolio", tags=["portfolio"], dependencies=subscription_gate)
-app.include_router(rewards_router, prefix="/rewards", tags=["rewards"], dependencies=subscription_gate)
+app.include_router(rewards_router, prefix="/rewards", tags=["rewards"])
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(billing_router, prefix="/billing", tags=["billing"])
 app.include_router(admin_router, prefix="/admin", tags=["admin"], dependencies=subscription_gate)
