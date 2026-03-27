@@ -12,6 +12,7 @@ from typing import Iterable
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from app.core.auth import require_user
 from app.core.config import settings
@@ -159,8 +160,41 @@ def _normalize_resume_bullet(line: str) -> str:
     return f"- {text}"
 
 
+def _looks_like_uploaded_file_title(value: str) -> bool:
+    text = _clean_resume_line(value)
+    if not text:
+        return False
+    return bool(
+        re.search(r"\.(pdf|docx|doc|txt|md)$", text, re.IGNORECASE)
+        or re.search(r"(?:^|[_-])v\d+(?:$|[_-])", text, re.IGNORECASE)
+        or re.search(r"\b(final|draft|copy|upload|resume)\b", text, re.IGNORECASE)
+    )
+
+
+def _resume_friendly_title(item: dict) -> str:
+    raw_title = _clean_resume_line(str(item.get("title") or ""))
+    display_title = _clean_resume_line(str(item.get("resume_display_title") or ""))
+    org = _clean_resume_line(str(item.get("org") or ""))
+    item_type = str(item.get("type") or "").strip().lower()
+    summary = _clean_resume_line(str(item.get("summary") or ""))
+
+    for candidate in (display_title, raw_title):
+        if candidate and not _looks_like_uploaded_file_title(candidate):
+            return candidate
+
+    if item_type == "evidence:resume":
+        return org or "Resume Highlights"
+    if "project" in item_type or any(token in normalize_skill_text(summary) for token in ("project", "prototype", "capstone", "research")):
+        return org or "Selected Project"
+    if "work" in item_type or "experience" in item_type:
+        return org or "Relevant Experience"
+    if org:
+        return org
+    return "Relevant Experience"
+
+
 def _format_resume_item_header(item: dict) -> str:
-    title = _clean_resume_line(str(item.get("resume_display_title") or item.get("title") or "")) or "Relevant experience"
+    title = _resume_friendly_title(item)
     org = _clean_resume_line(str(item.get("org") or ""))
     item_type = str(item.get("type") or "work").replace("evidence:", "").replace("_", " ").strip().title()
     header_parts = [title]
@@ -177,7 +211,18 @@ def _resume_display_title_for_item(item: dict) -> str:
     item_type = str(item.get("type") or "").strip().lower()
     if item_type == "evidence:resume":
         return org or "Resume Highlights"
+    if _looks_like_uploaded_file_title(raw_title):
+        if "project" in item_type:
+            return org or "Selected Project"
+        return org or "Relevant Experience"
     return raw_title or "Relevant experience"
+
+
+def _cleanup_temp_export(path: str) -> None:
+    try:
+        Path(path).unlink(missing_ok=True)
+    except Exception:
+        return
 
 
 def _scoped_user_id(user: dict, requested_user_id: str | None = None) -> str:
@@ -2936,12 +2981,20 @@ async def rewrite_tailored_resume_bullets(tailored_id: str, payload: RewriteBull
 def _docx_from_sections(sections: list[ResumeSection], out_path: str):
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.shared import Pt
+    from docx.shared import Inches, Pt
+
+    def configure_document(document: Document):
+        section = document.sections[0]
+        section.top_margin = Inches(0.48)
+        section.bottom_margin = Inches(0.48)
+        section.left_margin = Inches(0.62)
+        section.right_margin = Inches(0.62)
+        normal_style = document.styles["Normal"]
+        normal_style.font.name = "Aptos"
+        normal_style.font.size = Pt(10.5)
 
     doc = Document()
-    normal_style = doc.styles["Normal"]
-    normal_style.font.name = "Calibri"
-    normal_style.font.size = Pt(10.5)
+    configure_document(doc)
 
     for sec in sections:
         if sec.title == "Header":
@@ -2951,21 +3004,26 @@ def _docx_from_sections(sections: list[ResumeSection], out_path: str):
                 paragraph.paragraph_format.space_after = Pt(0 if index == 0 else 2)
                 run = paragraph.add_run(line)
                 run.bold = index == 0
-                run.font.size = Pt(16 if index == 0 else 10.5)
+                run.font.size = Pt(17 if index == 0 else 10.3)
+                if index == 0:
+                    run.font.name = "Aptos Display"
             doc.add_paragraph()
             continue
 
         title_paragraph = doc.add_paragraph()
-        title_paragraph.paragraph_format.space_before = Pt(6)
+        title_paragraph.paragraph_format.space_before = Pt(7)
         title_paragraph.paragraph_format.space_after = Pt(2)
         title_run = title_paragraph.add_run(sec.title)
         title_run.bold = True
-        title_run.font.size = Pt(11.5)
+        title_run.font.size = Pt(11.3)
+        title_run.font.name = "Aptos"
 
         for ln in sec.lines:
             if _is_resume_bullet_line(ln):
                 bullet_paragraph = doc.add_paragraph(style="List Bullet")
                 bullet_paragraph.paragraph_format.space_after = Pt(0)
+                bullet_paragraph.paragraph_format.left_indent = Inches(0.16)
+                bullet_paragraph.paragraph_format.first_line_indent = Inches(-0.12)
                 bullet_paragraph.add_run(_resume_bullet_text(ln))
             else:
                 paragraph = doc.add_paragraph()
@@ -2977,12 +3035,20 @@ def _docx_from_sections(sections: list[ResumeSection], out_path: str):
 def _docx_from_plain_text(text: str, out_path: str):
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.shared import Pt
+    from docx.shared import Inches, Pt
+
+    def configure_document(document: Document):
+        section = document.sections[0]
+        section.top_margin = Inches(0.48)
+        section.bottom_margin = Inches(0.48)
+        section.left_margin = Inches(0.62)
+        section.right_margin = Inches(0.62)
+        normal_style = document.styles["Normal"]
+        normal_style.font.name = "Aptos"
+        normal_style.font.size = Pt(10.5)
 
     doc = Document()
-    normal_style = doc.styles["Normal"]
-    normal_style.font.name = "Calibri"
-    normal_style.font.size = Pt(10.5)
+    configure_document(doc)
 
     first_body_line = True
     for line in _split_resume_lines(text):
@@ -2992,6 +3058,8 @@ def _docx_from_plain_text(text: str, out_path: str):
         if _is_resume_bullet_line(clean):
             paragraph = doc.add_paragraph(style="List Bullet")
             paragraph.paragraph_format.space_after = Pt(0)
+            paragraph.paragraph_format.left_indent = Inches(0.16)
+            paragraph.paragraph_format.first_line_indent = Inches(-0.12)
             paragraph.add_run(_resume_bullet_text(clean))
             first_body_line = False
             continue
@@ -3001,7 +3069,7 @@ def _docx_from_plain_text(text: str, out_path: str):
             paragraph.paragraph_format.space_after = Pt(2)
             run = paragraph.add_run(clean.title())
             run.bold = True
-            run.font.size = Pt(11.5)
+            run.font.size = Pt(11.3)
             first_body_line = False
             continue
 
@@ -3011,7 +3079,8 @@ def _docx_from_plain_text(text: str, out_path: str):
         if first_body_line:
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             run.bold = True
-            run.font.size = Pt(16)
+            run.font.size = Pt(17)
+            run.font.name = "Aptos Display"
             first_body_line = False
     doc.save(out_path)
 
@@ -3225,7 +3294,12 @@ async def export_docx(tailored_id: str, user=Depends(require_user)):
         _docx_from_sections(sections, tmp.name)
 
     filename = f"tailored_resume_{tailored_id}.docx"
-    return FileResponse(tmp.name, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", filename=filename)
+    return FileResponse(
+        tmp.name,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=filename,
+        background=BackgroundTask(_cleanup_temp_export, tmp.name),
+    )
 
 @router.get("/{tailored_id}/export/pdf")
 async def export_pdf(tailored_id: str, user=Depends(require_user)):
@@ -3244,9 +3318,18 @@ async def export_pdf(tailored_id: str, user=Depends(require_user)):
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     tmp.close()
     if _uses_uploaded_resume_reword_template(str(d.get("template") or "")) and plain_text:
-        _pdf_from_plain_text(plain_text, tmp.name)
+        parsed_sections = _parse_resume_sections(plain_text)
+        if parsed_sections:
+            _pdf_from_sections(parsed_sections, tmp.name)
+        else:
+            _pdf_from_plain_text(plain_text, tmp.name)
     else:
         _pdf_from_sections(sections, tmp.name)
 
     filename = f"tailored_resume_{tailored_id}.pdf"
-    return FileResponse(tmp.name, media_type="application/pdf", filename=filename)
+    return FileResponse(
+        tmp.name,
+        media_type="application/pdf",
+        filename=filename,
+        background=BackgroundTask(_cleanup_temp_export, tmp.name),
+    )

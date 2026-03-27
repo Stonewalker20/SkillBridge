@@ -962,6 +962,70 @@ def test_tailored_resume_can_use_resume_evidence_as_template_source(test_context
     assert stored_resume["template"] == "ats_v1"
 
 
+def test_tailored_resume_rewords_file_like_evidence_titles_into_resume_headers(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    user_id = test_context["user_id"]
+    db = test_context["db"]
+
+    client.post(
+        "/skills/confirmations/",
+        headers=headers,
+        json={
+            "resume_snapshot_id": None,
+            "confirmed": [{"skill_id": test_context["skill_python"], "proficiency": 4}],
+            "rejected": [],
+            "edited": [],
+        },
+    )
+
+    evidence = client.post(
+        "/evidence/",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "type": "project",
+            "title": "capstone_final_v4.pdf",
+            "source": "manual-entry",
+            "text_excerpt": "Built analytics dashboards in Python and delivered API reporting workflows for stakeholders.",
+            "skill_ids": [test_context["skill_python"]],
+            "origin": "user",
+        },
+    )
+    assert evidence.status_code == 200
+
+    ingest = client.post(
+        "/tailor/job/ingest",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "title": "Analytics Engineer",
+            "company": "Acme",
+            "location": "Remote",
+            "text": "Need Python, analytics dashboards, stakeholder communication, and reporting APIs.",
+        },
+    )
+    assert ingest.status_code == 200
+
+    preview = client.post(
+        "/tailor/preview",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "job_id": ingest.json()["id"],
+            "template": "ats_v1",
+        },
+    )
+    assert preview.status_code == 200
+    payload = preview.json()
+
+    assert "capstone_final_v4.pdf" not in payload["plain_text"]
+    assert "Selected Project" in payload["plain_text"] or "Relevant Experience" in payload["plain_text"]
+
+    stored_resume = next(doc for doc in db["tailored_resumes"].docs if str(doc["_id"]) == payload["id"])
+    assert "capstone_final_v4.pdf" not in stored_resume["plain_text"]
+
+
 def test_job_match_ignores_short_aliases_for_long_skills(test_context):
     client = test_context["client"]
     headers = test_context["headers"]

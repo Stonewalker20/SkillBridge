@@ -112,6 +112,15 @@ function downloadBlob(blob: Blob, filename: string) {
   window.URL.revokeObjectURL(url);
 }
 
+function tailoredResumeFilename(jobTitle?: string, company?: string, extension = "docx") {
+  const base = String(jobTitle || company || "tailored_resume")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return `${base || "tailored_resume"}.${extension}`;
+}
+
 function formatResumeTemplateLabel(snapshot: ResumeSnapshotListEntry) {
   const filename = String(snapshot.filename ?? "").trim();
   if (filename) return `Updated Resume from Evidence • ${filename}`;
@@ -246,10 +255,6 @@ export function Jobs() {
     [selectedResumeTemplate]
   );
   const selectedResumeSource = useMemo(() => parseResumeSourceValue(selectedResumeTemplate), [selectedResumeTemplate]);
-  const selectedResumeSnapshot = useMemo(
-    () => (selectedResumeSource.kind === "snapshot" ? resumeSnapshots.find((snapshot) => snapshot.snapshot_id === selectedResumeSource.id) ?? null : null),
-    [resumeSnapshots, selectedResumeSource]
-  );
   const selectedResumePayload = useMemo(
     () => ({
       resume_snapshot_id: selectedResumeSource.kind === "snapshot" ? selectedResumeSource.id : null,
@@ -257,9 +262,7 @@ export function Jobs() {
     }),
     [selectedResumeSource]
   );
-  const downloadsEditableDocx =
-    selectedResumeLayout === uploadedResumeRewordTemplate.value &&
-    String(selectedResumeSnapshot?.source_type ?? "").toLowerCase() === "docx";
+  const exportFormatLabel = "DOCX";
 
   const handleReset = () => {
     setJobDescription("");
@@ -414,13 +417,8 @@ export function Jobs() {
       }
       setLastTailoredId(previewId);
       setAnalysis((current) => (current ? { ...current, tailored_resume_id: previewId } : current));
-      if (downloadsEditableDocx) {
-        const blob = await api.downloadTailoredDocx(previewId);
-        downloadBlob(blob, "tailored_resume.docx");
-      } else {
-        const blob = await api.downloadTailoredPdf(previewId);
-        downloadBlob(blob, "tailored_resume.pdf");
-      }
+      const blob = await api.downloadTailoredDocx(previewId);
+      downloadBlob(blob, tailoredResumeFilename(jobTitle, company, "docx"));
       try {
         await refreshHistory();
       } catch (historyError) {
@@ -433,15 +431,15 @@ export function Jobs() {
         name: jobTitle || company || "Tailored resume",
       });
       recordActivity({
-        id: `jobs:export:${downloadsEditableDocx ? "docx" : "pdf"}:${previewId}`,
+        id: `jobs:export:docx:${previewId}`,
         type: "resume",
         action: "exported",
-        name: `${jobTitle || company || "Tailored resume"} (${downloadsEditableDocx ? "DOCX" : "PDF"})`,
+        name: `${jobTitle || company || "Tailored resume"} (${exportFormatLabel})`,
       });
-      toast.success(`Tailored resume ${downloadsEditableDocx ? "DOCX" : "PDF"} downloaded`);
+      toast.success(`Tailored resume ${exportFormatLabel} downloaded`);
     } catch (error: any) {
       console.error("Failed to generate resume:", error);
-      toast.error(error?.message || `Failed to generate tailored resume ${downloadsEditableDocx ? "DOCX" : "PDF"}`);
+      toast.error(error?.message || `Failed to generate tailored resume ${exportFormatLabel}`);
     } finally {
       setGenerating(false);
     }
@@ -1396,7 +1394,7 @@ export function Jobs() {
               className={activeHeaderTheme.buttonClass}
             >
               <Download className="mr-2 h-4 w-4" />
-              {generating ? `Generating ${downloadsEditableDocx ? "DOCX" : "PDF"}...` : `Generate ${downloadsEditableDocx ? "DOCX" : "PDF"}`}
+              {generating ? `Generating ${exportFormatLabel}...` : `Generate ${exportFormatLabel}`}
             </Button>
           </div>
         </div>
@@ -1418,8 +1416,8 @@ export function Jobs() {
         ) : (
           <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">
             {resumeSnapshots.length > 0 || resumeEvidence.length > 0
-              ? "Pick a resume source and layout. Uploaded Word resumes can be reworded without changing their section layout, and resume evidence can be used as a clean tailoring source."
-              : "Pick a layout, then generate the PDF from the default resume structure."}
+              ? "Pick a resume source and layout. Tailored resumes now download as DOCX first to preserve formatting, while resume evidence titles are rewritten into resume-friendly content."
+              : "Pick a layout, then generate a DOCX version from the default resume structure."}
           </div>
         )}
       </Card>
