@@ -17,6 +17,7 @@ REWARD_COUNTER_KEYS = (
 REWARD_MILESTONES: list[dict[str, object]] = [
     {
         "key": "first_evidence_saved",
+        "icon_key": "spark",
         "counter_key": "evidence_saved",
         "target_value": 1,
         "title": "First Proof Added",
@@ -25,6 +26,7 @@ REWARD_MILESTONES: list[dict[str, object]] = [
     },
     {
         "key": "evidence_starter",
+        "icon_key": "stack",
         "counter_key": "evidence_saved",
         "target_value": 3,
         "title": "Proof Stack",
@@ -33,6 +35,7 @@ REWARD_MILESTONES: list[dict[str, object]] = [
     },
     {
         "key": "first_skill_confirmed",
+        "icon_key": "shield",
         "counter_key": "profile_skills_confirmed",
         "target_value": 1,
         "title": "First Skill Locked In",
@@ -41,6 +44,7 @@ REWARD_MILESTONES: list[dict[str, object]] = [
     },
     {
         "key": "skill_stack",
+        "icon_key": "layers",
         "counter_key": "profile_skills_confirmed",
         "target_value": 5,
         "title": "Skill Stack",
@@ -49,6 +53,7 @@ REWARD_MILESTONES: list[dict[str, object]] = [
     },
     {
         "key": "first_resume_uploaded",
+        "icon_key": "scroll",
         "counter_key": "resume_snapshots_uploaded",
         "target_value": 1,
         "title": "Template Ready",
@@ -57,6 +62,7 @@ REWARD_MILESTONES: list[dict[str, object]] = [
     },
     {
         "key": "first_job_match",
+        "icon_key": "compass",
         "counter_key": "job_matches_run",
         "target_value": 1,
         "title": "First Match Run",
@@ -65,6 +71,7 @@ REWARD_MILESTONES: list[dict[str, object]] = [
     },
     {
         "key": "match_momentum",
+        "icon_key": "rocket",
         "counter_key": "job_matches_run",
         "target_value": 3,
         "title": "Match Momentum",
@@ -73,6 +80,7 @@ REWARD_MILESTONES: list[dict[str, object]] = [
     },
     {
         "key": "first_tailored_resume",
+        "icon_key": "badge",
         "counter_key": "tailored_resumes_generated",
         "target_value": 1,
         "title": "Resume Tailored",
@@ -189,6 +197,7 @@ def build_reward_achievements(
         achievements.append(
             {
                 "key": str(milestone["key"]),
+                "icon_key": str(milestone.get("icon_key") or "award"),
                 "title": str(milestone["title"]),
                 "description": str(milestone["description"]),
                 "reward": str(milestone["reward"]),
