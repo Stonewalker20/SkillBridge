@@ -45,5 +45,20 @@ class PasswordChangeIn(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class PasswordResetRequestIn(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirmIn(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class PasswordResetOut(BaseModel):
+    ok: bool = True
+    message: str
+    reset_url: Optional[str] = None
+
+
 class SubscriptionActivateIn(BaseModel):
     plan: Optional[str] = None

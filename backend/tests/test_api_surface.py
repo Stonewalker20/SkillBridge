@@ -11,6 +11,8 @@ def test_openapi_includes_expected_route_surface():
         "/health/db_counts",
         "/auth/register",
         "/auth/login",
+        "/auth/password-reset/request",
+        "/auth/password-reset/confirm",
         "/auth/me",
         "/auth/me/avatar",
         "/auth/me/subscription",

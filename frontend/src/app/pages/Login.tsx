@@ -100,6 +100,11 @@ export function Login() {
                 disabled={loading}
               />
             </div>
+            <div className="mt-2 text-right">
+              <Link to="/forgot-password" className="text-sm text-[#1E3A8A] hover:underline dark:text-blue-400">
+                Forgot password?
+              </Link>
+            </div>
           </div>
 
           <Button

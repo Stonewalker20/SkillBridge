@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     stripe_success_url: str = ""
     stripe_cancel_url: str = ""
     stripe_billing_portal_return_url: str = ""
+    password_reset_token_ttl_minutes: int = 60
     openai_embed_model: str = "text-embedding-3-small"
     openai_chat_model: str = "gpt-4o-mini"
     local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"

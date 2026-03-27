@@ -6,6 +6,12 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 const Landing = lazy(() => import("./pages/Landing").then((module) => ({ default: module.Landing })));
 const Login = lazy(() => import("./pages/Login").then((module) => ({ default: module.Login })));
 const SignUp = lazy(() => import("./pages/SignUp").then((module) => ({ default: module.SignUp })));
+const ForgotPassword = lazy(() =>
+  import("./pages/ForgotPassword").then((module) => ({ default: module.ForgotPassword }))
+);
+const ResetPassword = lazy(() =>
+  import("./pages/ResetPassword").then((module) => ({ default: module.ResetPassword }))
+);
 const Skills = lazy(() => import("./pages/Skills").then((module) => ({ default: module.Skills })));
 const Evidence = lazy(() => import("./pages/Evidence").then((module) => ({ default: module.Evidence })));
 const Jobs = lazy(() => import("./pages/Jobs").then((module) => ({ default: module.Jobs })));
@@ -47,6 +53,14 @@ export const router = createBrowserRouter([
       {
         path: "signup",
         element: suspense(<SignUp />),
+      },
+      {
+        path: "forgot-password",
+        element: suspense(<ForgotPassword />),
+      },
+      {
+        path: "reset-password",
+        element: suspense(<ResetPassword />),
       },
     ],
   },

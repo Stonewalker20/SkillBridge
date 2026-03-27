@@ -168,6 +168,69 @@ def test_password_change_verifies_current_password_and_rotates_session(test_cont
     assert new_login.status_code == 200
 
 
+def test_password_reset_flow_rotates_credentials_and_sessions(test_context):
+    client = test_context["client"]
+    db = test_context["db"]
+    original_headers = test_context["headers"]
+
+    request_reset = client.post("/auth/password-reset/request", json={"email": "tester@example.com"})
+    assert request_reset.status_code == 200
+    payload = request_reset.json()
+    assert payload["ok"] is True
+    assert payload["reset_url"].startswith(settings.public_app_url)
+    assert len(db["password_reset_tokens"].docs) == 1
+
+    reset_token = payload["reset_url"].split("token=", 1)[-1]
+    confirm = client.post(
+        "/auth/password-reset/confirm",
+        json={"token": reset_token, "new_password": "renewedpass123"},
+    )
+    assert confirm.status_code == 200
+    assert confirm.json()["ok"] is True
+    assert db["password_reset_tokens"].docs == []
+
+    stale_me = client.get("/auth/me", headers=original_headers)
+    assert stale_me.status_code == 401
+
+    old_login = client.post("/auth/login", json={"email": "tester@example.com", "password": "password123"})
+    assert old_login.status_code == 401
+
+    new_login = client.post("/auth/login", json={"email": "tester@example.com", "password": "renewedpass123"})
+    assert new_login.status_code == 200
+
+
+def test_password_reset_request_is_generic_for_unknown_email(test_context):
+    client = test_context["client"]
+    db = test_context["db"]
+
+    response = client.post("/auth/password-reset/request", json={"email": "missing@example.com"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["reset_url"] is None
+    assert db["password_reset_tokens"].docs == []
+
+
+def test_password_reset_token_cannot_be_reused(test_context):
+    client = test_context["client"]
+
+    request_reset = client.post("/auth/password-reset/request", json={"email": "tester@example.com"})
+    token = request_reset.json()["reset_url"].split("token=", 1)[-1]
+
+    first = client.post(
+        "/auth/password-reset/confirm",
+        json={"token": token, "new_password": "renewedpass123"},
+    )
+    assert first.status_code == 200
+
+    second = client.post(
+        "/auth/password-reset/confirm",
+        json={"token": token, "new_password": "anotherpass123"},
+    )
+    assert second.status_code == 400
+    assert second.json()["detail"] == "Invalid or expired reset token"
+
+
 def test_auth_login_is_rate_limited_per_identity(test_context):
     client = test_context["client"]
     email = "tester@example.com"

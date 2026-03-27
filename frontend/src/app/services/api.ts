@@ -190,6 +190,11 @@ export type AuthUser = {
 };
 export type AuthOut = { token: string; user: AuthUser };
 export type UserPatch = { email?: string; username?: string; avatar_preset?: string | null };
+export type PasswordResetResponse = {
+  ok: boolean;
+  message: string;
+  reset_url?: string | null;
+};
 export type BillingPlan = {
   key: string;
   label: string;
@@ -1066,6 +1071,10 @@ export const api = {
     setToken(out.token);
     return out;
   },
+  requestPasswordReset: (payload: { email: string }) =>
+    request<PasswordResetResponse>("/auth/password-reset/request", "POST", payload, {}, { skipAuth: true }),
+  confirmPasswordReset: (payload: { token: string; new_password: string }) =>
+    request<PasswordResetResponse>("/auth/password-reset/confirm", "POST", payload, {}, { skipAuth: true }),
 
   me: async () => {
     const out = await request<AuthUser | null>("/auth/me", "GET", undefined, {}, { allow401: true, returnOn401: null });
