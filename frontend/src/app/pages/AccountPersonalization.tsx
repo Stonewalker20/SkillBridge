@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { Check, Lock, MonitorCog, Palette, Sparkles, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "react-router";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -22,7 +23,15 @@ import { useAccountPreferences, SIDEBAR_DENSITY_OPTIONS, START_PAGE_OPTIONS } fr
 import { AVATAR_PRESETS, avatarPresetClass, type AvatarPresetValue } from "../lib/avatarPresets";
 import { api, type RewardsSummary } from "../services/api";
 import { AccountSectionNav } from "../components/AccountSectionNav";
-import { highestUnlockedRewardTier, rewardTierAtLeast, rewardTierClasses, rewardTierLabel } from "../lib/rewardTiers";
+import {
+  REWARD_TIERS,
+  highestUnlockedRewardTier,
+  isTierUnlockableUnlocked,
+  rewardTierClasses,
+  rewardTierLabel,
+  unlockableCountForTier,
+  type RewardTier,
+} from "../lib/rewardTiers";
 
 function PreferenceRow({
   title,
@@ -47,7 +56,7 @@ function PreferenceRow({
 }
 
 export function AccountPersonalization() {
-  const { refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { recordActivity } = useActivity();
   const { headerTheme, setHeaderTheme, activeHeaderTheme, themes } = useHeaderTheme();
   const { preferences, updatePreferences, resetPreferences } = useAccountPreferences();
@@ -105,6 +114,7 @@ export function AccountPersonalization() {
     START_PAGE_OPTIONS.find((option) => option.value === preferences.startPage)?.label ?? "Dashboard";
   const densityLabel =
     SIDEBAR_DENSITY_OPTIONS.find((option) => option.value === preferences.sidebarDensity)?.label ?? "Comfortable";
+  const rewardItems = useMemo(() => rewards?.badges ?? rewards?.achievements ?? [], [rewards]);
   const hasRewardsData = Boolean(
     rewards &&
       ((rewards.badges?.length ?? 0) > 0 ||
@@ -112,13 +122,39 @@ export function AccountPersonalization() {
         (rewards.badgeCount ?? 0) > 0 ||
         (rewards.totalCount ?? 0) > 0)
   );
+  const isAdminUser = ["owner", "admin", "team"].includes(String(user?.role ?? "").trim().toLowerCase());
+  const hasImageUploadAccess = isAdminUser || String(user?.subscription_status ?? "").trim().toLowerCase() === "active";
   const highestTier = hasRewardsData
-    ? highestUnlockedRewardTier(
-        (rewards?.badges ?? rewards?.achievements ?? []).filter((badge) => badge.unlocked).map((badge) => badge.current_tier ?? badge.tier)
-      )
+    ? highestUnlockedRewardTier(rewardItems.filter((badge) => badge.unlocked).map((badge) => badge.current_tier ?? badge.tier))
     : null;
-  const unlockedThemeCount = themes.filter((themeOption) => rewardTierAtLeast(highestTier, themeOption.unlockTier)).length;
-  const unlockedAvatarPresetCount = AVATAR_PRESETS.filter((preset) => rewardTierAtLeast(highestTier, preset.unlockTier)).length;
+  const unlockedThemeCount = themes.filter((themeOption) => !hasRewardsData || isTierUnlockableUnlocked(themeOption, rewardItems, isAdminUser)).length;
+  const unlockedAvatarPresetCount = AVATAR_PRESETS.filter((preset) => !hasRewardsData || isTierUnlockableUnlocked(preset, rewardItems, isAdminUser)).length;
+  const themeGroups = useMemo(
+    () =>
+      [
+        { key: "starter", label: "Starter", tier: null as RewardTier | null, items: themes.filter((themeOption) => !themeOption.unlockTier) },
+        ...REWARD_TIERS.map((tier) => ({
+          key: tier,
+          label: rewardTierLabel(tier),
+          tier,
+          items: themes.filter((themeOption) => themeOption.unlockTier === tier),
+        })),
+      ].filter((group) => group.items.length > 0),
+    [themes]
+  );
+  const avatarPresetGroups = useMemo(
+    () =>
+      [
+        { key: "starter", label: "Starter", tier: null as RewardTier | null, items: AVATAR_PRESETS.filter((preset) => !preset.unlockTier) },
+        ...REWARD_TIERS.map((tier) => ({
+          key: tier,
+          label: rewardTierLabel(tier),
+          tier,
+          items: AVATAR_PRESETS.filter((preset) => preset.unlockTier === tier),
+        })),
+      ].filter((group) => group.items.length > 0),
+    []
+  );
 
   const handleSelectAvatarPreset = async (preset: AvatarPresetValue) => {
     try {
@@ -134,6 +170,10 @@ export function AccountPersonalization() {
 
   const handleAvatarUpload = async (file: File | null) => {
     if (!file) return;
+    if (!hasImageUploadAccess) {
+      toast("Subscribers and admins can upload a personal profile image.");
+      return;
+    }
     setUploadingAvatar(true);
     try {
       const updated = await api.uploadMyAvatar(file);
@@ -162,7 +202,7 @@ export function AccountPersonalization() {
 
   const handleSelectTheme = (themeValue: (typeof themes)[number]["value"], isLocked: boolean) => {
     if (isLocked) {
-      toast("Unlock a higher badge tier to use this colorway.");
+      toast("Unlock more badges at this tier to use this colorway.");
       return;
     }
     setHeaderTheme(themeValue);
@@ -282,76 +322,112 @@ export function AccountPersonalization() {
             </div>
 
             <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
-              {hasRewardsData
-                ? `${unlockedThemeCount}/${themes.length} header themes and ${unlockedAvatarPresetCount}/${AVATAR_PRESETS.length} avatar colorways are available. Highest unlocked tier: ${rewardTierLabel(highestTier)}.`
-                : "Achievement sync is unavailable right now, so all header themes remain selectable until badge progress reloads."}
+              {isAdminUser
+                ? `Admin access unlocks all ${themes.length} workspace themes and all ${AVATAR_PRESETS.length} avatar colorways automatically.`
+                : hasRewardsData
+                  ? `${unlockedThemeCount}/${themes.length} header themes and ${unlockedAvatarPresetCount}/${AVATAR_PRESETS.length} avatar colorways are available. Highest unlocked tier: ${rewardTierLabel(highestTier)}.`
+                  : "Achievement sync is unavailable right now, so all header themes remain selectable until badge progress reloads."}
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {themes.map((themeOption) => {
-                const isSelected = headerTheme === themeOption.value;
-                const isLocked = hasRewardsData && !rewardTierAtLeast(highestTier, themeOption.unlockTier) && !isSelected;
-                const tierClass = rewardTierClasses(themeOption.unlockTier);
+            <div className="mt-4 space-y-5">
+              {themeGroups.map((group) => {
+                const tierClass = rewardTierClasses(group.tier);
+                const unlockedInGroup = group.items.filter((themeOption) => !hasRewardsData || isTierUnlockableUnlocked(themeOption, rewardItems, isAdminUser)).length;
+                const currentTierUnlocks = group.tier ? unlockableCountForTier(rewardItems, group.tier, isAdminUser) : group.items.length;
                 return (
-                  <button
-                    key={themeOption.value}
-                    type="button"
-                    onClick={() => handleSelectTheme(themeOption.value, isLocked)}
-                    disabled={isLocked}
-                    className={`rounded-2xl border p-3 text-left transition ${
-                      isSelected
-                        ? "border-slate-900 bg-slate-50 shadow-sm dark:border-slate-100 dark:bg-slate-900"
-                        : isLocked
-                          ? "border-slate-200 bg-white/70 opacity-70 dark:border-slate-800 dark:bg-slate-950/40"
-                          : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950/70 dark:hover:border-slate-500"
-                    }`}
-                    aria-pressed={isSelected}
-                    aria-label={`Use ${themeOption.label}`}
-                  >
+                  <div key={`theme-group:${group.key}`} className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                        {themeOption.swatchColors.map((color) => (
-                          <span
-                            key={color}
-                            className="h-5 w-5 rounded-full border border-white/70 shadow-sm dark:border-slate-900"
-                            style={{ background: color }}
-                          />
-                        ))}
-                      </div>
-                      <span
-                        className={`flex h-[18px] w-[18px] items-center justify-center rounded-full border ${
-                          isSelected
-                            ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950"
-                            : "border-slate-300 text-transparent dark:border-slate-600"
-                        }`}
-                      >
-                        <Check className="h-3 w-3" />
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="min-w-0 text-sm font-semibold text-slate-900 dark:text-slate-100">{themeOption.label}</p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {themeOption.unlockTier ? (
-                          <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${isLocked ? tierClass.muted : tierClass.chip}`}>
-                            {rewardTierLabel(themeOption.unlockTier)}
-                          </span>
-                        ) : (
-                          <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                            Starter
-                          </span>
-                        )}
-                        {isLocked ? (
-                          <span className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                            <Lock className="h-3 w-3" />
-                            Locked
-                          </span>
-                        ) : null}
-                        <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${themeOption.avatarClass} text-white`}>
-                          {initials}
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${group.tier ? tierClass.chip : "border-slate-200 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
+                          {group.label}
                         </span>
+                        <p className="text-sm text-slate-600 dark:text-slate-300">
+                          {group.tier
+                            ? `${Math.min(currentTierUnlocks, group.items.length)}/${group.items.length} colorways unlocked at this tier`
+                            : `${group.items.length} starter colorways`}
+                        </p>
                       </div>
+                      <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                        {unlockedInGroup}/{group.items.length} available
+                      </Badge>
                     </div>
-                  </button>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {group.items.map((themeOption) => {
+                        const isSelected = headerTheme === themeOption.value;
+                        const isLocked = hasRewardsData && !isTierUnlockableUnlocked(themeOption, rewardItems, isAdminUser) && !isSelected;
+                        const optionTierClass = rewardTierClasses(themeOption.unlockTier);
+                        return (
+                          <button
+                            key={themeOption.value}
+                            type="button"
+                            onClick={() => handleSelectTheme(themeOption.value, isLocked)}
+                            disabled={isLocked}
+                            className={`rounded-2xl border p-3 text-left transition ${
+                              isSelected
+                                ? "border-slate-900 bg-slate-50 shadow-sm dark:border-slate-100 dark:bg-slate-900"
+                                : isLocked
+                                  ? "border-slate-200 bg-white/70 opacity-70 dark:border-slate-800 dark:bg-slate-950/40"
+                                  : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950/70 dark:hover:border-slate-500"
+                            }`}
+                            aria-pressed={isSelected}
+                            aria-label={`Use ${themeOption.label}`}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                {themeOption.swatchColors.map((color) => (
+                                  <span
+                                    key={color}
+                                    className="h-5 w-5 rounded-full border border-white/70 shadow-sm dark:border-slate-900"
+                                    style={{ background: color }}
+                                  />
+                                ))}
+                              </div>
+                              <span
+                                className={`flex h-[18px] w-[18px] items-center justify-center rounded-full border ${
+                                  isSelected
+                                    ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950"
+                                    : "border-slate-300 text-transparent dark:border-slate-600"
+                                }`}
+                              >
+                                <Check className="h-3 w-3" />
+                              </span>
+                            </div>
+                            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0">
+                                <p className="min-w-0 text-sm font-semibold text-slate-900 dark:text-slate-100">{themeOption.label}</p>
+                                {themeOption.unlockTier ? (
+                                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                    Unlock slot {themeOption.unlockCount ?? 1} at {rewardTierLabel(themeOption.unlockTier)} tier
+                                  </p>
+                                ) : null}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {themeOption.unlockTier ? (
+                                  <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${isLocked ? optionTierClass.muted : optionTierClass.chip}`}>
+                                    {rewardTierLabel(themeOption.unlockTier)} #{themeOption.unlockCount ?? 1}
+                                  </span>
+                                ) : (
+                                  <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                                    Starter
+                                  </span>
+                                )}
+                                {isLocked ? (
+                                  <span className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                                    <Lock className="h-3 w-3" />
+                                    Locked
+                                  </span>
+                                ) : null}
+                                <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${themeOption.avatarClass} text-white`}>
+                                  {initials}
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -447,7 +523,11 @@ export function AccountPersonalization() {
                 </Avatar>
                 <div>
                   <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Profile photo</p>
-                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">PNG, JPG, JPEG, and WEBP up to 5 MB.</p>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                    {hasImageUploadAccess
+                      ? "PNG, JPG, JPEG, and WEBP up to 5 MB."
+                      : "Personal photo uploads are available for subscribers and admins."}
+                  </p>
                 </div>
               </div>
 
@@ -455,55 +535,90 @@ export function AccountPersonalization() {
                 type="file"
                 accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
                 className="mt-4 bg-white dark:bg-slate-950/70"
-                disabled={uploadingAvatar}
+                disabled={uploadingAvatar || !hasImageUploadAccess}
                 onChange={(event) => {
                   handleAvatarUpload(event.target.files?.[0] ?? null);
                   event.currentTarget.value = "";
                 }}
               />
+              {!hasImageUploadAccess ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                  <span>Use avatar colorways now, or activate a subscription to upload a personal image.</span>
+                  <Button asChild size="sm" variant="outline">
+                    <Link to="/app/account">Open Billing</Link>
+                  </Button>
+                </div>
+              ) : null}
 
-              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-                {AVATAR_PRESETS.map((preset) => {
-                  const selected = !avatarUrl && avatarPreset === preset.value;
-                  const isLocked = hasRewardsData && !rewardTierAtLeast(highestTier, preset.unlockTier) && !selected;
-                  const tierClass = rewardTierClasses(preset.unlockTier);
+              <div className="mt-4 space-y-5">
+                {avatarPresetGroups.map((group) => {
+                  const tierClass = rewardTierClasses(group.tier);
+                  const unlockedInGroup = group.items.filter((preset) => !hasRewardsData || isTierUnlockableUnlocked(preset, rewardItems, isAdminUser)).length;
+                  const currentTierUnlocks = group.tier ? unlockableCountForTier(rewardItems, group.tier, isAdminUser) : group.items.length;
                   return (
-                    <button
-                      type="button"
-                      key={preset.value}
-                      onClick={() => {
-                        if (isLocked) {
-                          toast("Unlock a higher badge tier to use this colorway.");
-                          return;
-                        }
-                        handleSelectAvatarPreset(preset.value);
-                      }}
-                      disabled={isLocked}
-                      className={`rounded-2xl border p-3 text-left transition ${
-                        selected
-                          ? "border-slate-900 bg-white shadow-sm dark:border-slate-100 dark:bg-slate-900"
-                          : isLocked
-                            ? "border-slate-200 bg-white/70 opacity-70 dark:border-slate-700 dark:bg-slate-950/50"
-                            : "border-slate-200 dark:border-slate-700"
-                      }`}
-                    >
-                      <div className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold ${preset.className}`}>
-                        {initials}
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</div>
-                        {preset.unlockTier ? (
-                          <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${isLocked ? tierClass.muted : tierClass.chip}`}>
-                            {rewardTierLabel(preset.unlockTier)}
+                    <div key={`avatar-group:${group.key}`} className="space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${group.tier ? tierClass.chip : "border-slate-200 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
+                            {group.label}
                           </span>
-                        ) : null}
-                        {isLocked ? (
-                          <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                            Locked
-                          </span>
-                        ) : null}
+                          <p className="text-sm text-slate-600 dark:text-slate-300">
+                            {group.tier
+                              ? `${Math.min(currentTierUnlocks, group.items.length)}/${group.items.length} avatar colorways unlocked`
+                              : `${group.items.length} starter presets`}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                          {unlockedInGroup}/{group.items.length} available
+                        </Badge>
                       </div>
-                    </button>
+
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                        {group.items.map((preset) => {
+                          const selected = !avatarUrl && avatarPreset === preset.value;
+                          const isLocked = hasRewardsData && !isTierUnlockableUnlocked(preset, rewardItems, isAdminUser) && !selected;
+                          const presetTierClass = rewardTierClasses(preset.unlockTier);
+                          return (
+                            <button
+                              type="button"
+                              key={preset.value}
+                              onClick={() => {
+                                if (isLocked) {
+                                  toast("Unlock more badges at this tier to use this colorway.");
+                                  return;
+                                }
+                                handleSelectAvatarPreset(preset.value);
+                              }}
+                              disabled={isLocked}
+                              className={`rounded-2xl border p-3 text-left transition ${
+                                selected
+                                  ? "border-slate-900 bg-white shadow-sm dark:border-slate-100 dark:bg-slate-900"
+                                  : isLocked
+                                    ? "border-slate-200 bg-white/70 opacity-70 dark:border-slate-700 dark:bg-slate-950/50"
+                                    : "border-slate-200 dark:border-slate-700"
+                              }`}
+                            >
+                              <div className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold ${preset.className}`}>
+                                {initials}
+                              </div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</div>
+                                {preset.unlockTier ? (
+                                  <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${isLocked ? presetTierClass.muted : presetTierClass.chip}`}>
+                                    {rewardTierLabel(preset.unlockTier)} #{preset.unlockCount ?? 1}
+                                  </span>
+                                ) : null}
+                                {isLocked ? (
+                                  <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                                    Locked
+                                  </span>
+                                ) : null}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </div>

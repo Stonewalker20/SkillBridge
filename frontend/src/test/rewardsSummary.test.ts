@@ -7,6 +7,7 @@ describe("normalizeRewardsSummary", () => {
       counters: {
         evidence_saved: 2,
         profile_skills_confirmed: 1,
+        skill_categories_covered: 1,
         resume_snapshots_uploaded: 1,
         job_matches_run: 0,
         tailored_resumes_generated: 0,
@@ -57,22 +58,26 @@ describe("normalizeRewardsSummary", () => {
       counters: {
         evidence_saved: 100,
         profile_skills_confirmed: 50,
+        skill_categories_covered: 10,
         resume_snapshots_uploaded: 25,
         job_matches_run: 10,
         tailored_resumes_generated: 5,
       },
     });
 
-    expect(summary.achievements).toHaveLength(5);
-    expect(summary.totalCount).toBe(5);
-    expect(summary.unlockedCount).toBe(5);
-    expect(summary.badgeCount).toBe(5);
-    expect(summary.unlockedBadgeCount).toBe(5);
+    expect(summary.achievements).toHaveLength(6);
+    expect(summary.totalCount).toBe(6);
+    expect(summary.unlockedCount).toBe(6);
+    expect(summary.badgeCount).toBe(6);
+    expect(summary.unlockedBadgeCount).toBe(6);
+    expect(summary.masteredBadgeCount).toBeGreaterThanOrEqual(1);
+    expect(summary.tierStepTotalCount).toBe(42);
+    expect(summary.completionPct).toBeGreaterThan(0);
     expect(summary.nextAchievement?.key).toBe("tailored_resumes_generated");
     expect(summary.achievements[0]?.icon_key).toBe("spark");
     expect(summary.achievements[0]?.tier).toBe("master");
     expect(summary.achievements[1]?.tier).toBe("diamond");
-    expect(summary.achievements[2]?.tier).toBe("emerald");
+    expect(summary.achievements[2]?.tier).toBe("master");
     expect(summary.achievements.at(-1)?.tier).toBe("gold");
     expect(summary.achievements[0]?.tier_progress).toHaveLength(7);
   });

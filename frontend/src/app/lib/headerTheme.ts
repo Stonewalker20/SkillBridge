@@ -9,6 +9,7 @@ type HeaderThemeConfig = {
   value: string;
   label: string;
   unlockTier: RewardTier | null;
+  unlockCount?: number;
   adminOnly?: boolean;
   swatchColors: readonly [string, string, string];
   heroClass: string;
@@ -42,6 +43,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "neon",
     label: "Neon Pulse",
     unlockTier: "master" as RewardTier,
+    unlockCount: 3,
     swatchColors: ["#22D3EE", "#A855F7", "#EC4899"],
     heroClass:
       "animate-[theme-neon-flow_16s_ease-in-out_infinite] bg-[length:220%_220%] bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.30),_transparent_38%),radial-gradient(circle_at_bottom_right,_rgba(236,72,153,0.18),_transparent_32%),linear-gradient(135deg,_#effbff,_#fdf2ff_54%,_#eff6ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.18),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(236,72,153,0.12),_transparent_26%),linear-gradient(135deg,_#04111f,_#16081f_56%,_#0a1630)]",
@@ -58,6 +60,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "prism",
     label: "Prism Flow",
     unlockTier: "master" as RewardTier,
+    unlockCount: 4,
     swatchColors: ["#F59E0B", "#22C55E", "#3B82F6"],
     heroClass:
       "animate-[theme-rainbow-flow_14s_linear_infinite] bg-[length:280%_280%] bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_34%),radial-gradient(circle_at_70%_20%,_rgba(34,197,94,0.16),_transparent_26%),linear-gradient(135deg,_#fff7ed,_#fef3c7_28%,_#ecfeff_60%,_#eef2ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.16),_transparent_28%),radial-gradient(circle_at_70%_20%,_rgba(34,197,94,0.12),_transparent_22%),linear-gradient(135deg,_#1d0f09,_#102618_30%,_#031a31_62%,_#1b1028)]",
@@ -74,7 +77,8 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "sunrise",
     label: "Sunrise Gold",
-    unlockTier: null as RewardTier | null,
+    unlockTier: "bronze" as RewardTier,
+    unlockCount: 1,
     swatchColors: ["#B45309", "#F59E0B", "#FEF3C7"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.30),_transparent_42%),linear-gradient(135deg,_#fff8e7,_#fde68a_58%,_#fff7ed)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.20),_transparent_34%),linear-gradient(135deg,_#2a1e06,_#120d03)]",
@@ -90,7 +94,8 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "forest",
     label: "Forest Teal",
-    unlockTier: null as RewardTier | null,
+    unlockTier: "bronze" as RewardTier,
+    unlockCount: 2,
     swatchColors: ["#0F766E", "#14B8A6", "#CCFBF1"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.24),_transparent_40%),linear-gradient(135deg,_#ecfdf5,_#ccfbf1_56%,_#f0fdfa)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.18),_transparent_34%),linear-gradient(135deg,_#07231f,_#041310)]",
@@ -107,6 +112,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "plum",
     label: "Plum Slate",
     unlockTier: "gold" as RewardTier,
+    unlockCount: 1,
     swatchColors: ["#7C3AED", "#4338CA", "#EDE9FE"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.24),_transparent_40%),linear-gradient(135deg,_#faf5ff,_#ede9fe_56%,_#f8fafc)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.14),_transparent_34%),linear-gradient(135deg,_#1b1028,_#0f172a)]",
@@ -123,6 +129,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "rose",
     label: "Rose Ember",
     unlockTier: "silver" as RewardTier,
+    unlockCount: 1,
     swatchColors: ["#E11D48", "#F97316", "#FFE4E6"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(244,63,94,0.20),_transparent_40%),linear-gradient(135deg,_#fff1f2,_#ffe4e6_56%,_#fff7ed)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,113,133,0.16),_transparent_34%),linear-gradient(135deg,_#2c0f16,_#17060b)]",
@@ -139,6 +146,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "slate",
     label: "Slate Steel",
     unlockTier: "bronze" as RewardTier,
+    unlockCount: 3,
     swatchColors: ["#334155", "#64748B", "#E2E8F0"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(71,85,105,0.20),_transparent_40%),linear-gradient(135deg,_#f8fafc,_#e2e8f0_58%,_#f1f5f9)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(148,163,184,0.14),_transparent_34%),linear-gradient(135deg,_#111827,_#020617)]",
@@ -155,6 +163,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "cobalt",
     label: "Cobalt Mint",
     unlockTier: "plat" as RewardTier,
+    unlockCount: 1,
     swatchColors: ["#2563EB", "#14B8A6", "#DBEAFE"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.22),_transparent_40%),linear-gradient(135deg,_#eff6ff,_#dbeafe_56%,_#ecfeff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(96,165,250,0.16),_transparent_34%),linear-gradient(135deg,_#0a1630,_#03141a)]",
@@ -171,6 +180,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "aurora",
     label: "Aurora Sky",
     unlockTier: "emerald" as RewardTier,
+    unlockCount: 1,
     swatchColors: ["#0EA5E9", "#22C55E", "#DCFCE7"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.22),_transparent_38%),linear-gradient(135deg,_#ecfeff,_#dcfce7_56%,_#eff6ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.15),_transparent_34%),linear-gradient(135deg,_#04161f,_#05150d)]",
@@ -186,7 +196,8 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "sandstone",
     label: "Sandstone Clay",
-    unlockTier: "bronze" as RewardTier,
+    unlockTier: "silver" as RewardTier,
+    unlockCount: 2,
     swatchColors: ["#78716C", "#A8A29E", "#F5F5F4"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(120,113,108,0.20),_transparent_40%),linear-gradient(135deg,_#fafaf9,_#f5f5f4_56%,_#e7e5e4)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(168,162,158,0.14),_transparent_34%),linear-gradient(135deg,_#1c1917,_#0c0a09)]",
@@ -203,6 +214,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "orchid",
     label: "Orchid Pulse",
     unlockTier: "gold" as RewardTier,
+    unlockCount: 2,
     swatchColors: ["#9333EA", "#EC4899", "#F5D0FE"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(147,51,234,0.22),_transparent_40%),linear-gradient(135deg,_#fdf4ff,_#f5d0fe_56%,_#fce7f3)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.14),_transparent_34%),linear-gradient(135deg,_#250925,_#180611)]",
@@ -219,6 +231,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "glacier",
     label: "Glacier Glass",
     unlockTier: "diamond" as RewardTier,
+    unlockCount: 1,
     swatchColors: ["#38BDF8", "#E0F2FE", "#ECFEFF"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.22),_transparent_38%),linear-gradient(135deg,_#f0f9ff,_#e0f2fe_52%,_#ecfeff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.18),_transparent_34%),linear-gradient(135deg,_#061a24,_#03131b)]",
@@ -235,6 +248,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "abyss",
     label: "Abyss Current",
     unlockTier: "diamond" as RewardTier,
+    unlockCount: 2,
     swatchColors: ["#0F172A", "#1D4ED8", "#67E8F9"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(29,78,216,0.22),_transparent_38%),linear-gradient(135deg,_#e0f2fe,_#dbeafe_48%,_#eff6ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(6,182,212,0.16),_transparent_34%),linear-gradient(135deg,_#020617,_#081325)]",
@@ -251,6 +265,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "blood",
     label: "Blood Ember",
     unlockTier: null as RewardTier | null,
+    unlockCount: 1,
     adminOnly: true,
     swatchColors: ["#7F1D1D", "#DC2626", "#FCA5A5"],
     heroClass:
@@ -269,6 +284,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "neptune",
     label: "Neptune Flux",
     unlockTier: "master" as RewardTier,
+    unlockCount: 1,
     swatchColors: ["#22D3EE", "#2563EB", "#7C3AED"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.26),_transparent_38%),linear-gradient(135deg,_#eef8ff,_#dbeafe_48%,_#eef2ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.18),_transparent_34%),linear-gradient(135deg,_#040817,_#0f1027)]",
@@ -285,6 +301,7 @@ export const ACCOUNT_HEADER_THEMES = [
     value: "supernova",
     label: "Supernova Ice",
     unlockTier: "master" as RewardTier,
+    unlockCount: 2,
     swatchColors: ["#93C5FD", "#C4B5FD", "#E0E7FF"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(147,197,253,0.24),_transparent_38%),linear-gradient(135deg,_#f5f7ff,_#e0e7ff_48%,_#eef2ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(196,181,253,0.18),_transparent_34%),linear-gradient(135deg,_#0b1021,_#140a23)]",
@@ -311,6 +328,23 @@ function isAdminRole(role: string | null | undefined): boolean {
 export function getAccessibleHeaderThemes(role: string | null | undefined) {
   const admin = isAdminRole(role);
   return ACCOUNT_HEADER_THEMES.filter((theme) => !theme.adminOnly || admin);
+}
+
+export function getHeaderThemePageClass(theme: AccountHeaderTheme): string {
+  switch (theme.value) {
+    case "neon":
+      return "animate-[theme-neon-flow_18s_ease-in-out_infinite] bg-[length:240%_240%] bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.20),_transparent_36%),radial-gradient(circle_at_bottom_right,_rgba(236,72,153,0.14),_transparent_30%),linear-gradient(180deg,_#f6fdff,_#fdf2ff_48%,_#eff6ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.16),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(236,72,153,0.12),_transparent_24%),linear-gradient(180deg,_#03111f,_#15071e_48%,_#08162e)]";
+    case "prism":
+      return "animate-[theme-rainbow-flow_16s_linear_infinite] bg-[length:260%_260%] bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_34%),radial-gradient(circle_at_75%_18%,_rgba(34,197,94,0.14),_transparent_28%),linear-gradient(180deg,_#fff8ef,_#eefbf6_44%,_#eef4ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.12),_transparent_28%),radial-gradient(circle_at_75%_18%,_rgba(34,197,94,0.10),_transparent_22%),linear-gradient(180deg,_#1a0f07,_#0e2417_44%,_#071830)]";
+    case "neptune":
+      return "animate-[theme-neptune-flow_18s_ease-in-out_infinite] bg-[length:240%_240%] bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.20),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(124,58,237,0.14),_transparent_28%),linear-gradient(180deg,_#eefaff,_#e0ecff_48%,_#f1f3ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.12),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(124,58,237,0.12),_transparent_24%),linear-gradient(180deg,_#040817,_#0e1027_48%,_#140b25)]";
+    case "supernova":
+      return "animate-[theme-supernova-flow_18s_ease-in-out_infinite] bg-[length:240%_240%] bg-[radial-gradient(circle_at_top_left,_rgba(147,197,253,0.20),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(167,139,250,0.14),_transparent_28%),linear-gradient(180deg,_#f7f9ff,_#edf0ff_48%,_#f7f1ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(147,197,253,0.12),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(167,139,250,0.12),_transparent_24%),linear-gradient(180deg,_#0a1021,_#140a23_48%,_#1b0d28)]";
+    case "blood":
+      return "animate-[theme-blood-pulse_14s_ease-in-out_infinite] bg-[length:240%_240%] bg-[radial-gradient(circle_at_top_left,_rgba(248,113,113,0.24),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(127,29,29,0.20),_transparent_28%),linear-gradient(180deg,_#fff1f2,_#fee2e2_48%,_#fecaca)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(248,113,113,0.16),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(127,29,29,0.16),_transparent_24%),linear-gradient(180deg,_#1c0507,_#3f0a0d_48%,_#6b1116)]";
+    default:
+      return "bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)] dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_48%,_#020617)]";
+  }
 }
 
 export function readStoredHeaderTheme(): AccountHeaderThemeValue {

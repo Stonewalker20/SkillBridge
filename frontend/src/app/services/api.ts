@@ -1,4 +1,4 @@
-import { REWARD_TIERS, nextRewardTierForValue, rewardTierForValue, rewardTierTarget, type RewardTier } from "../lib/rewardTiers";
+import { REWARD_TIERS, rewardTierTarget, type RewardTier } from "../lib/rewardTiers";
 
 export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
@@ -229,6 +229,7 @@ export type BillingPortalSession = {
 export type RewardCounters = {
   evidence_saved: number;
   profile_skills_confirmed: number;
+  skill_categories_covered: number;
   resume_snapshots_uploaded: number;
   job_matches_run: number;
   tailored_resumes_generated: number;
@@ -261,6 +262,10 @@ export type RewardsSummary = {
   counters: RewardCounters;
   unlockedCount: number;
   totalCount: number;
+  masteredBadgeCount: number;
+  tierStepUnlockedCount: number;
+  tierStepTotalCount: number;
+  completionPct: number;
   achievements: RewardAchievement[];
   badges?: RewardBadge[];
   badgeCount?: number;
@@ -275,6 +280,7 @@ const REWARD_BADGES: Array<{
   title: string;
   description: string;
   counterKey: keyof RewardCounters;
+  tierTargets: number[];
 }> = [
   {
     key: "evidence_saved",
@@ -282,6 +288,7 @@ const REWARD_BADGES: Array<{
     counterKey: "evidence_saved",
     title: "Proof Builder",
     description: "Save evidence consistently so your profile is grounded in visible proof of work.",
+    tierTargets: [1, 3, 6, 10, 20, 35, 50],
   },
   {
     key: "profile_skills_confirmed",
@@ -289,6 +296,15 @@ const REWARD_BADGES: Array<{
     counterKey: "profile_skills_confirmed",
     title: "Skill Verifier",
     description: "Confirm profile skills to turn extracted signals into trusted data for matching and analytics.",
+    tierTargets: [1, 5, 10, 20, 35, 50, 75],
+  },
+  {
+    key: "skill_categories_covered",
+    iconKey: "layers",
+    counterKey: "skill_categories_covered",
+    title: "Skill Spectrum",
+    description: "Broaden confirmed skills across multiple categories so your profile reflects depth and range instead of one narrow lane.",
+    tierTargets: [1, 2, 4, 6, 7, 8, 10],
   },
   {
     key: "resume_snapshots_uploaded",
@@ -296,6 +312,7 @@ const REWARD_BADGES: Array<{
     counterKey: "resume_snapshots_uploaded",
     title: "Resume Foundation",
     description: "Add resume sources so tailoring starts from your real materials instead of a blank draft.",
+    tierTargets: [1, 2, 3, 4, 5, 7, 10],
   },
   {
     key: "job_matches_run",
@@ -303,6 +320,7 @@ const REWARD_BADGES: Array<{
     counterKey: "job_matches_run",
     title: "Match Navigator",
     description: "Run grounded job matches repeatedly to sharpen fit feedback and gap analysis over time.",
+    tierTargets: [1, 3, 5, 10, 20, 35, 50],
   },
   {
     key: "tailored_resumes_generated",
@@ -310,6 +328,7 @@ const REWARD_BADGES: Array<{
     counterKey: "tailored_resumes_generated",
     title: "Tailor Forge",
     description: "Generate tailored resumes so analysis turns into polished, submission-ready artifacts.",
+    tierTargets: [1, 2, 4, 8, 15, 25, 40],
   },
 ];
 
@@ -361,11 +380,13 @@ function normalizeRewardAchievement(raw: any): RewardAchievement {
 function buildRewardAchievementsFromCounters(counters: RewardCounters, unlockedLookup: Record<string, string | null> = {}): RewardAchievement[] {
   return REWARD_BADGES.map((badge) => {
     const currentValue = Number(counters[badge.counterKey] ?? 0) || 0;
-    const currentTier = rewardTierForValue(currentValue);
-    const nextTier = nextRewardTierForValue(currentValue);
-    const targetValue = nextTier ? rewardTierTarget(nextTier) : rewardTierTarget("master");
+    const currentTier = REWARD_TIERS.reduce<RewardTier | null>((best, tier, index) => {
+      return currentValue >= badge.tierTargets[index] ? tier : best;
+    }, null);
+    const nextTier = REWARD_TIERS.find((tier, index) => currentValue < badge.tierTargets[index]) ?? null;
+    const targetValue = nextTier ? badge.tierTargets[REWARD_TIERS.indexOf(nextTier)] : badge.tierTargets[badge.tierTargets.length - 1];
     const tierProgress = REWARD_TIERS.map((tier) => {
-      const stepTarget = rewardTierTarget(tier);
+      const stepTarget = badge.tierTargets[REWARD_TIERS.indexOf(tier)] ?? rewardTierTarget(tier);
       const stepUnlocked = currentValue >= stepTarget;
       return {
         key: `${badge.key}:${tier}`,
@@ -385,7 +406,7 @@ function buildRewardAchievementsFromCounters(counters: RewardCounters, unlockedL
       description: badge.description,
       reward: nextTier
         ? `Next tier: ${String(nextTier).charAt(0).toUpperCase()}${String(nextTier).slice(1)} at ${targetValue} ${badge.counterKey.replaceAll("_", " ")}.`
-        : `Master tier reached at ${rewardTierTarget("master")} ${badge.counterKey.replaceAll("_", " ")}.`,
+        : `Master tier reached at ${badge.tierTargets[badge.tierTargets.length - 1]} ${badge.counterKey.replaceAll("_", " ")}.`,
       counter_key: badge.counterKey,
       current_value: currentValue,
       target_value: targetValue,
@@ -398,9 +419,10 @@ function buildRewardAchievementsFromCounters(counters: RewardCounters, unlockedL
 }
 
 async function buildFallbackRewardsSummary(): Promise<RewardsSummary> {
-  const [evidenceResult, profileResult, snapshotsResult, historyResult, tailoredResult] = await Promise.allSettled([
+  const [evidenceResult, profileResult, skillsResult, snapshotsResult, historyResult, tailoredResult] = await Promise.allSettled([
     api.listEvidence(),
     api.getProfileConfirmation(),
+    api.listSkills({ limit: 5000 }),
     api.listResumeSnapshots(),
     api.listJobMatchHistory(1000),
     api.listTailoredResumes(1000),
@@ -411,13 +433,26 @@ async function buildFallbackRewardsSummary(): Promise<RewardsSummary> {
       ? evidenceResult.value.filter((item) => String(item?.origin ?? "user").trim().toLowerCase() !== "system")
       : [];
   const confirmation = profileResult.status === "fulfilled" ? profileResult.value : null;
+  const skills = skillsResult.status === "fulfilled" ? skillsResult.value : [];
   const snapshots = snapshotsResult.status === "fulfilled" ? snapshotsResult.value : [];
   const history = historyResult.status === "fulfilled" ? historyResult.value : [];
   const tailored = tailoredResult.status === "fulfilled" ? tailoredResult.value : [];
+  const skillsById = new Map(skills.map((skill) => [String(skill.id), skill]));
+  const confirmedCategories = new Set(
+    asArray(confirmation?.confirmed)
+      .flatMap((entry) => {
+        const skill = skillsById.get(String(entry?.skill_id ?? ""));
+        const categories = asArray<string>(skill?.categories).map((value) => String(value).trim()).filter(Boolean);
+        const single = String(skill?.category ?? "").trim();
+        return [...categories, ...(single ? [single] : [])];
+      })
+      .filter(Boolean)
+  );
 
   const counters: RewardCounters = {
     evidence_saved: evidence.length,
     profile_skills_confirmed: asArray(confirmation?.confirmed).length,
+    skill_categories_covered: confirmedCategories.size,
     resume_snapshots_uploaded:
       snapshots.length + evidence.filter((item) => String(item?.type ?? "").trim().toLowerCase() === "resume").length,
     job_matches_run: history.length,
@@ -430,6 +465,7 @@ export function normalizeRewardsSummary(raw: any): RewardsSummary {
   const counters: RewardCounters = {
     evidence_saved: Number(raw?.counters?.evidence_saved ?? 0) || 0,
     profile_skills_confirmed: Number(raw?.counters?.profile_skills_confirmed ?? 0) || 0,
+    skill_categories_covered: Number(raw?.counters?.skill_categories_covered ?? 0) || 0,
     resume_snapshots_uploaded: Number(raw?.counters?.resume_snapshots_uploaded ?? 0) || 0,
     job_matches_run: Number(raw?.counters?.job_matches_run ?? 0) || 0,
     tailored_resumes_generated: Number(raw?.counters?.tailored_resumes_generated ?? 0) || 0,
@@ -448,6 +484,18 @@ export function normalizeRewardsSummary(raw: any): RewardsSummary {
     : buildRewardAchievementsFromCounters(counters, unlockedLookup);
   const badges = asArray(raw?.badges).length ? asArray(raw?.badges).map(normalizeRewardAchievement) : achievements;
   const unlockedCount = achievements.filter((achievement) => achievement.unlocked).length;
+  const tierStepUnlockedCount =
+    Number(raw?.tier_step_unlocked_count ?? raw?.tierStepUnlockedCount) ||
+    achievements.flatMap((achievement) => asArray(achievement.tier_progress)).filter((step) => step.unlocked).length;
+  const tierStepTotalCount =
+    Number(raw?.tier_step_total_count ?? raw?.tierStepTotalCount) ||
+    achievements.flatMap((achievement) => asArray(achievement.tier_progress)).length;
+  const masteredBadgeCount =
+    Number(raw?.mastered_badge_count ?? raw?.masteredBadgeCount) ||
+    achievements.filter((achievement) => achievement.current_tier === "master").length;
+  const completionPct =
+    Number(raw?.completion_pct ?? raw?.completionPct) ||
+    (tierStepTotalCount > 0 ? Number(((tierStepUnlockedCount / tierStepTotalCount) * 100).toFixed(2)) : 0);
   const nextAchievement =
     [...achievements]
       .filter((achievement) => achievement.next_tier)
@@ -460,6 +508,10 @@ export function normalizeRewardsSummary(raw: any): RewardsSummary {
     counters,
     unlockedCount: Number(raw?.unlocked_count ?? unlockedCount) || unlockedCount,
     totalCount: Number(raw?.total_count ?? achievements.length) || achievements.length,
+    masteredBadgeCount,
+    tierStepUnlockedCount,
+    tierStepTotalCount,
+    completionPct,
     achievements,
     badges,
     badgeCount: Number(raw?.badge_count ?? raw?.badgeCount ?? badges.length) || badges.length,

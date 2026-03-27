@@ -21,7 +21,7 @@ import LogoImage from "../../imports/skillbridge_logo.png";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { useHeaderTheme } from "../lib/headerTheme";
+import { getHeaderThemePageClass, useHeaderTheme } from "../lib/headerTheme";
 import { avatarPresetClass } from "../lib/avatarPresets";
 import { useAccountPreferences } from "../context/AccountPreferencesContext";
 import { SubscriptionGate } from "./SubscriptionGate";
@@ -104,7 +104,7 @@ export function RootLayout() {
   }
 
   return (
-    <div className="flex min-h-svh bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)] text-slate-900 dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_48%,_#020617)] dark:text-slate-100 lg:h-svh lg:overflow-hidden">
+    <div className={cn("flex min-h-svh text-slate-900 dark:text-slate-100 lg:h-svh lg:overflow-hidden", getHeaderThemePageClass(activeHeaderTheme))}>
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div 
@@ -115,8 +115,9 @@ export function RootLayout() {
 
       {/* Sidebar */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 flex h-svh flex-col overflow-hidden border-r border-slate-200/70 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.96)_52%,_rgba(241,245,249,0.98))] text-[clamp(0.82rem,0.76rem+0.18vh,0.96rem)] backdrop-blur-xl ease-in-out dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.96))] lg:sticky lg:top-0 lg:h-svh lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex h-svh flex-col overflow-hidden border-r border-slate-200/70 text-[clamp(0.82rem,0.76rem+0.18vh,0.96rem)] backdrop-blur-xl ease-in-out dark:border-slate-800/80 lg:sticky lg:top-0 lg:h-svh lg:translate-x-0",
         preferences.reducedMotion ? "transition-none" : "transition-transform duration-300",
+        activeHeaderTheme.sidebarClass,
         isCompactSidebar ? "w-56" : "w-64",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
@@ -289,7 +290,7 @@ export function RootLayout() {
 
       {/* Main Content */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-white/70 bg-white/70 px-4 py-4 backdrop-blur-xl sm:px-8 dark:border-slate-800/80 dark:bg-slate-950/55">
+        <header className={cn("border-b px-4 py-4 backdrop-blur-xl sm:px-8", activeHeaderTheme.softPanelClass, "border-white/70 dark:border-slate-800/80")}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               {/* Mobile Menu Button */}
