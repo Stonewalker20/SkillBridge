@@ -22,7 +22,6 @@ import { useAccountPreferences, SIDEBAR_DENSITY_OPTIONS, START_PAGE_OPTIONS } fr
 import { AVATAR_PRESETS, avatarPresetClass, type AvatarPresetValue } from "../lib/avatarPresets";
 import { api, type RewardsSummary } from "../services/api";
 import { AccountSectionNav } from "../components/AccountSectionNav";
-import { RewardBadgeCollection } from "../components/RewardBadgeCollection";
 import { highestUnlockedRewardTier, rewardTierAtLeast, rewardTierClasses, rewardTierLabel } from "../lib/rewardTiers";
 
 function PreferenceRow({
@@ -425,20 +424,6 @@ export function AccountPersonalization() {
         </div>
 
         <div className="space-y-6">
-          {rewards ? (
-            <RewardBadgeCollection
-              badges={rewards.badges ?? rewards.achievements}
-              unlockedCount={rewards.unlockedBadgeCount ?? rewards.unlockedCount}
-              totalCount={rewards.badgeCount ?? rewards.totalCount ?? rewards.achievements.length}
-            />
-          ) : (
-            <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-              <div className="text-sm text-slate-600 dark:text-slate-300">
-                Badge progress is unavailable right now, but your personalization settings are still available.
-              </div>
-            </Card>
-          )}
-
           <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
             <div className="mb-5 flex items-center gap-3">
               <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
