@@ -13,6 +13,12 @@ npm test
 npm run test:watch
 ```
 
+## Containers
+
+- `Dockerfile` is the development container and runs the Vite dev server.
+- `Dockerfile.prod` builds the static app and serves it with nginx.
+- `nginx.conf` keeps SPA routes working by falling back to `index.html`.
+
 ## Notes
 
 - The workspace uses npm, backed by `package-lock.json`.

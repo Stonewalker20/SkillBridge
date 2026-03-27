@@ -58,6 +58,8 @@ npm run build
 
 Set `VITE_API_BASE` to the deployed backend origin for staging or production builds.
 
+If you want a containerized frontend build, use `frontend/Dockerfile.prod`, not the dev-only `frontend/Dockerfile`.
+
 ## 5. Billing Setup
 
 Before enabling real subscriptions:
@@ -107,6 +109,16 @@ If the release fails:
 3. restore the database only if a migration or destructive data write caused corruption
 4. keep Stripe webhooks disabled during rollback if event handling changed
 
-## 9. Known Remaining External Dependencies
+## 9. Example Container Stack
+
+The repo now includes `infra/docker-compose.prod.example.yml` as a minimal production-shaped example. It is not a full managed deployment, but it gives you:
+
+- backend service
+- static frontend served by nginx
+- MongoDB service for non-managed environments
+
+Use it as a reference, not as the final HA deployment architecture.
+
+## 10. Known Remaining External Dependencies
 
 The repo now includes a password reset flow, but production-grade email delivery still depends on an external email provider. Until a mailer is wired, password reset links are development-friendly rather than customer-ready.

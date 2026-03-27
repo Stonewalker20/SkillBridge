@@ -77,7 +77,8 @@ skillbridge/
 │   ├── Dockerfile
 │   └── README.md
 ├── infra/
-│   └── docker-compose.yml      # local MongoDB container setup
+│   ├── docker-compose.yml      # local MongoDB container setup
+│   └── docker-compose.prod.example.yml
 ├── tests/                      # top-level integration or legacy project tests
 ├── .env.example
 └── README.md
@@ -195,6 +196,8 @@ For deployed frontend environments, start from `frontend/.env.staging.example` o
 - Deployment runbook: `docs/deployment_guide.md`
 - Environment matrix: `docs/env_matrix.md`
 - Release checklist: `docs/release_runbook_checklist.md`
+- Production frontend image: `frontend/Dockerfile.prod`
+- Example production compose stack: `infra/docker-compose.prod.example.yml`
 
 Frontend quality commands:
 
