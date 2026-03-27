@@ -34,11 +34,20 @@
 
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0.4pt}
+\setlength{\headheight}{14pt}
 
 % ---------------------------
 % Table formatting helpers
 % ---------------------------
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+\newcommand{\SafeImageOrPlaceholder}[2]{%
+  \IfFileExists{#1}{%
+    \fbox{\includegraphics[width=#2]{#1}}%
+  }{%
+    \fbox{\parbox[c][2.25in][c]{#2}{\centering Missing image placeholder\\[0.35em]\texttt{\detokenize{#1}}}}%
+  }%
+}
 
 % ---------------------------
 % Week Summary Page Macro
@@ -83,7 +92,7 @@
   \vspace{0.75em}
   \begin{figure}[H]
     \centering
-    \fbox{\includegraphics[width=0.95\linewidth]{#2}}
+    \SafeImageOrPlaceholder{#2}{0.95\linewidth}
     \caption{#3}
   \end{figure}
 }
@@ -106,9 +115,9 @@
     \centering
     \begin{tabularx}{\linewidth}{@{}X X@{}}
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#2}} &
+      \SafeImageOrPlaceholder{#2}{0.95\linewidth} &
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#4}} \\
+      \SafeImageOrPlaceholder{#4}{0.95\linewidth} \\
       \small #3 & \small #5 \\
     \end{tabularx}
   \end{figure}
@@ -124,15 +133,15 @@
     \centering
     \begin{tabularx}{\linewidth}{@{}X X@{}}
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#2}} &
+      \SafeImageOrPlaceholder{#2}{0.95\linewidth} &
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#4}} \\
+      \SafeImageOrPlaceholder{#4}{0.95\linewidth} \\
       \small #3 & \small #5 \\
       \\
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#6}} &
+      \SafeImageOrPlaceholder{#6}{0.95\linewidth} &
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#8}} \\
+      \SafeImageOrPlaceholder{#8}{0.95\linewidth} \\
       \small #7 & \small #9 \\
     \end{tabularx}
   \end{figure}
@@ -352,6 +361,106 @@ The repository does not currently contain the actual midterm screenshots. The bo
 \end{enumerate}
 
 % =========================================================
+% WEEK 4 (PR4) -- MOST RECENT
+% =========================================================
+\WeekReport{4}{February 26 -- March 3, 2026}{
+Week 4 focused on extending SkillBridge beyond ingestion and extraction into user-facing project organization, personalized dashboard aggregation, and admin moderation workflows. The backend now supports linking confirmed skills to specific portfolio projects, computing dashboard summaries from multiple user collections, and moderating community-submitted job postings through an approval or rejection flow.
+}{
+Justin Elia & Validation support for project and moderation flows & \\
+Spencer Roeren & Report review and UI alignment support & \\
+Cordell Stonecipher & Implemented UC 1.2, UC 1.4, and UC 4.1 endpoints + aggregation logic + testing & (Artifacts: API routes + tests + report updates) \\
+}
+
+\subsection*{Week 4 -- Implemented Use Cases}
+\addcontentsline{toc}{subsection}{Week 4 -- Implemented Use Cases}
+\begin{itemize}
+  \item \textbf{UC 1.2 -- Link Skill to Project}
+  \item \textbf{UC 1.4 -- Dashboard Summary (User-Specific)}
+  \item \textbf{UC 4.1 -- Moderate Job Postings}
+\end{itemize}
+
+\subsection*{Week 4 -- Screenshots of Implemented Features}
+\addcontentsline{toc}{subsection}{Week 4 -- Screenshots of Implemented Features}
+\noindent
+The PR4 screenshots have not been exported into the repository yet. The boxes below are compile-safe placeholders for the final report draft.
+
+\begin{figure}[H]
+  \centering
+  \begin{tabular}{cc}
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 1.2 Placeholder\\Project skill link API response\\and project\_skill\_links collection view}} &
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 1.4 Placeholder\\Dashboard summary API response\\and dashboard metric cards}} \\
+    \small Planned evidence: project-skill linking & \small Planned evidence: dashboard summary aggregation \\
+    \\[0.75em]
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 4.1 Placeholder\\Pending jobs list, moderation PATCH\\and updated moderation status}} &
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering PR4 Use Case Diagram Placeholder\\Highlight UC 1.2, UC 1.4, and UC 4.1}} \\
+    \small Planned evidence: moderation workflow & \small Planned evidence: highlighted use case diagram \\
+  \end{tabular}
+  \caption{PR4 implementation evidence placeholders for UC 1.2, UC 1.4, and UC 4.1.}
+\end{figure}
+
+\subsection*{Week 4 -- Database Queries Used (MongoDB Equivalent to SQL)}
+\addcontentsline{toc}{subsection}{Week 4 -- Database Queries Used (MongoDB Equivalent to SQL)}
+
+\noindent
+\textbf{UC 1.2 -- Link Skill to Project}
+\begin{verbatim}
+db.project_skill_links.findOne({
+  project_id: ObjectId("<project_id>"),
+  skill_id: ObjectId("<skill_id>")
+})
+
+db.project_skill_links.insertOne({
+  project_id: ObjectId("<project_id>"),
+  skill_id: ObjectId("<skill_id>"),
+  created_at: new Date()
+})
+\end{verbatim}
+
+\noindent
+\textbf{UC 1.4 -- Dashboard Summary}
+\begin{verbatim}
+db.projects.find(
+  { user_id: { $in: [ObjectId("<user_id>"), "<user_id>"] } },
+  { title: 1, description: 1, created_at: 1 }
+).sort({ created_at: -1 }).limit(10)
+
+db.evidence.aggregate([
+  { $match: { user_id: { $in: [ObjectId("<user_id>"), "<user_id>"] } } },
+  { $unwind: "$skill_ids" },
+  { $group: { _id: "$skill_ids", evidence_count: { $sum: 1 } } },
+  { $sort: { evidence_count: -1 } },
+  { $limit: 8 }
+])
+
+db.resume_skill_confirmations.aggregate([
+  { $match: { user_id: { $in: [ObjectId("<user_id>"), "<user_id>"] }, resume_snapshot_id: null } },
+  { $unwind: "$confirmed" },
+  { $group: { _id: "$confirmed.skill_id" } },
+  { $count: "n" }
+])
+\end{verbatim}
+
+\noindent
+\textbf{UC 4.1 -- Moderate Job Postings}
+\begin{verbatim}
+db.jobs.find({ moderation_status: "pending" }).sort({ created_at: -1 })
+
+db.jobs.updateOne(
+  { _id: ObjectId("<job_id>") },
+  { $set: {
+      moderation_status: "rejected",
+      moderation_reason: "Rejected by reviewer",
+      updated_at: new Date()
+  }}
+)
+\end{verbatim}
+
+\subsection*{Week 4 -- Video Demonstration}
+\addcontentsline{toc}{subsection}{Week 4 -- Video Demonstration}
+\noindent
+Video link: To be added for PR4 delivery.
+
+% =========================================================
 % WEEK 3 (PR3) -- MOST RECENT
 % =========================================================
 \WeekReport{3}{February 19 -- February 25, 2026}{
@@ -519,7 +628,7 @@ db.skills.aggregate([
 \subsection*{Week 2 -- Video Demonstration}
 \addcontentsline{toc}{subsection}{Week 2 -- Video Demonstration}
 \noindent
-Video link: \href{https://drive.google.com/file/d/1VNMVQtzIe4HL9UoQhuhnphgiitfG7b9m/view?usp=drive_link}{https://drive.google.com/file/d/1VNMVQtzIe4HL9UoQhuhnphgiitfG7b9m/view?usp=drive_link}
+Video link: \url{https://drive.google.com/file/d/1VNMVQtzIe4HL9UoQhuhnphgiitfG7b9m/view?usp=drive_link}
 
 
 \WeekReport{1}{(Feb 8th)}{
@@ -568,7 +677,7 @@ The UI will display data using the backend API endpoints:
     \begin{subfigure}{0.48\textwidth}
         \centering
         \begin{tikzpicture}
-            \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=\linewidth]{images/Dashboard.png}};
+            \node[anchor=south west, inner sep=0] (image) at (0,0) {\SafeImageOrPlaceholder{images/Dashboard.png}{\linewidth}};
             \begin{scope}[x={(image.south east)},y={(image.north west)}]
                 \node [anchor=south east, fill=black, fill opacity=0.5, text=white, font=\sffamily\tiny, inner sep=2pt, rounded corners=1pt] at (0.98, 0.05) {Dashboard View};
             \end{scope}
@@ -579,7 +688,7 @@ The UI will display data using the backend API endpoints:
     \begin{subfigure}{0.48\textwidth}
         \centering
         \begin{tikzpicture}
-            \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=\linewidth]{images/Skills.png}};
+            \node[anchor=south west, inner sep=0] (image) at (0,0) {\SafeImageOrPlaceholder{images/Skills.png}{\linewidth}};
             \begin{scope}[x={(image.south east)},y={(image.north west)}]
                 \node [anchor=south east, fill=black, fill opacity=0.5, text=white, font=\sffamily\tiny, inner sep=2pt, rounded corners=1pt] at (0.98, 0.05) {Skills View};
             \end{scope}
@@ -593,7 +702,7 @@ The UI will display data using the backend API endpoints:
     \begin{subfigure}{0.48\textwidth}
         \centering
         \begin{tikzpicture}
-            \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=\linewidth]{images/Evidence.png}};
+            \node[anchor=south west, inner sep=0] (image) at (0,0) {\SafeImageOrPlaceholder{images/Evidence.png}{\linewidth}};
             \begin{scope}[x={(image.south east)},y={(image.north west)}]
                 \node [anchor=south east, fill=black, fill opacity=0.5, text=white, font=\sffamily\tiny, inner sep=2pt, rounded corners=1pt] at (0.98, 0.05) {Evidence View};
             \end{scope}
@@ -604,7 +713,7 @@ The UI will display data using the backend API endpoints:
     \begin{subfigure}{0.48\textwidth}
         \centering
         \begin{tikzpicture}
-            \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=\linewidth]{images/Job Browser.png}};
+            \node[anchor=south west, inner sep=0] (image) at (0,0) {\SafeImageOrPlaceholder{images/Job Browser.png}{\linewidth}};
             \begin{scope}[x={(image.south east)},y={(image.north west)}]
                 \node [anchor=south east, fill=black, fill opacity=0.5, text=white, font=\sffamily\tiny, inner sep=2pt, rounded corners=1pt] at (0.98, 0.05) {Job Browser View};
             \end{scope}

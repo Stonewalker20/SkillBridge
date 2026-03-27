@@ -18,6 +18,7 @@ from app.models.confirmations import (
     RejectedSkill,
 )
 from app.utils.mongo import oid_str, ref_values
+from app.utils.rewards import sync_reward_counter
 
 router = APIRouter()
 
@@ -332,6 +333,8 @@ async def upsert_confirmation(payload: ConfirmationIn, user=Depends(require_user
     )
     if not d:
         raise HTTPException(status_code=500, detail="Failed to read confirmation document")
+    if snapshot_oid is None:
+        await sync_reward_counter(db, oid_str(user_oid), "profile_skills_confirmed", len(confirmed_docs))
 
     return await serialize_confirmation_doc(db, d, user_refs)
 

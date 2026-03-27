@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type Skill, type ConfirmationOut } from "../services/api";
+import { api, type Skill, type ConfirmationOut, type RewardAchievement, type RewardsSummary } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
 import { Card } from "../components/ui/card";
-import { Target, FolderOpen, TrendingUp, FileText, X } from "lucide-react";
+import { Award, FileText, FolderOpen, Rocket, Target, TrendingUp, X } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
@@ -55,6 +55,26 @@ const EMPTY_SUMMARY: DashboardSummary = {
   portfolioTypeDistribution: [],
   recentMatchTrend: [],
 };
+
+const REWARD_ACTIONS: Record<string, { href: string; label: string }> = {
+  evidence_saved: { href: "/app/evidence", label: "Add evidence" },
+  profile_skills_confirmed: { href: "/app/skills", label: "Confirm skills" },
+  resume_snapshots_uploaded: { href: "/app/evidence?add=1&type=resume", label: "Add resume evidence" },
+  job_matches_run: { href: "/app/jobs", label: "Run match" },
+  tailored_resumes_generated: { href: "/app/jobs", label: "Generate resume" },
+};
+
+function rewardProgressLabel(achievement: RewardAchievement): string {
+  const labels: Record<string, string> = {
+    evidence_saved: "evidence items",
+    profile_skills_confirmed: "confirmed skills",
+    resume_snapshots_uploaded: "resume templates",
+    job_matches_run: "job matches",
+    tailored_resumes_generated: "tailored resumes",
+  };
+  const unit = labels[achievement.counter_key] ?? "steps";
+  return `${achievement.current_value}/${achievement.target_value} ${unit}`;
+}
 
 const TAILORED_RESUME_FETCH_LIMIT = 1000;
 
@@ -120,6 +140,49 @@ function mergeRecentActivity(sources: Array<Array<any>>): DashboardSummary["rece
   return Array.from(byId.values()).sort((a, b) => activityTimestamp(b.date) - activityTimestamp(a.date));
 }
 
+function RecentActivityRow({
+  activity,
+  onHide,
+}: {
+  activity: DashboardSummary["recentActivity"][number];
+  onHide: (eventKey: string) => void;
+}) {
+  const eventKey = String(activity.eventKey ?? `${activity.id}:${activity.date}`);
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3 last:border-slate-100 dark:border-slate-800 dark:bg-slate-800/60">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+        <div className="min-w-0 space-y-2">
+          <div className="flex flex-wrap items-start gap-2">
+            <Badge variant="outline" className="shrink-0 capitalize bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+              {activity.type}
+            </Badge>
+            <p className="min-w-0 flex-1 break-words text-sm font-medium leading-5 text-gray-900 dark:text-slate-100">
+              {activity.name}
+            </p>
+          </div>
+          <p className="break-words text-xs capitalize text-gray-500 dark:text-slate-400">{activity.action}</p>
+        </div>
+        <div className="flex shrink-0 items-start gap-2">
+          <span className="pt-0.5 text-xs text-gray-500 dark:text-slate-400">
+            {activity.date ? new Date(activity.date).toLocaleDateString() : ""}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 rounded-full text-slate-400 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-900 dark:hover:text-slate-100"
+            onClick={() => onHide(eventKey)}
+            aria-label={`Hide activity ${activity.name}`}
+            title="Hide activity"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 async function loadAllSkills(): Promise<Skill[]> {
   const pageSize = 200;
   const allSkills: Skill[] = [];
@@ -142,6 +205,7 @@ export function Dashboard() {
   const { activeHeaderTheme } = useHeaderTheme();
   const { preferences } = useAccountPreferences();
   const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
+  const [rewards, setRewards] = useState<RewardsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [hiddenRecentActivityKeys, setHiddenRecentActivityKeys] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
@@ -232,10 +296,11 @@ export function Dashboard() {
         //    - profile confirmation = resume_snapshot_id null
         //    - total skills = confirmed length
         //    - top categories computed from confirmed skill ids -> global skills list mapping
-        const [skillsLib, profileConf, tailoredResumeRows] = await Promise.all([
+        const [skillsLib, profileConf, tailoredResumeRows, rewardSummary] = await Promise.all([
           loadAllSkills(),
           api.getProfileConfirmation().catch(() => null as ConfirmationOut | null),
           api.listTailoredResumes(TAILORED_RESUME_FETCH_LIMIT).catch(() => []),
+          api.getRewardsSummary().catch(() => null),
         ]);
         const confirmed = Array.isArray(profileConf?.confirmed) ? profileConf!.confirmed : [];
         const confirmedIds = new Set(confirmed.map((c) => (c?.skill_id ?? "").trim()).filter(Boolean));
@@ -280,9 +345,11 @@ export function Dashboard() {
           recentActivity: mergedRecentActivity,
           topSkillCategories,
         });
+        setRewards(rewardSummary ?? null);
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
         setSummary(EMPTY_SUMMARY);
+        setRewards(null);
       } finally {
         setLoading(false);
       }
@@ -324,6 +391,13 @@ export function Dashboard() {
       },
     ],
     [summary]
+  );
+  const hasRewardsData = Boolean(
+    rewards &&
+      ((rewards.badges?.length ?? 0) > 0 ||
+        rewards.achievements.length > 0 ||
+        (rewards.badgeCount ?? 0) > 0 ||
+        (rewards.totalCount ?? 0) > 0)
   );
 
   const visibleRecentActivity = useMemo(
@@ -410,6 +484,180 @@ export function Dashboard() {
         ))}
       </div>
 
+      <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Award className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Achievements</h3>
+            </div>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
+              Milestones unlock as you save evidence, confirm skills, run job matches, and generate tailored resumes.
+            </p>
+          </div>
+          <Badge variant="outline" className="w-fit dark:border-slate-700 dark:text-slate-200">
+            {hasRewardsData
+              ? `${rewards?.unlockedCount ?? 0}/${Math.max(rewards?.totalCount ?? 0, rewards?.achievements.length ?? 0)} unlocked`
+              : "Sync unavailable"}
+          </Badge>
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
+            {hasRewardsData && rewards?.nextAchievement ? (
+              <>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next Unlock</div>
+                    <div className="mt-2 text-xl font-semibold text-slate-900 dark:text-slate-100">{rewards.nextAchievement.title}</div>
+                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.description}</p>
+                    <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">{rewardProgressLabel(rewards.nextAchievement)}</p>
+                  </div>
+                  {REWARD_ACTIONS[rewards.nextAchievement.counter_key] ? (
+                    <Button asChild size="sm" className={activeHeaderTheme.buttonClass}>
+                      <Link to={REWARD_ACTIONS[rewards.nextAchievement.counter_key].href}>
+                        {REWARD_ACTIONS[rewards.nextAchievement.counter_key].label}
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="mt-4 h-2.5 rounded-full bg-slate-200 dark:bg-slate-700">
+                  <div
+                    className={`h-2.5 rounded-full ${activeHeaderTheme.barClass}`}
+                    style={{ width: `${Math.max(6, Math.min(100, rewards.nextAchievement.progress_pct))}%` }}
+                  />
+                </div>
+                <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.reward}</p>
+              </>
+            ) : !hasRewardsData ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                  <Award className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+                  <span className="text-lg font-semibold">Achievement progress is unavailable right now</span>
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Reward data did not load, so milestone counts are hidden until the next successful sync.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                  <Rocket className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+                  <span className="text-lg font-semibold">All current milestones unlocked</span>
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  You have cleared the current progression track. New milestones can be added on top of this reward system without changing the existing history.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/30">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recent Unlocks</div>
+            {!hasRewardsData ? (
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Recent unlocks will appear here once reward sync returns.</p>
+            ) : rewards.recentUnlocks.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">No milestones unlocked yet. Your first reward appears as soon as you save evidence or confirm a skill.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {rewards.recentUnlocks.map((achievement) => (
+                  <div key={achievement.key} className="rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900/70">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{achievement.title}</div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{achievement.reward}</div>
+                      </div>
+                      <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
+                        Unlocked
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {hasRewardsData ? (
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Award className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+                  <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Achievement Progress</h4>
+                </div>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  {rewards?.unlockedCount ?? 0}/{Math.max(rewards?.totalCount ?? 0, rewards?.achievements.length ?? 0)} milestones unlocked.
+                </p>
+              </div>
+              <Badge variant="outline" className="w-fit shrink-0 dark:border-slate-700 dark:text-slate-200">
+                {rewards?.nextAchievement ? "Next up" : "All set"}
+              </Badge>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
+                {rewards?.nextAchievement ? (
+                  <>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next unlock</div>
+                        <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">{rewards.nextAchievement.title}</div>
+                        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.description}</p>
+                        <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">{rewardProgressLabel(rewards.nextAchievement)}</p>
+                      </div>
+                      {REWARD_ACTIONS[rewards.nextAchievement.counter_key] ? (
+                        <Button asChild size="sm" className={activeHeaderTheme.buttonClass}>
+                          <Link to={REWARD_ACTIONS[rewards.nextAchievement.counter_key].href}>
+                            {REWARD_ACTIONS[rewards.nextAchievement.counter_key].label}
+                          </Link>
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="mt-4 h-2.5 rounded-full bg-slate-200 dark:bg-slate-700">
+                      <div
+                        className={`h-2.5 rounded-full ${activeHeaderTheme.barClass}`}
+                        style={{ width: `${Math.max(6, Math.min(100, rewards.nextAchievement.progress_pct))}%` }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next unlock</div>
+                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                      You’ve cleared the current milestone track. New rewards will appear here when additional milestones are added.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900/70">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recent unlocks</div>
+                {rewards?.recentUnlocks.length ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {rewards.recentUnlocks.slice(0, 3).map((achievement) => (
+                      <Badge key={achievement.key} variant="secondary" className="max-w-full truncate rounded-full px-3 py-1 text-xs">
+                        {achievement.title}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Unlock activity will appear here as milestones are earned.</p>
+                )}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Badge variant="outline" className="rounded-full dark:border-slate-700 dark:text-slate-200">
+                    {rewards?.unlockedCount ?? 0} unlocked
+                  </Badge>
+                  <Badge variant="outline" className="rounded-full dark:border-slate-700 dark:text-slate-200">
+                    {Math.max(rewards?.totalCount ?? 0, rewards?.achievements.length ?? 0)} total
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </Card>
+
       <div className={`grid grid-cols-1 gap-6 ${preferences.showRecentActivity ? "lg:grid-cols-2" : ""}`}>
         {preferences.showRecentActivity ? (
           <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
@@ -432,35 +680,11 @@ export function Dashboard() {
             ) : (
               <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
                 {visibleRecentActivity.map((activity) => (
-                  <div
+                  <RecentActivityRow
                     key={activity.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3 last:border-slate-100 dark:border-slate-800 dark:bg-slate-800/60"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Badge variant="outline" className="capitalize bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                        {activity.type}
-                      </Badge>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{activity.name}</p>
-                        <p className="text-xs text-gray-500 capitalize dark:text-slate-400">{activity.action}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 dark:text-slate-400">
-                        {activity.date ? new Date(activity.date).toLocaleDateString() : ""}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-full text-slate-400 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-900 dark:hover:text-slate-100"
-                        onClick={() => hideRecentActivityItem(activity.eventKey ?? `${activity.id}:${activity.date}`)}
-                        aria-label={`Hide activity ${activity.name}`}
-                        title="Hide activity"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
+                    activity={activity}
+                    onHide={hideRecentActivityItem}
+                  />
                 ))}
               </div>
             )}

@@ -78,6 +78,14 @@ def new_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def has_subscription_access(user: Dict[str, Any]) -> bool:
+    role = str(user.get("role") or "user").strip().lower()
+    if role in ADMIN_ROLES:
+        return True
+    status = str(user.get("subscription_status") or "inactive").strip().lower()
+    return status == "active"
+
+
 async def require_user(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
     """Return user doc for Bearer token or raise 401."""
     if not authorization or not authorization.lower().startswith("bearer "):
@@ -92,9 +100,15 @@ async def require_user(authorization: Optional[str] = Header(default=None)) -> D
     if not sess:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    created_at = normalize_exp(sess.get("created_at"))
     exp = normalize_exp(sess.get("expires_at"))
-    if exp and exp < now_utc():
-        # best-effort cleanup
+    if not created_at or not exp:
+        await db["sessions"].delete_one({"_id": sess["_id"]})
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if exp < created_at or exp > created_at + timedelta(days=TOKEN_TTL_DAYS):
+        await db["sessions"].delete_one({"_id": sess["_id"]})
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if exp <= now_utc():
         await db["sessions"].delete_one({"_id": sess["_id"]})
         raise HTTPException(status_code=401, detail="Token expired")
 
@@ -107,6 +121,12 @@ async def require_user(authorization: Optional[str] = Header(default=None)) -> D
         await db["sessions"].delete_many({"user_id": user["_id"]})
         raise HTTPException(status_code=401, detail="Account deactivated")
 
+    return user
+
+
+async def require_active_subscription(user=Depends(require_user)) -> Dict[str, Any]:
+    if not has_subscription_access(user):
+        raise HTTPException(status_code=402, detail="Subscription required")
     return user
 
 

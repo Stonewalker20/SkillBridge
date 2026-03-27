@@ -2,9 +2,10 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
 from app.core.db import connect_to_mongo, close_mongo_connection, get_db
+from app.core.auth import require_active_subscription
 from app.routers.health import router as health_router
 from app.routers.skills import router as skills_router
 from app.routers.confirmations import router as confirmations_router
@@ -18,13 +19,14 @@ from app.routers.taxonomy import router as taxonomy_router
 from app.routers.tailor import router as tailor_router
 from app.routers.portfolio import router as portfolio_router
 from app.routers.auth import router as auth_router
+from app.routers.billing import router as billing_router
 from app.routers.admin import router as admin_router
+from app.routers.rewards import router as rewards_router
 from app.core.config import settings
+from app.utils.observability import configure_logging, emit_app_event, request_logging_middleware
 from app.utils.ai import get_inference_status, release_local_models, warm_local_models
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
-import os
-from pathlib import Path
 
 async def ensure_indexes():
     # These indexes support the hot paths we exercise on every authenticated session:
@@ -36,11 +38,16 @@ async def ensure_indexes():
     await db["job_match_runs"].create_index([("user_id", 1), ("created_at", -1)])
     await db["tailored_resumes"].create_index([("user_id", 1), ("created_at", -1)])
     await db["rag_chunks"].create_index([("user_id", 1), ("source_type", 1), ("source_id", 1), ("chunk_index", 1)])
+    await db["user_rewards"].create_index("user_id", unique=True)
+    await db["billing_events"].create_index("event_id", unique=True)
+    await db["request_rate_limits"].create_index("expires_at", expireAfterSeconds=0)
+    await db["audit_events"].create_index([("created_at", -1), ("actor_id", 1), ("action", 1)])
 
 def ensure_local_media_dirs():
     # User-uploaded avatars are served as local static files. The directory must
     # exist before requests arrive so uploads and static serving share one path.
-    settings.user_avatar_upload_path.mkdir(parents=True, exist_ok=True)
+    if settings.media_storage_mode_normalized == "local":
+        settings.user_avatar_upload_path.mkdir(parents=True, exist_ok=True)
 
 
 @asynccontextmanager
@@ -48,6 +55,16 @@ async def lifespan(_app: FastAPI):
     # FastAPI lifespan keeps startup/shutdown work in one place and avoids the
     # deprecated on_event hooks. This is the right place to connect the database,
     # materialize indexes, and optionally prewarm local ML models.
+    configure_logging("DEBUG" if settings.app_env_normalized == "development" else "INFO")
+    issues = settings.validate_runtime_settings()
+    if issues:
+        raise RuntimeError("Invalid runtime settings:\n- " + "\n- ".join(issues))
+    emit_app_event(
+        "app_startup",
+        app_env=settings.app_env_normalized,
+        mongo_db=settings.mongo_db,
+        allowed_origins_count=len(settings.allowed_origins_list),
+    )
     ensure_local_media_dirs()
     await connect_to_mongo()
     await ensure_indexes()
@@ -62,36 +79,41 @@ async def lifespan(_app: FastAPI):
     try:
         yield
     finally:
+        emit_app_event("app_shutdown", app_env=settings.app_env_normalized)
         release_local_models()
         await close_mongo_connection()
 
 
 app = FastAPI(title="SkillBridge API", version="0.5.0", lifespan=lifespan)
 
-origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.allowed_origins_list,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.middleware("http")(request_logging_middleware)
 
-settings.user_avatar_upload_path.parent.mkdir(parents=True, exist_ok=True)
-app.mount("/media", StaticFiles(directory=str(settings.user_avatar_upload_path.parent)), name="media")
+if settings.media_storage_mode_normalized == "local":
+    settings.user_avatar_upload_path.parent.mkdir(parents=True, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=str(settings.user_avatar_upload_path.parent)), name="media")
 
 app.include_router(health_router, prefix="/health", tags=["health"])
-app.include_router(skills_router, prefix="/skills", tags=["skills"])
-app.include_router(confirmations_router, prefix="/skills/confirmations", tags=["confirmations"])
-app.include_router(jobs_router, prefix="/jobs", tags=["jobs"])
-app.include_router(evidence_router, prefix="/evidence", tags=["evidence"])
-app.include_router(resumes_router, prefix="/ingest/resume", tags=["resume"])
-app.include_router(projects_router, prefix="/projects", tags=["projects"])
-app.include_router(dashboard_router, prefix="/dashboard", tags=["dashboard"])
-app.include_router(roles_router, prefix="/roles", tags=["roles"])
-app.include_router(taxonomy_router, prefix="/taxonomy", tags=["taxonomy"])
-app.include_router(tailor_router, prefix="/tailor", tags=["tailor"])
-app.include_router(portfolio_router, prefix="/portfolio", tags=["portfolio"])
+subscription_gate = [Depends(require_active_subscription)]
+
+app.include_router(skills_router, prefix="/skills", tags=["skills"], dependencies=subscription_gate)
+app.include_router(confirmations_router, prefix="/skills/confirmations", tags=["confirmations"], dependencies=subscription_gate)
+app.include_router(jobs_router, prefix="/jobs", tags=["jobs"], dependencies=subscription_gate)
+app.include_router(evidence_router, prefix="/evidence", tags=["evidence"], dependencies=subscription_gate)
+app.include_router(resumes_router, prefix="/ingest/resume", tags=["resume"], dependencies=subscription_gate)
+app.include_router(projects_router, prefix="/projects", tags=["projects"], dependencies=subscription_gate)
+app.include_router(dashboard_router, prefix="/dashboard", tags=["dashboard"], dependencies=subscription_gate)
+app.include_router(roles_router, prefix="/roles", tags=["roles"], dependencies=subscription_gate)
+app.include_router(taxonomy_router, prefix="/taxonomy", tags=["taxonomy"], dependencies=subscription_gate)
+app.include_router(tailor_router, prefix="/tailor", tags=["tailor"], dependencies=subscription_gate)
+app.include_router(portfolio_router, prefix="/portfolio", tags=["portfolio"], dependencies=subscription_gate)
+app.include_router(rewards_router, prefix="/rewards", tags=["rewards"])
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
-app.include_router(admin_router, prefix="/admin", tags=["admin"])
+app.include_router(billing_router, prefix="/billing", tags=["billing"])
+app.include_router(admin_router, prefix="/admin", tags=["admin"], dependencies=subscription_gate)

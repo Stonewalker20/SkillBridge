@@ -5,13 +5,16 @@ from __future__ import annotations
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from datetime import datetime, timezone
 from bson import ObjectId
+from bson.binary import Binary
 from app.core.db import get_db
 from app.core.auth import require_user
 from app.models.resume import ResumeSnapshotIn, ResumeSnapshotOut, ResumeSnapshotListEntryOut
 from app.utils.ai import normalize_ai_preferences
 from app.utils.rag import sync_rag_document
 from app.utils.mongo import oid_str, ref_values
+from app.utils.rewards import increment_reward_counter
 from pypdf import PdfReader
+from docx import Document
 import io
 
 router = APIRouter()
@@ -37,6 +40,25 @@ def extract_pdf_text(file_bytes: bytes) -> str:
         return "\n".join(parts).strip()
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {e}")
+
+
+def extract_docx_text(file_bytes: bytes) -> str:
+    try:
+        document = Document(io.BytesIO(file_bytes))
+        parts: list[str] = []
+        for paragraph in document.paragraphs:
+            text = str(paragraph.text or "")
+            if not text.strip():
+                parts.append("")
+                continue
+            style_name = str(getattr(paragraph.style, "name", "") or "").lower()
+            normalized = text.strip()
+            if style_name.startswith("list") and not normalized.startswith(("- ", "* ", "\u2022 ")):
+                normalized = f"- {normalized}"
+            parts.append(normalized)
+        return "\n".join(parts).strip()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse DOCX: {e}")
 
 # UC 3.1 – Resume Ingestion
 @router.post("/text", response_model=ResumeSnapshotOut)
@@ -69,6 +91,7 @@ async def ingest_resume_text(payload: ResumeSnapshotIn, user=Depends(require_use
         preferences=ai_preferences,
         metadata={"source_type": "paste"},
     )
+    await increment_reward_counter(db, oid_str(user["_id"]), "resume_snapshots_uploaded")
     preview = raw_text[:200] + ("..." if len(raw_text) > 200 else "")
     return {"snapshot_id": str(res.inserted_id), "preview": preview}
 
@@ -107,6 +130,50 @@ async def ingest_resume_pdf(user_id: str = Form(...), file: UploadFile = File(..
         preferences=ai_preferences,
         metadata={"source_type": "pdf", "filename": file.filename},
     )
+    await increment_reward_counter(db, oid_str(user["_id"]), "resume_snapshots_uploaded")
+    preview = raw_text[:200] + ("..." if len(raw_text) > 200 else "")
+    return {"snapshot_id": str(res.inserted_id), "preview": preview}
+
+
+@router.post("/docx", response_model=ResumeSnapshotOut)
+async def ingest_resume_docx(user_id: str = Form(...), file: UploadFile = File(...), user=Depends(require_user)):
+    db = get_db()
+    ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
+    user_id = _scoped_user_id(user, user_id)
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="Only DOCX files are supported.")
+    b = await file.read()
+    if not b:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    raw_text = extract_docx_text(b)
+    if len(raw_text) < 50:
+        raise HTTPException(status_code=400, detail="Extracted DOCX text too short.")
+
+    doc = {
+        "user_id": user["_id"],
+        "source_type": "docx",
+        "raw_text": raw_text,
+        "source_document": Binary(b),
+        "metadata": {
+            "source": "docx",
+            "filename": file.filename,
+            "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        "image_ref": "/images/resume_icon.png",
+        "created_at": now_utc(),
+    }
+    res = await db["resume_snapshots"].insert_one(doc)
+    await sync_rag_document(
+        db,
+        user_id=oid_str(user["_id"]),
+        source_type="resume_snapshot",
+        source_id=oid_str(res.inserted_id),
+        title=file.filename or "Resume Snapshot",
+        text=raw_text,
+        preferences=ai_preferences,
+        metadata={"source_type": "docx", "filename": file.filename},
+    )
+    await increment_reward_counter(db, oid_str(user["_id"]), "resume_snapshots_uploaded")
     preview = raw_text[:200] + ("..." if len(raw_text) > 200 else "")
     return {"snapshot_id": str(res.inserted_id), "preview": preview}
 

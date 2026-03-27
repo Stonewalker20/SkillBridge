@@ -13,7 +13,6 @@ import {
   type SkillTrajectoryOut,
   type UserSkillVectorHistoryPoint,
 } from "../services/api";
-import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
@@ -25,6 +24,7 @@ import {
   type ChartConfig,
 } from "../components/ui/chart";
 import { useHeaderTheme } from "../lib/headerTheme";
+import { AnalyticsMetric, AnalyticsSection, BadgeCloud } from "./SkillAnalyticsParts";
 
 type AnalyticsState = {
   loading: boolean;
@@ -322,21 +322,21 @@ export function SkillAnalytics() {
   return (
     <div className="space-y-6">
       <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
-        <div className="px-6 py-7 md:px-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="px-6 py-6 md:px-8 md:py-7">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                 <BarChart3 className="h-3.5 w-3.5" />
                 Skill Analytics
               </div>
-              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Understand how your skill profile is supported.</h1>
-              <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                Explore category coverage, evidence support, proficiency distribution, and which skills are driving your evidence depth.
+              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">A compact view of proof, gaps, and direction.</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                Scan what is confirmed, what is backed by evidence, and where the next useful signal lives.
               </p>
             </div>
             <Button asChild variant="outline" className="border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/70">
               <Link to="/app/skills">
-                Review Skills
+                Review skills
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
@@ -344,36 +344,63 @@ export function SkillAnalytics() {
         </div>
       </div>
 
-      <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="flex flex-wrap gap-2">
-          {[
-            ["#overview", "Overview"],
-            ["#support", "Support"],
-            ["#trajectory", "Trajectory"],
-            ["#learning", "Learning Path"],
-          ].map(([href, label]) => (
-            <Button key={href} asChild variant="outline" size="sm" className="h-8 rounded-full border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-900/70">
-              <a href={href}>{label}</a>
-            </Button>
-          ))}
-        </div>
-      </Card>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <AnalyticsMetric
+          icon={Target}
+          label="Confirmed Skills"
+          value={analytics.confirmedCount}
+          caption="Skills currently in the profile"
+          toneClass="bg-[#1E3A8A]"
+        />
+        <AnalyticsMetric
+          icon={FolderOpen}
+          label="Evidence-Backed"
+          value={analytics.evidenceBackedConfirmed}
+          caption="Confirmed skills with proof"
+          toneClass="bg-[#0F766E]"
+        />
+        <AnalyticsMetric
+          icon={Layers3}
+          label="Without Evidence"
+          value={analytics.unsupportedConfirmed}
+          caption="Confirmed skills still missing proof"
+          toneClass="bg-[#F59E0B]"
+        />
+        <AnalyticsMetric
+          icon={BarChart3}
+          label="Evidence Items"
+          value={analytics.totalEvidence}
+          caption="User-uploaded evidence records"
+          toneClass="bg-slate-700"
+        />
+      </div>
 
-      <div id="overview" className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr] scroll-mt-24">
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mb-4">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Personal Skill Vector Drift</h3>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            Tracks how your aggregate user embedding evolves as you confirm skills and add proof.
-          </p>
-          </div>
+      <div className="flex flex-wrap gap-2">
+        {[
+          ["#overview", "Overview"],
+          ["#support", "Support"],
+          ["#trajectory", "Trajectory"],
+          ["#learning", "Learning Path"],
+        ].map(([href, label]) => (
+          <Button key={href} asChild variant="outline" size="sm" className="h-8 rounded-full border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-900/70">
+            <a href={href}>{label}</a>
+          </Button>
+        ))}
+      </div>
+
+      <div id="overview" className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr] scroll-mt-24">
+        <AnalyticsSection
+          title="Vector Drift"
+          description="Aggregate profile score across recent updates."
+          className="h-full"
+        >
           {analytics.vectorHistory.length === 0 ? (
-            <div className="text-sm text-slate-500 dark:text-slate-400">No vector history yet. Analyze jobs or open the job match page to generate one.</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">No vector history yet. Analyze a job to generate the first point.</div>
           ) : (
             <div className="h-56 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={analytics.vectorHistory}>
-                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.18} />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(value: number) => [`${Math.round(Number(value) || 0)}%`, "Vector score"]} />
@@ -382,228 +409,146 @@ export function SkillAnalytics() {
               </ResponsiveContainer>
             </div>
           )}
-        </Card>
+        </AnalyticsSection>
 
-        <div className="grid grid-cols-2 gap-4">
-          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-blue-50 p-3 dark:bg-blue-500/10">
-                <Target className="h-5 w-5 text-[#1E3A8A] dark:text-blue-300" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Confirmed Skills</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.confirmedCount}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-teal-50 p-3 dark:bg-teal-500/10">
-                <FolderOpen className="h-5 w-5 text-[#0F766E] dark:text-teal-300" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Evidence-Backed</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.evidenceBackedConfirmed}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-amber-50 p-3 dark:bg-amber-500/10">
-                <Layers3 className="h-5 w-5 text-amber-600 dark:text-amber-300" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Without Evidence</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.unsupportedConfirmed}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-slate-100 p-3 dark:bg-slate-800">
-                <FolderOpen className="h-5 w-5 text-slate-700 dark:text-slate-200" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Evidence Items</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{analytics.totalEvidence}</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      <div id="support" className="grid grid-cols-1 gap-6 xl:grid-cols-2 scroll-mt-24">
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Confirmed Skill Categories</h3>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Category distribution across your confirmed skill profile.</p>
-          </div>
-          {analytics.topCategories.length === 0 ? (
-            <div className="text-sm text-slate-500 dark:text-slate-400">No confirmed categories yet.</div>
-          ) : (
-            <ChartContainer config={categoryChartConfig} className="h-[320px] w-full">
-              <BarChart data={analytics.topCategories.slice(0, 10)} margin={{ left: 12, right: 12, top: 12 }}>
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="category" tickLine={false} axisLine={false} interval={0} angle={-18} textAnchor="end" height={64} />
-                <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
-                <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
-                <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="var(--color-count)" />
-              </BarChart>
-            </ChartContainer>
-          )}
-        </Card>
-
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Evidence by Type</h3>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">What kinds of artifacts are supporting your profile.</p>
-          </div>
+        <AnalyticsSection title="Evidence Mix" description="What is supporting the profile today.">
           {analytics.evidenceTypes.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">No evidence added yet.</div>
           ) : (
-            <ChartContainer config={evidenceTypeChartConfig} className="h-[320px] w-full">
-              <PieChart>
-                <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
-                <ChartLegend content={<ChartLegendContent />} />
-                <Pie data={analytics.evidenceTypes} dataKey="value" nameKey="name" innerRadius={68} outerRadius={108} paddingAngle={4}>
-                  {analytics.evidenceTypes.map((entry, index) => (
-                    <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ChartContainer>
+            <>
+              <ChartContainer config={evidenceTypeChartConfig} className="h-64 w-full">
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Pie data={analytics.evidenceTypes} dataKey="value" nameKey="name" innerRadius={58} outerRadius={92} paddingAngle={4}>
+                    {analytics.evidenceTypes.map((entry, index) => (
+                      <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+              <div className="mt-4 space-y-3">
+                {analytics.topEvidenceSkills.length === 0 ? (
+                  <div className="text-sm text-slate-500 dark:text-slate-400">Add evidence to surface the most documented skills.</div>
+                ) : (
+                  analytics.topEvidenceSkills.map((skill, index) => {
+                    const maxCount = analytics.topEvidenceSkills[0]?.count || 1;
+                    const width = Math.max(8, (skill.count / maxCount) * 100);
+                    return (
+                      <div key={skill.skillId}>
+                        <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="min-w-7 justify-center dark:border-slate-700 dark:text-slate-200">
+                              {index + 1}
+                            </Badge>
+                            <span className="font-medium text-slate-900 dark:text-slate-100">{skill.name}</span>
+                          </div>
+                          <span className="text-slate-600 dark:text-slate-300">{skill.count} items</span>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800">
+                          <div className="h-2.5 rounded-full bg-[linear-gradient(90deg,_#1E3A8A,_#0F766E)]" style={{ width: `${width}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </>
           )}
-        </Card>
+        </AnalyticsSection>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Most Supported Skills</h3>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Skills that appear most often across your evidence library.</p>
-          </div>
-          {analytics.topEvidenceSkills.length === 0 ? (
-            <div className="text-sm text-slate-500 dark:text-slate-400">Add evidence to see which skills are most documented.</div>
+      <div id="support" className="grid grid-cols-1 gap-6 xl:grid-cols-2 scroll-mt-24">
+        <AnalyticsSection title="Confirmed Categories" description="Distribution of your confirmed skills by category.">
+          {analytics.topCategories.length === 0 ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">No confirmed categories yet.</div>
           ) : (
-            <div className="max-h-[22rem] space-y-4 overflow-y-auto pr-1">
-              {analytics.topEvidenceSkills.map((skill, index) => {
-                const maxCount = analytics.topEvidenceSkills[0]?.count || 1;
-                const width = Math.max(8, (skill.count / maxCount) * 100);
-                return (
-                  <div key={skill.skillId}>
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="min-w-8 justify-center dark:border-slate-700 dark:text-slate-200">
-                          {index + 1}
-                        </Badge>
-                        <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{skill.name}</span>
-                      </div>
-                      <span className="text-sm text-slate-600 dark:text-slate-300">{skill.count} evidence items</span>
-                    </div>
-                    <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800">
-                      <div
-                        className="h-2.5 rounded-full bg-[linear-gradient(90deg,_#1E3A8A,_#0F766E)]"
-                        style={{ width: `${width}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Proficiency Distribution</h3>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">How your confirmed skills are distributed across current proficiency levels.</p>
-          </div>
-          {analytics.proficiencyData.length === 0 ? (
-            <div className="text-sm text-slate-500 dark:text-slate-400">No confirmed skill proficiency data yet.</div>
-          ) : (
-            <ChartContainer config={proficiencyChartConfig} className="h-[280px] w-full">
-              <BarChart data={analytics.proficiencyData} margin={{ left: 8, right: 8, top: 12 }}>
+            <ChartContainer config={categoryChartConfig} className="h-[300px] w-full">
+              <BarChart data={analytics.topCategories.slice(0, 10)} margin={{ left: 12, right: 12, top: 12 }}>
                 <CartesianGrid vertical={false} />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                <XAxis dataKey="category" tickLine={false} axisLine={false} interval={0} angle={-18} textAnchor="end" height={56} />
                 <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
                 <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
                 <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="var(--color-count)" />
               </BarChart>
             </ChartContainer>
           )}
-          {analytics.proficiencyData.length > 0 ? (
-            <div className="mt-5 max-h-[16rem] space-y-3 overflow-y-auto border-t border-slate-200 pt-4 pr-1 dark:border-slate-800">
-              {analytics.proficiencyData.map((bucket) => (
-                <div key={bucket.level} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-800/60">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{bucket.label}</span>
-                    <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
-                      {bucket.count} skill{bucket.count === 1 ? "" : "s"}
-                    </Badge>
+        </AnalyticsSection>
+
+        <AnalyticsSection title="Proficiency Spread" description="How confirmed skills are distributed across levels.">
+          {analytics.proficiencyData.length === 0 ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">No confirmed skill proficiency data yet.</div>
+          ) : (
+            <>
+              <ChartContainer config={proficiencyChartConfig} className="h-[260px] w-full">
+                <BarChart data={analytics.proficiencyData} margin={{ left: 8, right: 8, top: 12 }}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
+                  <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="var(--color-count)" />
+                </BarChart>
+              </ChartContainer>
+              <div className="mt-4 max-h-[14rem] space-y-3 overflow-y-auto pr-1">
+                {analytics.proficiencyData.map((bucket) => (
+                  <div key={bucket.level} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-800/60">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{bucket.label}</span>
+                      <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                        {bucket.count} skill{bucket.count === 1 ? "" : "s"}
+                      </Badge>
+                    </div>
+                    <BadgeCloud
+                      items={bucket.skills}
+                      emptyLabel="No visible skills at this level."
+                      className="mt-2"
+                      badgeClassName="dark:bg-slate-900 dark:text-slate-200"
+                    />
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {bucket.skills.length ? (
-                      bucket.skills.map((skill) => (
-                        <Badge key={`${bucket.level}:${skill}`} variant="secondary" className="dark:bg-slate-900 dark:text-slate-200">
-                          {skill}
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className="text-xs text-slate-500 dark:text-slate-400">No visible skills at this level.</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </Card>
+                ))}
+              </div>
+            </>
+          )}
+        </AnalyticsSection>
       </div>
 
       <div id="trajectory" className="grid grid-cols-1 gap-6 xl:grid-cols-[0.92fr_1.08fr] scroll-mt-24">
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Skill Clusters</h3>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">The strongest clusters in your profile that are currently shaping career direction.</p>
-          </div>
+        <AnalyticsSection title="Skill Clusters" description="The strongest clusters currently shaping direction." compact>
           {analytics.trajectoryClusters.length === 0 ? (
-            <div className="text-sm text-slate-500 dark:text-slate-400">Confirm more skills to generate cluster-level trajectory signals.</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Confirm more skills to generate cluster-level signals.</div>
           ) : (
-            <div className="max-h-[24rem] space-y-4 overflow-y-auto pr-1">
+            <div className="max-h-[21rem] space-y-2.5 overflow-y-auto pr-1">
               {analytics.trajectoryClusters.map((cluster) => (
-                <div key={cluster.category} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
-                  <div className="flex items-center justify-between gap-3">
+                <div key={cluster.category} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/60">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{cluster.category}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {cluster.skill_count} skills • {cluster.evidence_backed_count} evidence-backed • avg proficiency {cluster.average_proficiency.toFixed(1)}
+                      <p className="mt-0.5 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                        {cluster.skill_count} skills • {cluster.evidence_backed_count} backed • avg {cluster.average_proficiency.toFixed(1)}
                       </p>
                     </div>
                     <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
                       {cluster.skill_names.length}
                     </Badge>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {cluster.skill_names.map((skill) => (
-                      <Badge key={`${cluster.category}:${skill}`} variant="secondary" className="dark:bg-slate-900 dark:text-slate-200">
-                        {skill}
-                      </Badge>
-                    ))}
-                  </div>
+                  <BadgeCloud
+                    items={cluster.skill_names}
+                    emptyLabel="No skills in this cluster."
+                    className="mt-2.5"
+                    limit={6}
+                    badgeClassName="dark:bg-slate-900 dark:text-slate-200"
+                  />
                 </div>
               ))}
             </div>
           )}
-        </Card>
+        </AnalyticsSection>
 
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Career Path Trajectory</h3>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Predicted role paths based on weighted skill coverage, evidence support, and semantic fit.</p>
-          </div>
+        <AnalyticsSection title="Career Paths" description="Role fits based on skill coverage, proof, and semantic alignment." compact>
           {analytics.careerPaths.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">Add roles and analyze jobs to unlock career path predictions.</div>
           ) : (
-            <div className="max-h-[24rem] space-y-4 overflow-y-auto pr-1">
+            <div className="max-h-[21rem] space-y-2.5 overflow-y-auto pr-1">
               {analytics.careerPaths.map((path) => (
                 <button
                   type="button"
@@ -612,163 +557,151 @@ export function SkillAnalytics() {
                     setSelectedCareerPathId(path.role_id);
                     navigate(`/app/analytics/career-paths/${path.role_id}`);
                   }}
-                  className={`w-full rounded-2xl border p-4 text-left transition ${selectedCareerPathId === path.role_id ? "border-slate-400 bg-white dark:border-slate-600 dark:bg-slate-900/70" : "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-800/60"}`}
+                  className={`w-full rounded-2xl border p-3.5 text-left transition ${selectedCareerPathId === path.role_id ? "border-slate-400 bg-white dark:border-slate-600 dark:bg-slate-900/70" : "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-800/60"}`}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{path.role_name}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{path.role_name}</p>
                         <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
                           {path.confidence_label}
                         </Badge>
                       </div>
-                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{path.reasoning}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{path.reasoning}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{Math.round(path.score)}%</p>
-                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{path.cluster_category || "General"} cluster</p>
+                      <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{Math.round(path.score)}%</p>
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{path.cluster_category || "General"}</p>
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Vector {Math.round(path.personal_vector_alignment_score ?? 0)}%</p>
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Matched Skills</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {path.matched_skills.length ? path.matched_skills.map((skill) => (
-                          <Badge key={`${path.role_id}:matched:${skill}`} variant="secondary" className="dark:bg-slate-900 dark:text-slate-200">
-                            {skill}
-                          </Badge>
-                        )) : <span className="text-xs text-slate-500 dark:text-slate-400">No matched skills yet.</span>}
-                      </div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                        Matched ({path.matched_skills.length})
+                      </p>
+                      <BadgeCloud
+                        items={path.matched_skills}
+                        emptyLabel="No matched skills yet."
+                        className="mt-1.5"
+                        limit={4}
+                        badgeClassName="dark:bg-slate-900 dark:text-slate-200"
+                      />
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Missing Skills</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {path.missing_skills.length ? path.missing_skills.map((skill) => (
-                          <Badge key={`${path.role_id}:missing:${skill}`} variant="outline" className="dark:border-slate-700 dark:text-slate-200">
-                            {skill}
-                          </Badge>
-                        )) : <span className="text-xs text-slate-500 dark:text-slate-400">No critical gaps detected.</span>}
-                      </div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                        Missing ({path.missing_skills.length})
+                      </p>
+                      <BadgeCloud
+                        items={path.missing_skills}
+                        emptyLabel="No critical gaps detected."
+                        className="mt-1.5"
+                        limit={4}
+                        variant="outline"
+                        badgeClassName="dark:border-slate-700 dark:text-slate-200"
+                      />
                     </div>
                   </div>
-                  {path.next_steps.length ? (
-                    <div className="mt-4 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/40">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Next Steps</p>
-                      <ul className="mt-2 space-y-1 text-sm text-slate-700 dark:text-slate-300">
-                        {path.next_steps.map((step) => (
-                          <li key={`${path.role_id}:${step}`}>{step}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
+                  {path.next_steps.length ? <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{path.next_steps[0]}</p> : null}
                 </button>
               ))}
             </div>
           )}
-        </Card>
+        </AnalyticsSection>
       </div>
 
       {selectedCareerPathDetail ? (
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mb-4 flex items-start justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{selectedCareerPathDetail.role_name} Deep Dive</h3>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{selectedCareerPathDetail.reasoning}</p>
-            </div>
-            <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
-              Vector {Math.round(selectedCareerPathDetail.personal_vector_alignment_score)}%
-            </Badge>
-          </div>
+        <AnalyticsSection
+          title={`${selectedCareerPathDetail.role_name} Deep Dive`}
+          description={selectedCareerPathDetail.reasoning}
+          actions={<Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">Vector {Math.round(selectedCareerPathDetail.personal_vector_alignment_score)}%</Badge>}
+        >
           <div className="grid gap-4 md:grid-cols-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Top Role Skills</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {selectedCareerPathDetail.top_role_skills.map((skill) => (
-                  <Badge key={`top:${skill}`} variant="secondary" className="dark:bg-slate-900 dark:text-slate-200">{skill}</Badge>
-                ))}
-              </div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Top Skills</p>
+              <BadgeCloud items={selectedCareerPathDetail.top_role_skills} emptyLabel="None" className="mt-2" badgeClassName="dark:bg-slate-900 dark:text-slate-200" />
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Graph Neighbors</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {selectedCareerPathDetail.graph_neighbor_skills.map((skill) => (
-                  <Badge key={`neighbor:${skill}`} variant="outline" className="dark:border-slate-700 dark:text-slate-200">{skill}</Badge>
-                ))}
-              </div>
+              <BadgeCloud items={selectedCareerPathDetail.graph_neighbor_skills} emptyLabel="None" className="mt-2" variant="outline" badgeClassName="dark:border-slate-700 dark:text-slate-200" />
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Project Ideas</p>
-              <ul className="mt-2 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+              <div className="mt-2 space-y-2">
                 {selectedCareerPathDetail.recommended_project_ideas.map((idea) => (
-                  <li key={idea} className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-950/50">{idea}</li>
+                  <div key={idea} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:bg-slate-950/50 dark:text-slate-300">
+                    {idea}
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           </div>
-        </Card>
+        </AnalyticsSection>
       ) : null}
 
-      <Card id="learning" className="border-slate-200 p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Learning Path Recommendation</h3>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            A staged plan based on your strongest clusters, projected career paths, and the highest-impact missing skills.
-          </p>
-        </div>
+      <AnalyticsSection
+        id="learning"
+        title="Learning Path"
+        description="A staged plan from proof-gaps to higher-confidence role readiness."
+        compact
+        className="scroll-mt-24"
+      >
         {analytics.learningPath.length === 0 ? (
           <div className="text-sm text-slate-500 dark:text-slate-400">Confirm more skills and analyze target roles to generate a learning path.</div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <div className="grid max-h-[28rem] grid-cols-1 gap-4 overflow-y-auto pr-1 xl:grid-cols-3">
-            {analytics.learningPath.map((step) => (
-              <div key={`${step.phase}:${step.title}`} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-800/60">
-                <div className="flex items-center justify-between gap-3">
-                  <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
-                    {step.phase}
-                  </Badge>
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                    {step.target_skills.length} targets
-                  </span>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.08fr_0.92fr]">
+            <div className="max-h-[28rem] space-y-2.5 overflow-y-auto pr-1">
+              {analytics.learningPath.map((step) => (
+                <div
+                  key={`${step.phase}:${step.title}`}
+                  className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/60"
+                >
+                  <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                          {step.phase}
+                        </Badge>
+                        <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{step.target_skills.length} targets</span>
+                      </div>
+                      <h4 className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{step.title}</h4>
+                      <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{step.rationale}</p>
+                    </div>
+                    <div className="space-y-2 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+                      <BadgeCloud
+                        items={step.target_skills}
+                        emptyLabel="No target skills."
+                        limit={4}
+                        badgeClassName={
+                          selectedLearningSkill === step.target_skills[0]
+                            ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                            : "dark:bg-slate-900 dark:text-slate-200"
+                        }
+                      />
+                      <p className="text-xs leading-5 text-slate-700 dark:text-slate-300">{step.evidence_action}</p>
+                    </div>
+                  </div>
                 </div>
-                <h4 className="mt-4 text-base font-semibold text-slate-900 dark:text-slate-100">{step.title}</h4>
-                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{step.rationale}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {step.target_skills.map((skill) => (
-                    <button
-                      type="button"
-                      key={`${step.phase}:${skill}`}
-                      onClick={() => setSelectedLearningSkill(skill)}
-                      className={`rounded-full px-2.5 py-1 text-sm ${selectedLearningSkill === skill ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "bg-slate-200 text-slate-800 dark:bg-slate-900 dark:text-slate-200"}`}
-                    >
-                      {skill}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/40">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Evidence Action</p>
-                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">{step.evidence_action}</p>
-                </div>
-              </div>
-            ))}
+              ))}
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-800/60">
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
               {progressImpact ? (
-                <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/80 dark:bg-emerald-950/40 dark:text-emerald-200">
-                  {progressImpact.roleName} trajectory {progressImpact.delta >= 0 ? "increased" : "decreased"} by {Math.abs(progressImpact.delta).toFixed(2)} points after this progress update.
+                <div className="mb-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 dark:border-emerald-900/80 dark:bg-emerald-950/40 dark:text-emerald-200">
+                  {progressImpact.roleName} trajectory {progressImpact.delta >= 0 ? "increased" : "decreased"} by {Math.abs(progressImpact.delta).toFixed(2)} points after the latest update.
                 </div>
               ) : null}
-              <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {selectedLearningSkillDetail?.skill_name || selectedLearningSkill || "Select a target skill"}
               </h4>
               {selectedLearningSkillDetail ? (
                 <>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  <p className="mt-1.5 text-sm leading-6 text-slate-600 dark:text-slate-300">
                     {selectedLearningSkillDetail.confirmed
-                      ? "This skill is already confirmed. The remaining focus is stronger proof and project depth."
-                      : "This skill is not yet confirmed in your profile and should be treated as a targeted learning gap."}
+                      ? "Already confirmed. Focus on stronger proof and project depth."
+                      : "Not yet confirmed. Treat this as a targeted gap with a clear next action."}
                   </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
                       Evidence support {selectedLearningSkillDetail.evidence_support_count}
                     </Badge>
@@ -776,7 +709,7 @@ export function SkillAnalytics() {
                       {selectedLearningSkillDetail.progress_status.replace("_", " ")}
                     </Badge>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       size="sm"
                       variant="outline"
@@ -794,57 +727,53 @@ export function SkillAnalytics() {
                       Complete
                     </Button>
                   </div>
-                  <div className="mt-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Related Career Paths</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {selectedLearningSkillDetail.related_career_paths.map((path) => (
-                        <Badge key={path} variant="secondary" className="dark:bg-slate-900 dark:text-slate-200">{path}</Badge>
-                      ))}
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Related Careers</p>
+                      <BadgeCloud items={selectedLearningSkillDetail.related_career_paths} emptyLabel="None" className="mt-1.5" limit={5} badgeClassName="dark:bg-slate-900 dark:text-slate-200" />
                     </div>
-                  </div>
-                  <div className="mt-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Graph Neighbors</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {selectedLearningSkillDetail.graph_neighbors.map((skill) => (
-                        <Badge key={skill} variant="outline" className="dark:border-slate-700 dark:text-slate-200">{skill}</Badge>
-                      ))}
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Graph Neighbors</p>
+                      <BadgeCloud items={selectedLearningSkillDetail.graph_neighbors} emptyLabel="None" className="mt-1.5" limit={5} variant="outline" badgeClassName="dark:border-slate-700 dark:text-slate-200" />
                     </div>
-                  </div>
-                  <div className="mt-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Recommended Projects</p>
-                    <ul className="mt-2 space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                      {selectedLearningSkillDetail.recommended_projects.map((idea) => (
-                        <li key={idea} className="rounded-xl bg-white/70 px-3 py-2 dark:bg-slate-950/40">{idea}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="mt-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Recommended Resources</p>
-                    <div className="mt-2 space-y-2">
-                      {selectedLearningSkillDetail.recommended_resources.map((resource) => (
-                        <a
-                          key={`${resource.title}:${resource.url}`}
-                          href={resource.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block rounded-xl bg-white/70 px-3 py-2 text-sm text-slate-700 transition hover:bg-white dark:bg-slate-950/40 dark:text-slate-300 dark:hover:bg-slate-900"
-                        >
-                          <span className="font-medium">{resource.title}</span>
-                          <span className="ml-2 text-slate-500 dark:text-slate-400">{resource.provider}</span>
-                        </a>
-                      ))}
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Recommended Projects</p>
+                      <div className="mt-1.5 space-y-2">
+                        {selectedLearningSkillDetail.recommended_projects.map((idea) => (
+                          <div key={idea} className="rounded-xl bg-white/70 px-3 py-2 text-sm leading-5 text-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
+                            {idea}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Resources</p>
+                      <div className="mt-1.5 space-y-2">
+                        {selectedLearningSkillDetail.recommended_resources.map((resource) => (
+                          <a
+                            key={`${resource.title}:${resource.url}`}
+                            href={resource.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block rounded-xl bg-white/70 px-3 py-2 text-sm leading-5 text-slate-700 transition hover:bg-white dark:bg-slate-950/40 dark:text-slate-300 dark:hover:bg-slate-900"
+                          >
+                            <span className="font-medium">{resource.title}</span>
+                            <span className="ml-2 text-slate-500 dark:text-slate-400">{resource.provider}</span>
+                          </a>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </>
               ) : (
                 <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                  Choose a target skill to inspect evidence gaps, graph neighbors, and project ideas.
+                  Select a target skill to inspect gaps, neighbors, and next steps.
                 </p>
               )}
             </div>
           </div>
         )}
-      </Card>
+      </AnalyticsSection>
     </div>
   );
 }

@@ -11,6 +11,19 @@ import { useHeaderTheme } from "../lib/headerTheme";
 
 const RESUMES_PER_PAGE = 15;
 const TAILORED_RESUME_FETCH_LIMIT = 1000;
+const TAILORED_RESUME_TEMPLATE_LABELS: Record<string, string> = {
+  ats_v1: "ATS Classic",
+  professional_v1: "Professional",
+  modern_v1: "Modern Impact",
+  project_focused_v1: "Project Forward",
+  experience_focused_v1: "Experience Forward",
+  uploaded_resume_reword_v1: "Uploaded Resume Reword",
+};
+
+function getTailoredResumeTemplateLabel(template?: string | null) {
+  const key = String(template ?? "").trim();
+  return TAILORED_RESUME_TEMPLATE_LABELS[key] || key || "Custom";
+}
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -76,6 +89,20 @@ export function TailoredResumes() {
     } catch (error) {
       console.error("Failed to download tailored resume PDF:", error);
       toast.error("Failed to download tailored resume PDF");
+    } finally {
+      setDownloadingId("");
+    }
+  };
+
+  const handleDownloadDocx = async (item: TailoredResumeListEntry) => {
+    try {
+      setDownloadingId(item.id);
+      const blob = await api.downloadTailoredDocx(item.id);
+      const baseName = (item.job_title || item.company || "tailored_resume").replace(/\s+/g, "_").toLowerCase();
+      downloadBlob(blob, `${baseName}.docx`);
+    } catch (error) {
+      console.error("Failed to download tailored resume DOCX:", error);
+      toast.error("Failed to download tailored resume DOCX");
     } finally {
       setDownloadingId("");
     }
@@ -237,7 +264,7 @@ export function TailoredResumes() {
             </div>
             <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Tailored resumes attached to saved jobs</h1>
             <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              View every tailored resume you have generated and download the PDF associated with each job target.
+              View every tailored resume you have generated and download the DOCX-first version for each job target, with PDF still available when needed.
             </p>
           </div>
         </div>
@@ -304,6 +331,11 @@ export function TailoredResumes() {
                       <p className="truncate text-xs text-slate-600 dark:text-slate-300">
                         {[item.company, item.location].filter(Boolean).join(" • ") || "Saved job target"}
                       </p>
+                      <div className="mt-2">
+                        <Badge variant="outline" className="border-slate-200 bg-white/80 text-[11px] uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                          {getTailoredResumeTemplateLabel(item.template)}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -361,6 +393,20 @@ export function TailoredResumes() {
                     {deletingId === item.id ? "Deleting..." : "Delete"}
                   </Button>
                   <Button
+                    size="sm"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDownloadDocx(item);
+                    }}
+                    disabled={downloadingId === item.id || deletingId === item.id || loadingDetailId === item.id}
+                    className={`h-8 px-2.5 text-xs ${activeHeaderTheme.buttonClass}`}
+                  >
+                    <Download className="mr-1.5 h-3.5 w-3.5" />
+                    {downloadingId === item.id ? "Downloading..." : "DOCX"}
+                  </Button>
+                  <Button
+                    variant="outline"
                     type="button"
                     size="sm"
                     onClick={(event) => {
@@ -368,10 +414,10 @@ export function TailoredResumes() {
                       handleDownloadPdf(item);
                     }}
                     disabled={downloadingId === item.id || deletingId === item.id || loadingDetailId === item.id}
-                    className={`h-8 px-2.5 text-xs ${activeHeaderTheme.buttonClass}`}
+                    className="h-8 px-2.5 text-xs"
                   >
                     <Download className="mr-1.5 h-3.5 w-3.5" />
-                    {downloadingId === item.id ? "Downloading..." : "Download PDF"}
+                    {downloadingId === item.id ? "Downloading..." : "PDF"}
                   </Button>
                 </div>
               </div>

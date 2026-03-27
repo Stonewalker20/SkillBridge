@@ -111,7 +111,7 @@ def expand_alias_variants(values: Iterable[str], base_name: str | None = None) -
         expanded.extend(_inflected_variants(str(value or "")))
     if base_name:
         initialism = _initialism_variant(base_name)
-        if initialism:
+        if initialism and not should_use_strict_exact_match(initialism):
             expanded.extend(_inflected_variants(initialism))
     deduped = unique_casefolded(expanded)
     if base_name:

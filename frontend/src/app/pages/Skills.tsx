@@ -1,5 +1,5 @@
 // frontend/src/app/pages/Skills.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type Skill, type ConfirmationOut } from "../services/api";
 import { useActivity } from "../context/ActivityContext";
 import { useAuth } from "../context/AuthContext";
@@ -10,7 +10,7 @@ import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Label } from "../components/ui/label";
-import { Plus, Trash2 } from "lucide-react";
+import { AlertCircle, Plus, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router";
 import { useHeaderTheme } from "../lib/headerTheme";
@@ -64,7 +64,7 @@ export function Skills() {
   const [autoConfirmAfterCreate, setAutoConfirmAfterCreate] = useState(true);
   const [newSkill, setNewSkill] = useState({ name: "", category: "", aliases: "" });
 
-  const refreshSkills = async () => {
+  const refreshSkills = useCallback(async () => {
     const pageSize = 200;
     const allSkills: Skill[] = [];
     let skip = 0;
@@ -78,14 +78,14 @@ export function Skills() {
     }
 
     setSkills(allSkills);
-  };
+  }, []);
 
-  const refreshConfirmation = async () => {
+  const refreshConfirmation = useCallback(async () => {
     const c = await api.getProfileConfirmation();
     setConfirmation(c);
-  };
+  }, []);
 
-  const refreshEvidenceSkills = async () => {
+  const refreshEvidenceSkills = useCallback(async () => {
     if (!user?.id) {
       setEvidenceSkillIds([]);
       return;
@@ -97,7 +97,7 @@ export function Skills() {
       )
     );
     setEvidenceSkillIds(ids);
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     const boot = async () => {
@@ -112,7 +112,7 @@ export function Skills() {
       }
     };
     boot();
-  }, [user?.id]);
+  }, [refreshConfirmation, refreshEvidenceSkills, refreshSkills]);
 
   useEffect(() => {
     if (searchParams.get("add") === "1") {
@@ -614,7 +614,11 @@ export function Skills() {
         <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Confirmed Skills Without Evidence</h3>
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Evidence Needed
+              </div>
+              <h3 className="mt-3 text-lg font-semibold text-gray-900 dark:text-slate-100">Confirmed Skills Without Evidence</h3>
               <p className="text-sm text-gray-600 dark:text-slate-300">
                 These skills are confirmed on your profile, but you do not have any supporting evidence attached yet.
               </p>
@@ -623,12 +627,27 @@ export function Skills() {
               <Link to="/app/evidence?add=1">Upload Evidence</Link>
             </Button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {unsupportedConfirmedSkills.map((skill) => (
-              <Badge key={skill.id} variant="outline" className="border-amber-300 text-amber-700">
-                {skill.name}
-              </Badge>
-            ))}
+          <div className="rounded-2xl border border-amber-200/70 bg-[linear-gradient(135deg,_rgba(255,251,235,0.95),_rgba(255,255,255,0.92))] px-4 py-4 dark:border-amber-900/50 dark:bg-[linear-gradient(135deg,_rgba(69,26,3,0.34),_rgba(15,23,42,0.82))]">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-200">
+                <Sparkles className="h-4 w-4" />
+                Add proof to strengthen these signals in job match and analytics.
+              </div>
+              <div className="rounded-full border border-amber-300 bg-white/80 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:border-amber-800 dark:bg-slate-950/60 dark:text-amber-200">
+                {unsupportedConfirmedSkills.length} pending
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {unsupportedConfirmedSkills.map((skill) => (
+                <div
+                  key={skill.id}
+                  className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white/85 px-3 py-1.5 text-sm text-amber-900 shadow-[0_8px_24px_-18px_rgba(180,83,9,0.55)] dark:border-amber-900/60 dark:bg-slate-950/70 dark:text-amber-100"
+                >
+                  <span className="h-2 w-2 rounded-full bg-[linear-gradient(135deg,_#f59e0b,_#f97316)]" />
+                  <span className="font-medium">{skill.name}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </Card>
       ) : null}

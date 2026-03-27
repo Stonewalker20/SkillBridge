@@ -2,21 +2,27 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
-from bson import ObjectId
+from datetime import timedelta
 from pathlib import Path
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
+from bson import ObjectId
 import secrets
 
 from app.core.db import get_db
 from app.core.auth import (
+    TOKEN_TTL_DAYS,
     hash_password,
     verify_password,
     create_session,
     require_user,
+    has_subscription_access,
     now_utc,
+    normalize_exp,
 )
 from app.models.auth import RegisterIn, LoginIn, AuthOut, UserOut, UserPatch, PasswordChangeIn
 from app.utils.mongo import oid_str
+from app.utils.media_storage import avatar_storage_key_from_user, get_avatar_storage_provider
+from app.utils.security import AUTH_RATE_LIMITS, build_rate_limit_identifier, enforce_rate_limit
 from app.core.config import settings
 
 router = APIRouter()
@@ -37,9 +43,18 @@ AVATAR_PRESETS = {
     "orchid",
 }
 ALLOWED_AVATAR_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+SUBSCRIPTION_DEFAULT_PLAN = "pro"
+SUBSCRIPTION_DEFAULT_STATUS = "inactive"
 
 
 def serialize_user_out(user: dict) -> UserOut:
+    subscription_status = str(user.get("subscription_status") or SUBSCRIPTION_DEFAULT_STATUS).strip().lower() or SUBSCRIPTION_DEFAULT_STATUS
+    subscription_plan = str(user.get("subscription_plan") or "").strip() or None
+    if has_subscription_access(user):
+        subscription_status = "active"
+        subscription_plan = subscription_plan or "admin"
+    elif subscription_status == "active" and not subscription_plan:
+        subscription_plan = SUBSCRIPTION_DEFAULT_PLAN
     return UserOut(
         id=oid_str(user["_id"]),
         email=user["email"],
@@ -47,6 +62,14 @@ def serialize_user_out(user: dict) -> UserOut:
         role=user.get("role", "user"),
         avatar_url=str(user.get("avatar_url") or "").strip() or None,
         avatar_preset=str(user.get("avatar_preset") or "").strip() or None,
+        subscription_status=subscription_status,
+        subscription_plan=subscription_plan,
+        subscription_started_at=user.get("subscription_started_at"),
+        subscription_renewal_at=user.get("subscription_renewal_at"),
+        billing_provider=str(user.get("billing_provider") or "").strip() or None,
+        stripe_customer_id=str(user.get("stripe_customer_id") or "").strip() or None,
+        stripe_subscription_id=str(user.get("stripe_subscription_id") or "").strip() or None,
+        stripe_checkout_session_id=str(user.get("stripe_checkout_session_id") or "").strip() or None,
     )
 
 
@@ -59,14 +82,14 @@ def _password_parts_for_user(user: dict) -> tuple[str | None, str | None]:
     return password_salt, password_hash
 
 
-def _delete_local_avatar_if_present(user: dict):
-    avatar_url = str(user.get("avatar_url") or "").strip()
-    if not avatar_url.startswith("/media/avatars/"):
-        return
-    filename = avatar_url.rsplit("/", 1)[-1]
-    target = settings.user_avatar_upload_path / filename
-    if target.exists():
-        target.unlink()
+async def _delete_avatar_if_present(user: dict):
+    storage = get_avatar_storage_provider()
+    try:
+        await storage.delete_avatar(avatar_storage_key_from_user(user))
+    except Exception:
+        # Avatar cleanup is best-effort. A storage delete failure should not block
+        # profile updates or account deletion when the new media has already been saved.
+        pass
 
 
 def bootstrap_role_for_email(email: str) -> str:
@@ -81,9 +104,30 @@ def bootstrap_role_for_email(email: str) -> str:
 def is_user_active(user: dict) -> bool:
     return user.get("is_active", True) is not False
 
+
+def _session_expiry_state(session: dict) -> str | None:
+    created_at = normalize_exp(session.get("created_at"))
+    expires_at = normalize_exp(session.get("expires_at"))
+    if not created_at or not expires_at:
+        return "invalid"
+    if expires_at < created_at:
+        return "invalid"
+    if expires_at > created_at + timedelta(days=TOKEN_TTL_DAYS):
+        return "invalid"
+    if expires_at <= now_utc():
+        return "expired"
+    return None
+
 @router.post("/register", response_model=AuthOut)
-async def register(payload: RegisterIn):
+async def register(payload: RegisterIn, request: Request):
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="auth.register",
+        identifier=build_rate_limit_identifier(request, payload.email, payload.username),
+        limit=AUTH_RATE_LIMITS["register"][0],
+        window_seconds=AUTH_RATE_LIMITS["register"][1],
+    )
 
     existing = await db["users"].find_one(
         {"$or": [{"email": payload.email}, {"username": payload.username}]}
@@ -101,6 +145,15 @@ async def register(payload: RegisterIn):
         "role": bootstrap_role_for_email(payload.email),
         "is_active": True,
         "avatar_preset": "midnight",
+        "subscription_status": SUBSCRIPTION_DEFAULT_STATUS,
+        "subscription_plan": None,
+        "subscription_started_at": None,
+        "subscription_renewal_at": None,
+        "billing_provider": None,
+        "stripe_customer_id": None,
+        "stripe_subscription_id": None,
+        "stripe_checkout_session_id": None,
+        "avatar_storage_key": None,
         "created_at": now_utc(),
     }
 
@@ -115,8 +168,15 @@ async def register(payload: RegisterIn):
 
 
 @router.post("/login", response_model=AuthOut)
-async def login(payload: LoginIn):
+async def login(payload: LoginIn, request: Request):
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="auth.login",
+        identifier=build_rate_limit_identifier(request, payload.email),
+        limit=AUTH_RATE_LIMITS["login"][0],
+        window_seconds=AUTH_RATE_LIMITS["login"][1],
+    )
 
     user = await db["users"].find_one(
         {"$or": [{"email": payload.email}, {"username": payload.email}]}
@@ -160,8 +220,9 @@ async def patch_me(payload: UserPatch, user=Depends(require_user)):
             raise HTTPException(status_code=400, detail="Invalid avatar preset")
         updates["avatar_preset"] = avatar_preset or None
         if avatar_preset:
-            _delete_local_avatar_if_present(user)
+            await _delete_avatar_if_present(user)
             updates["avatar_url"] = None
+            updates["avatar_storage_key"] = None
 
     if updates:
         updates["updated_at"] = now_utc()
@@ -177,8 +238,61 @@ async def patch_me(payload: UserPatch, user=Depends(require_user)):
     return serialize_user_out(updated)
 
 
+@router.post("/me/subscription", response_model=UserOut)
+async def activate_subscription(request: Request, user=Depends(require_user)):
+    db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="auth.subscription",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AUTH_RATE_LIMITS["subscription"][0],
+        window_seconds=AUTH_RATE_LIMITS["subscription"][1],
+    )
+    current_status = str(user.get("subscription_status") or SUBSCRIPTION_DEFAULT_STATUS).strip().lower()
+    if has_subscription_access(user) and current_status == "active":
+        return serialize_user_out(user)
+
+    if settings.app_env_normalized != "development":
+        raise HTTPException(
+            status_code=409,
+            detail="Mock subscription activation is only available in development. Use billing checkout in staging or production.",
+        )
+
+    activated_at = now_utc()
+    renewal_at = activated_at + timedelta(days=30)
+    await db["users"].update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {
+                "subscription_status": "active",
+                "subscription_plan": SUBSCRIPTION_DEFAULT_PLAN,
+                "subscription_started_at": user.get("subscription_started_at") or activated_at,
+                "subscription_renewal_at": renewal_at,
+                "billing_provider": "mock",
+                "stripe_customer_id": None,
+                "stripe_subscription_id": None,
+                "stripe_checkout_session_id": None,
+                "updated_at": activated_at,
+            }
+        },
+    )
+    updated = await db["users"].find_one({"_id": user["_id"]})
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+    return serialize_user_out(updated)
+
+
 @router.post("/me/password", response_model=AuthOut)
-async def change_password(payload: PasswordChangeIn, user=Depends(require_user)):
+async def change_password(payload: PasswordChangeIn, request: Request, user=Depends(require_user)):
+    db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="auth.password_change",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AUTH_RATE_LIMITS["password_change"][0],
+        window_seconds=AUTH_RATE_LIMITS["password_change"][1],
+    )
+
     password_salt, password_hash = _password_parts_for_user(user)
     if not password_salt or not password_hash:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -187,7 +301,6 @@ async def change_password(payload: PasswordChangeIn, user=Depends(require_user))
     if secrets.compare_digest(payload.current_password, payload.new_password):
         raise HTTPException(status_code=400, detail="New password must be different")
 
-    db = get_db()
     changed_at = now_utc()
     password_parts = hash_password(payload.new_password)
     await db["users"].update_one(
@@ -212,7 +325,16 @@ async def change_password(payload: PasswordChangeIn, user=Depends(require_user))
 
 
 @router.post("/me/avatar", response_model=UserOut)
-async def upload_avatar(file: UploadFile = File(...), user=Depends(require_user)):
+async def upload_avatar(request: Request, file: UploadFile = File(...), user=Depends(require_user)):
+    db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="auth.avatar_upload",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AUTH_RATE_LIMITS["avatar_upload"][0],
+        window_seconds=AUTH_RATE_LIMITS["avatar_upload"][1],
+    )
+
     filename = str(file.filename or "").strip()
     suffix = Path(filename).suffix.lower()
     if suffix not in ALLOWED_AVATAR_SUFFIXES:
@@ -224,17 +346,21 @@ async def upload_avatar(file: UploadFile = File(...), user=Depends(require_user)
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Avatar file is too large")
 
-    target_name = f"{oid_str(user['_id'])}-{int(now_utc().timestamp() * 1000)}-{secrets.token_hex(4)}{suffix}"
-    target = settings.user_avatar_upload_path / target_name
-    _delete_local_avatar_if_present(user)
-    target.write_bytes(content)
+    storage = get_avatar_storage_provider()
+    stored = await storage.upload_avatar(
+        user_id=oid_str(user["_id"]),
+        filename=filename,
+        content=content,
+        content_type=file.content_type,
+    )
+    await _delete_avatar_if_present(user)
 
-    db = get_db()
     await db["users"].update_one(
         {"_id": user["_id"]},
         {
             "$set": {
-                "avatar_url": f"/media/avatars/{target_name}",
+                "avatar_url": stored.url,
+                "avatar_storage_key": stored.storage_key,
                 "avatar_preset": None,
                 "updated_at": now_utc(),
             }
@@ -249,7 +375,7 @@ async def upload_avatar(file: UploadFile = File(...), user=Depends(require_user)
 @router.delete("/me")
 async def delete_me(user=Depends(require_user)):
     db = get_db()
-
+    await _delete_avatar_if_present(user)
     await db["users"].delete_one({"_id": user["_id"]})
     await db["sessions"].delete_many({"user_id": user["_id"]})
 

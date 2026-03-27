@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Lock, Mail, Settings2, Sparkles, Trash2, User, Wand2 } from "lucide-react";
+import { Award, Lock, Mail, Settings2, Sparkles, Trash2, User, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -31,6 +31,7 @@ import { useActivity } from "../context/ActivityContext";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { avatarPresetClass } from "../lib/avatarPresets";
 import { AccountSectionNav } from "../components/AccountSectionNav";
+import { SubscriptionGate } from "../components/SubscriptionGate";
 
 export function Account() {
   const { refreshUser } = useAuth();
@@ -41,10 +42,19 @@ export function Account() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingAI, setSavingAI] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [startingBilling, setStartingBilling] = useState(false);
+  const [openingBillingPortal, setOpeningBillingPortal] = useState(false);
+  const [usingDevFallback, setUsingDevFallback] = useState(false);
   const [aiSettings, setAiSettings] = useState<any>(null);
+  const [billingStatus, setBillingStatus] = useState<any>(null);
+  const [billingMessage, setBillingMessage] = useState<string | null>(null);
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [accountRole, setAccountRole] = useState("user");
+  const [subscriptionStatus, setSubscriptionStatus] = useState("inactive");
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null);
+  const [subscriptionRenewalAt, setSubscriptionRenewalAt] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarPreset, setAvatarPreset] = useState<string | null>("midnight");
 
@@ -56,12 +66,22 @@ export function Account() {
     const load = async () => {
       setLoading(true);
       try {
-        const [me, settings] = await Promise.all([api.me(), api.getAIPreferences().catch(() => null)]);
+        const [me, billing] = await Promise.all([
+          api.me(),
+          api.getBillingStatus().catch(() => null),
+        ]);
         setUsername(me?.username || "");
         setEmail(me?.email || "");
+        setAccountRole(me?.role || "user");
+        setSubscriptionStatus(me?.subscription_status || "inactive");
+        setSubscriptionPlan(me?.subscription_plan || null);
+        setSubscriptionRenewalAt(me?.subscription_renewal_at || null);
         setAvatarUrl(me?.avatar_url || null);
         setAvatarPreset(me?.avatar_preset || "midnight");
-        setAiSettings(settings);
+        setBillingStatus(billing);
+        setBillingMessage(billing?.message ?? null);
+        const hasAccess = ["owner", "admin", "team"].includes(String(me?.role ?? "").toLowerCase()) || String(me?.subscription_status ?? "").toLowerCase() === "active";
+        setAiSettings(hasAccess ? await api.getAIPreferences().catch(() => null) : null);
       } catch (e: any) {
         toast.error(e?.message || "Failed to load account");
       } finally {
@@ -79,6 +99,107 @@ export function Account() {
     const b = parts[1]?.[0] ?? parts[0]?.[1] ?? "B";
     return (a + b).toUpperCase();
   }, [username]);
+
+  const isAdminRole = ["owner", "admin", "team"].includes(String(accountRole).toLowerCase());
+  const hasSubscriptionAccess = isAdminRole || subscriptionStatus === "active";
+
+  const refreshBillingState = async () => {
+    const [me, billing] = await Promise.all([
+      api.me(),
+      api.getBillingStatus().catch(() => null),
+    ]);
+    setUsername(me?.username || "");
+    setEmail(me?.email || "");
+    setAccountRole(me?.role || "user");
+    setSubscriptionStatus(me?.subscription_status || "inactive");
+    setSubscriptionPlan(me?.subscription_plan || null);
+    setSubscriptionRenewalAt(me?.subscription_renewal_at || null);
+    setBillingStatus(billing);
+    setBillingMessage(billing?.message ?? null);
+  };
+
+  const handleStartCheckout = async () => {
+    setStartingBilling(true);
+    setBillingMessage(null);
+    try {
+      const session = await api.createBillingCheckout();
+      setBillingStatus((current: any) => (current ? { ...current, ...session } : session));
+      setBillingMessage(session.message ?? null);
+      if (session.status === "created" && session.checkout_url) {
+        window.location.assign(session.checkout_url);
+        return;
+      }
+      if (session.status === "already_active") {
+        toast.success("Subscription already active");
+        await refreshBillingState();
+        const settings = await api.getAIPreferences().catch(() => null);
+        setAiSettings(settings);
+        await refreshUser();
+        return;
+      }
+      toast.error(session.message || "Checkout is not available yet");
+    } catch (e: any) {
+      const message = e?.message || "Failed to start checkout";
+      setBillingMessage(message);
+      toast.error(message);
+    } finally {
+      setStartingBilling(false);
+    }
+  };
+
+  const handleOpenBillingPortal = async () => {
+    setOpeningBillingPortal(true);
+    setBillingMessage(null);
+    try {
+      const portal = await api.createBillingPortal();
+      setBillingMessage(portal.message ?? null);
+      if (portal.status === "created" && portal.portal_url) {
+        window.location.assign(portal.portal_url);
+        return;
+      }
+      toast.error(portal.message || "Billing portal is not available");
+    } catch (e: any) {
+      const message = e?.message || "Failed to open billing portal";
+      setBillingMessage(message);
+      toast.error(message);
+    } finally {
+      setOpeningBillingPortal(false);
+    }
+  };
+
+  const handleUseDevFallback = async () => {
+    setUsingDevFallback(true);
+    setBillingMessage(null);
+    try {
+      const updated = await api.activateSubscription();
+      setSubscriptionStatus(updated.subscription_status || "active");
+      setSubscriptionPlan(updated.subscription_plan || "pro");
+      setSubscriptionRenewalAt(updated.subscription_renewal_at || null);
+      setBillingStatus((current: any) => ({
+        ...(current || {}),
+        billing_provider: updated.billing_provider || "mock",
+        stripe_customer_id: updated.stripe_customer_id ?? null,
+        stripe_subscription_id: updated.stripe_subscription_id ?? null,
+        stripe_checkout_session_id: updated.stripe_checkout_session_id ?? null,
+        subscription_status: updated.subscription_status || "active",
+        message: "Development fallback activated.",
+      }));
+      const settings = await api.getAIPreferences().catch(() => null);
+      setAiSettings(settings);
+      await refreshUser();
+      recordActivity({
+        id: `account:subscription:${Date.now()}`,
+        type: "account",
+        action: "activated",
+        name: "Subscription activated",
+      });
+      toast.success("Development fallback activated");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to activate the development fallback");
+    } finally {
+      setUsingDevFallback(false);
+    }
+  };
 
   const handleUpdateUsername = async () => {
     setSavingProfile(true);
@@ -227,6 +348,52 @@ export function Account() {
         </div>
       </div>
 
+      <SubscriptionGate
+        active={hasSubscriptionAccess}
+        plan={subscriptionPlan}
+        renewalAt={subscriptionRenewalAt}
+        role={accountRole}
+        compact
+        onActivate={hasSubscriptionAccess ? undefined : handleStartCheckout}
+        activating={startingBilling}
+        ctaLabel="Start checkout"
+        secondaryAction={billingStatus?.dev_fallback_available ? handleUseDevFallback : undefined}
+        secondaryActionLabel="Use dev fallback"
+        statusMessage={billingMessage || billingStatus?.message || undefined}
+      />
+
+      {!hasSubscriptionAccess ? (
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Billing status</h3>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                Use Stripe checkout when billing is configured. If Stripe is missing in local development, the explicit fallback stays available.
+              </p>
+              <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                <p>Provider: {billingStatus?.provider || "stripe"}</p>
+                <p>Mode: {billingStatus?.mode || "unavailable"}</p>
+                {billingStatus?.stripe_customer_id ? <p>Customer id: {billingStatus.stripe_customer_id}</p> : null}
+                {billingStatus?.stripe_subscription_id ? <p>Subscription id: {billingStatus.stripe_subscription_id}</p> : null}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={handleStartCheckout} disabled={startingBilling} className={activeHeaderTheme.buttonClass}>
+                {startingBilling ? "Starting checkout..." : "Start checkout"}
+              </Button>
+              <Button variant="outline" onClick={handleOpenBillingPortal} disabled={openingBillingPortal || !billingStatus?.portal_available}>
+                {openingBillingPortal ? "Opening..." : "Open billing portal"}
+              </Button>
+              {billingStatus?.dev_fallback_available ? (
+                <Button variant="secondary" onClick={handleUseDevFallback} disabled={usingDevFallback}>
+                  {usingDevFallback ? "Applying fallback..." : "Use dev fallback"}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
           <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
@@ -277,7 +444,8 @@ export function Account() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-              {aiSettings ? (
+              {hasSubscriptionAccess ? (
+                aiSettings ? (
                 <>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
@@ -358,8 +526,23 @@ export function Account() {
                     </Button>
                   </div>
                 </>
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-slate-300">AI settings are unavailable right now.</p>
+                )
               ) : (
-                <p className="text-sm text-gray-600 dark:text-slate-300">AI settings are unavailable right now.</p>
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
+                    AI settings unlock after your subscription is active. That keeps the core workspace gated until billing is live.
+                  </p>
+                  <Button onClick={handleStartCheckout} disabled={startingBilling} className={activeHeaderTheme.buttonClass}>
+                    {startingBilling ? "Starting checkout..." : "Start checkout"}
+                  </Button>
+                  {billingStatus?.dev_fallback_available ? (
+                    <Button variant="outline" onClick={handleUseDevFallback} disabled={usingDevFallback}>
+                      {usingDevFallback ? "Applying fallback..." : "Use dev fallback"}
+                    </Button>
+                  ) : null}
+                </div>
               )}
             </div>
           </Card>
@@ -412,12 +595,20 @@ export function Account() {
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
                 Use the dedicated page to adjust appearance, upload a profile photo, and tune how the app behaves day to day.
               </p>
-              <Button asChild className={`mt-4 ${activeHeaderTheme.buttonClass}`}>
-                <Link to="/app/account/personalization">
-                  <Settings2 className="h-4 w-4" />
-                  Manage Personalization
-                </Link>
-              </Button>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button asChild className={activeHeaderTheme.buttonClass}>
+                  <Link to="/app/account/personalization">
+                    <Settings2 className="h-4 w-4" />
+                    Manage Personalization
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/app/account/achievements">
+                    <Award className="h-4 w-4" />
+                    View Achievements
+                  </Link>
+                </Button>
+              </div>
             </div>
           </Card>
 

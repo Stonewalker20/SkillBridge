@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
-import { Check, MonitorCog, Palette, Sparkles, Upload } from "lucide-react";
+import { Check, Lock, MonitorCog, Palette, Sparkles, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -20,8 +20,9 @@ import { useActivity } from "../context/ActivityContext";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { useAccountPreferences, SIDEBAR_DENSITY_OPTIONS, START_PAGE_OPTIONS } from "../context/AccountPreferencesContext";
 import { AVATAR_PRESETS, avatarPresetClass, type AvatarPresetValue } from "../lib/avatarPresets";
-import { api } from "../services/api";
+import { api, type RewardsSummary } from "../services/api";
 import { AccountSectionNav } from "../components/AccountSectionNav";
+import { highestUnlockedRewardTier, rewardTierAtLeast, rewardTierClasses, rewardTierLabel } from "../lib/rewardTiers";
 
 function PreferenceRow({
   title,
@@ -58,16 +59,23 @@ export function AccountPersonalization() {
   const [email, setEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarPreset, setAvatarPreset] = useState<string | null>("midnight");
+  const [rewards, setRewards] = useState<RewardsSummary | null>(null);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const me = await api.me();
-        setUsername(me?.username || "");
-        setEmail(me?.email || "");
-        setAvatarUrl(me?.avatar_url || null);
-        setAvatarPreset(me?.avatar_preset || "midnight");
+        const [meResult, rewardsResult] = await Promise.allSettled([api.me(), api.getRewardsSummary()]);
+        if (meResult.status === "fulfilled") {
+          const me = meResult.value;
+          setUsername(me?.username || "");
+          setEmail(me?.email || "");
+          setAvatarUrl(me?.avatar_url || null);
+          setAvatarPreset(me?.avatar_preset || "midnight");
+        } else {
+          toast.error(meResult.reason?.message || "Failed to load personalization");
+        }
+        setRewards(rewardsResult.status === "fulfilled" ? rewardsResult.value : null);
       } catch (e: any) {
         toast.error(e?.message || "Failed to load personalization");
       } finally {
@@ -97,6 +105,20 @@ export function AccountPersonalization() {
     START_PAGE_OPTIONS.find((option) => option.value === preferences.startPage)?.label ?? "Dashboard";
   const densityLabel =
     SIDEBAR_DENSITY_OPTIONS.find((option) => option.value === preferences.sidebarDensity)?.label ?? "Comfortable";
+  const hasRewardsData = Boolean(
+    rewards &&
+      ((rewards.badges?.length ?? 0) > 0 ||
+        rewards.achievements.length > 0 ||
+        (rewards.badgeCount ?? 0) > 0 ||
+        (rewards.totalCount ?? 0) > 0)
+  );
+  const highestTier = hasRewardsData
+    ? highestUnlockedRewardTier(
+        (rewards?.badges ?? rewards?.achievements ?? []).filter((badge) => badge.unlocked).map((badge) => badge.current_tier ?? badge.tier)
+      )
+    : null;
+  const unlockedThemeCount = themes.filter((themeOption) => rewardTierAtLeast(highestTier, themeOption.unlockTier)).length;
+  const unlockedAvatarPresetCount = AVATAR_PRESETS.filter((preset) => rewardTierAtLeast(highestTier, preset.unlockTier)).length;
 
   const handleSelectAvatarPreset = async (preset: AvatarPresetValue) => {
     try {
@@ -136,6 +158,14 @@ export function AccountPersonalization() {
       name: "Workspace preferences reset",
     });
     toast.success("Workspace preferences reset");
+  };
+
+  const handleSelectTheme = (themeValue: (typeof themes)[number]["value"], isLocked: boolean) => {
+    if (isLocked) {
+      toast("Unlock a higher badge tier to use this colorway.");
+      return;
+    }
+    setHeaderTheme(themeValue);
   };
 
   if (loading) {
@@ -251,24 +281,35 @@ export function AccountPersonalization() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-3">
+            <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
+              {hasRewardsData
+                ? `${unlockedThemeCount}/${themes.length} header themes and ${unlockedAvatarPresetCount}/${AVATAR_PRESETS.length} avatar colorways are available. Highest unlocked tier: ${rewardTierLabel(highestTier)}.`
+                : "Achievement sync is unavailable right now, so all header themes remain selectable until badge progress reloads."}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {themes.map((themeOption) => {
                 const isSelected = headerTheme === themeOption.value;
+                const isLocked = hasRewardsData && !rewardTierAtLeast(highestTier, themeOption.unlockTier) && !isSelected;
+                const tierClass = rewardTierClasses(themeOption.unlockTier);
                 return (
                   <button
                     key={themeOption.value}
                     type="button"
-                    onClick={() => setHeaderTheme(themeOption.value)}
+                    onClick={() => handleSelectTheme(themeOption.value, isLocked)}
+                    disabled={isLocked}
                     className={`rounded-2xl border p-3 text-left transition ${
                       isSelected
                         ? "border-slate-900 bg-slate-50 shadow-sm dark:border-slate-100 dark:bg-slate-900"
-                        : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950/70 dark:hover:border-slate-500"
+                        : isLocked
+                          ? "border-slate-200 bg-white/70 opacity-70 dark:border-slate-800 dark:bg-slate-950/40"
+                          : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950/70 dark:hover:border-slate-500"
                     }`}
                     aria-pressed={isSelected}
                     aria-label={`Use ${themeOption.label}`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         {themeOption.swatchColors.map((color) => (
                           <span
                             key={color}
@@ -287,11 +328,28 @@ export function AccountPersonalization() {
                         <Check className="h-3 w-3" />
                       </span>
                     </div>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{themeOption.label}</p>
-                      <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${themeOption.avatarClass} text-white`}>
-                        {initials}
-                      </span>
+                    <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="min-w-0 text-sm font-semibold text-slate-900 dark:text-slate-100">{themeOption.label}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {themeOption.unlockTier ? (
+                          <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${isLocked ? tierClass.muted : tierClass.chip}`}>
+                            {rewardTierLabel(themeOption.unlockTier)}
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                            Starter
+                          </span>
+                        )}
+                        {isLocked ? (
+                          <span className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                            <Lock className="h-3 w-3" />
+                            Locked
+                          </span>
+                        ) : null}
+                        <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${themeOption.avatarClass} text-white`}>
+                          {initials}
+                        </span>
+                      </div>
                     </div>
                   </button>
                 );
@@ -404,22 +462,47 @@ export function AccountPersonalization() {
                 }}
               />
 
-              <div className="mt-4 grid grid-cols-3 gap-3">
+              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
                 {AVATAR_PRESETS.map((preset) => {
                   const selected = !avatarUrl && avatarPreset === preset.value;
+                  const isLocked = hasRewardsData && !rewardTierAtLeast(highestTier, preset.unlockTier) && !selected;
+                  const tierClass = rewardTierClasses(preset.unlockTier);
                   return (
                     <button
                       type="button"
                       key={preset.value}
-                      onClick={() => handleSelectAvatarPreset(preset.value)}
+                      onClick={() => {
+                        if (isLocked) {
+                          toast("Unlock a higher badge tier to use this colorway.");
+                          return;
+                        }
+                        handleSelectAvatarPreset(preset.value);
+                      }}
+                      disabled={isLocked}
                       className={`rounded-2xl border p-3 text-left transition ${
-                        selected ? "border-slate-900 bg-white shadow-sm dark:border-slate-100 dark:bg-slate-900" : "border-slate-200 dark:border-slate-700"
+                        selected
+                          ? "border-slate-900 bg-white shadow-sm dark:border-slate-100 dark:bg-slate-900"
+                          : isLocked
+                            ? "border-slate-200 bg-white/70 opacity-70 dark:border-slate-700 dark:bg-slate-950/50"
+                            : "border-slate-200 dark:border-slate-700"
                       }`}
                     >
                       <div className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold ${preset.className}`}>
                         {initials}
                       </div>
-                      <div className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</div>
+                        {preset.unlockTier ? (
+                          <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${isLocked ? tierClass.muted : tierClass.chip}`}>
+                            {rewardTierLabel(preset.unlockTier)}
+                          </span>
+                        ) : null}
+                        {isLocked ? (
+                          <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                            Locked
+                          </span>
+                        ) : null}
+                      </div>
                     </button>
                   );
                 })}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import re
 import tempfile
 from datetime import datetime, timezone
@@ -9,8 +10,9 @@ from pathlib import Path
 from typing import Iterable
 
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from app.core.auth import require_user
 from app.core.config import settings
@@ -41,7 +43,7 @@ from app.models.tailor import (
     UserSkillVectorHistoryPoint,
 )
 from app.utils.rag import retrieve_rag_context
-from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
+from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text, should_use_strict_exact_match
 from app.utils.ai import (
     AVAILABLE_INFERENCE_MODES,
     cosine_similarity,
@@ -51,12 +53,259 @@ from app.utils.ai import (
     rewrite_resume_bullets,
 )
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
+from app.utils.rewards import increment_reward_counter
+from app.utils.security import AI_RATE_LIMITS, build_rate_limit_identifier, enforce_rate_limit
 
 router = APIRouter()
 DEFAULT_RESUME_TEMPLATE_TEX = Path(__file__).resolve().parents[2] / "data" / "raw" / "default_resume_template.tex"
+UPLOADED_RESUME_REWORD_TEMPLATE = "uploaded_resume_reword_v1"
+
+TAILORED_RESUME_TEMPLATES: dict[str, dict[str, object]] = {
+    "ats_v1": {
+        "label": "ATS Classic",
+        "order": [
+            "Header",
+            "Professional Summary",
+            "Core Skills",
+            "Relevant Experience",
+            "Selected Projects",
+            "Education",
+            "Certifications",
+            "Awards",
+        ],
+        "renames": {
+            "Summary": "Professional Summary",
+            "Skills": "Core Skills",
+            "Experience": "Relevant Experience",
+            "Projects": "Selected Projects",
+        },
+        "rewrite_focus": "ats",
+    },
+    "professional_v1": {
+        "label": "Professional",
+        "order": [
+            "Header",
+            "Professional Summary",
+            "Core Skills",
+            "Relevant Experience",
+            "Selected Projects",
+            "Education",
+            "Certifications",
+            "Awards",
+        ],
+        "renames": {
+            "Summary": "Professional Summary",
+            "Skills": "Core Skills",
+            "Experience": "Relevant Experience",
+            "Projects": "Selected Projects",
+        },
+        "rewrite_focus": "balanced",
+    },
+    "modern_v1": {
+        "label": "Modern Impact",
+        "order": ["Header", "Profile", "Selected Impact", "Experience", "Projects", "Skills", "Education", "Certifications"],
+        "renames": {"Summary": "Profile", "Targeted Highlights": "Selected Impact"},
+        "rewrite_focus": "impact",
+    },
+    "project_focused_v1": {
+        "label": "Project Forward",
+        "order": ["Header", "Project Fit Summary", "Selected Projects", "Experience", "Skills", "Education", "Certifications"],
+        "renames": {"Summary": "Project Fit Summary", "Projects": "Selected Projects"},
+        "rewrite_focus": "impact",
+    },
+    "experience_focused_v1": {
+        "label": "Experience Forward",
+        "order": ["Header", "Experience Summary", "Relevant Experience", "Skills", "Projects", "Education", "Certifications"],
+        "renames": {"Summary": "Experience Summary", "Experience": "Relevant Experience"},
+        "rewrite_focus": "balanced",
+    },
+}
 
 def now_utc():
     return datetime.now(timezone.utc)
+
+
+def _normalize_tailored_resume_template(template_name: str | None) -> str:
+    candidate = str(template_name or "ats_v1").strip().lower()
+    return candidate if candidate in TAILORED_RESUME_TEMPLATES or candidate == UPLOADED_RESUME_REWORD_TEMPLATE else "ats_v1"
+
+
+def _uses_uploaded_resume_reword_template(template_name: str) -> bool:
+    return str(template_name or "").strip().lower() == UPLOADED_RESUME_REWORD_TEMPLATE
+
+
+def _template_rewrite_focus(template_name: str) -> str:
+    if _uses_uploaded_resume_reword_template(template_name):
+        return "balanced"
+    config = TAILORED_RESUME_TEMPLATES.get(_normalize_tailored_resume_template(template_name), {})
+    focus = str(config.get("rewrite_focus") or "balanced").strip().lower()
+    return focus if focus in {"ats", "balanced", "impact"} else "balanced"
+
+
+def _is_resume_bullet_line(line: str) -> bool:
+    return bool(re.match(r"^\s*[-*•]\s+", str(line or "")))
+
+
+def _resume_bullet_text(line: str) -> str:
+    return re.sub(r"^\s*[-*•]\s+", "", str(line or "").strip())
+
+
+def _normalize_resume_bullet(line: str) -> str:
+    text = _clean_resume_line(_resume_bullet_text(line))
+    if not text:
+        return ""
+    text = text.rstrip(" ,;:")
+    if text and text[-1] not in ".!?":
+        text += "."
+    return f"- {text}"
+
+
+def _looks_like_uploaded_file_title(value: str) -> bool:
+    text = _clean_resume_line(value)
+    if not text:
+        return False
+    return bool(
+        re.search(r"\.(pdf|docx|doc|txt|md)$", text, re.IGNORECASE)
+        or re.search(r"(?:^|[_-])v\d+(?:$|[_-])", text, re.IGNORECASE)
+        or re.search(r"\b(final|draft|copy|upload|resume)\b", text, re.IGNORECASE)
+    )
+
+
+def _resume_submission_text(value: str) -> str:
+    text = _clean_resume_line(_clean_evidence_text_for_resume(value))
+    if not text:
+        return ""
+    replacements = (
+        (r"\bportfolio item\b", "project"),
+        (r"\bportfolio\b", "project"),
+        (r"\bevidence-backed\b", ""),
+        (r"\bretrieved context\b", ""),
+        (r"\bmanual[- ]entry\b", ""),
+        (r"\bresume evidence\b", "professional experience"),
+    )
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text).strip(" ,;:-")
+    return text
+
+
+def _looks_like_objective_or_meta_resume_line(value: str) -> bool:
+    text = normalize_skill_text(value)
+    if not text:
+        return False
+    return any(
+        phrase in text
+        for phrase in (
+            "targeted for",
+            "selected experience and projects",
+            "selected experience",
+            "evidence backed",
+            "retrieved context",
+            "resume evidence",
+            "portfolio",
+            "to obtain",
+            "seeking ",
+            "looking for",
+            "objective",
+        )
+    )
+
+
+def _derived_resume_item_title(item: dict) -> str:
+    item_type = normalize_skill_text(str(item.get("type") or ""))
+    text = normalize_skill_text(
+        " ".join(
+            [
+                str(item.get("summary") or ""),
+                str(item.get("title") or ""),
+                str(item.get("org") or ""),
+                str(item.get("resume_display_title") or ""),
+            ]
+        )
+    )
+    patterns: list[tuple[tuple[str, ...], str]] = [
+        (("dashboard", "analytics", "reporting"), "Analytics Dashboard"),
+        (("machine learning", "model", "ml"), "Machine Learning"),
+        (("data pipeline", "etl", "pipeline"), "Data Pipeline"),
+        (("api", "backend", "service", "integration"), "API Delivery"),
+        (("automation", "workflow"), "Automation"),
+        (("research", "experiment", "study"), "Research"),
+        (("web app", "frontend", "ui", "react"), "Web Application"),
+    ]
+    stem = ""
+    for tokens, label in patterns:
+        if any(token in text for token in tokens):
+            stem = label
+            break
+    if not stem:
+        if "project" in item_type or any(token in text for token in ("project", "prototype", "capstone")):
+            stem = "Project"
+        elif any(token in text for token in ("research", "assistant", "intern", "engineer", "developer", "analyst")):
+            stem = "Professional"
+        else:
+            stem = "Professional"
+
+    if "project" in item_type or any(token in text for token in ("project", "prototype", "capstone")):
+        return stem if stem.endswith("Project") else f"{stem} Project"
+    if stem.endswith("Experience"):
+        return stem
+    if stem == "Research":
+        return "Research Experience"
+    if stem == "Professional":
+        return "Professional Experience"
+    return f"{stem} Experience"
+
+
+def _resume_friendly_title(item: dict) -> str:
+    raw_title = _resume_submission_text(str(item.get("title") or ""))
+    display_title = _resume_submission_text(str(item.get("resume_display_title") or ""))
+    org = _clean_resume_line(str(item.get("org") or ""))
+    item_type = str(item.get("type") or "").strip().lower()
+    summary = _resume_submission_text(str(item.get("summary") or ""))
+
+    for candidate in (display_title, raw_title):
+        if candidate and not _looks_like_uploaded_file_title(candidate):
+            return candidate
+
+    if item_type == "evidence:resume":
+        return org or _derived_resume_item_title(item)
+    if "project" in item_type or any(token in normalize_skill_text(summary) for token in ("project", "prototype", "capstone", "research")):
+        return org or _derived_resume_item_title(item)
+    if "work" in item_type or "experience" in item_type:
+        return org or _derived_resume_item_title(item)
+    if org:
+        return org
+    return _derived_resume_item_title(item)
+
+
+def _format_resume_item_header(item: dict) -> str:
+    title = _resume_friendly_title(item)
+    org = _clean_resume_line(str(item.get("org") or ""))
+    item_type = str(item.get("type") or "work").replace("evidence:", "").replace("_", " ").strip().title()
+    header_parts = [title]
+    if org and normalize_skill_text(org) != normalize_skill_text(title):
+        header_parts.append(org)
+    elif item_type and item_type.lower() != "work":
+        header_parts.append(item_type)
+    return " | ".join(header_parts)
+
+
+def _resume_display_title_for_item(item: dict) -> str:
+    raw_title = _resume_submission_text(str(item.get("title") or ""))
+    org = _clean_resume_line(str(item.get("org") or ""))
+    item_type = str(item.get("type") or "").strip().lower()
+    if item_type == "evidence:resume":
+        return org or _derived_resume_item_title(item)
+    if _looks_like_uploaded_file_title(raw_title):
+        return org or _derived_resume_item_title(item)
+    return raw_title or _derived_resume_item_title(item)
+
+
+def _cleanup_temp_export(path: str) -> None:
+    try:
+        Path(path).unlink(missing_ok=True)
+    except Exception:
+        return
 
 
 def _scoped_user_id(user: dict, requested_user_id: str | None = None) -> str:
@@ -362,6 +611,8 @@ def _match_skills(job_text: str, skills: Iterable[dict]) -> list[ExtractedSkill]
             a = (a or "").strip()
             if not a:
                 continue
+            if should_use_strict_exact_match(a) and normalize_skill_text(a) != n:
+                continue
             al = normalize_skill_text(a)
             if re.search(rf"(?<![A-Za-z0-9]){re.escape(al)}(?![A-Za-z0-9])", text):
                 bump(sid, name, "alias")
@@ -374,22 +625,22 @@ async def _load_user_items(db, user_id: str) -> list[dict]:
     items: list[dict] = []
     evidence_docs = await db["evidence"].find(user_filter).sort("updated_at", -1).to_list(length=1000)
     for evidence in evidence_docs:
-        items.append(
-            {
-                "_id": evidence["_id"],
-                "type": f"evidence:{evidence.get('type', 'other')}",
-                "title": evidence.get("title", "") or "Evidence",
-                "org": evidence.get("org"),
-                "summary": evidence.get("summary") or evidence.get("text_excerpt") or "",
-                "bullets": evidence.get("bullets", []) or [],
-                "links": evidence.get("links", []) or ([evidence.get("source")] if evidence.get("source") else []),
-                "skill_ids": evidence.get("skill_ids", []) or [],
-                "priority": evidence.get("priority", 1),
-                "updated_at": evidence.get("updated_at"),
-                "created_at": evidence.get("created_at"),
-                "_source_collection": "evidence",
-            }
-        )
+        item = {
+            "_id": evidence["_id"],
+            "type": f"evidence:{evidence.get('type', 'other')}",
+            "title": evidence.get("title", "") or "Evidence",
+            "org": evidence.get("org"),
+            "summary": evidence.get("summary") or evidence.get("text_excerpt") or "",
+            "bullets": evidence.get("bullets", []) or [],
+            "links": evidence.get("links", []) or ([evidence.get("source")] if evidence.get("source") else []),
+            "skill_ids": evidence.get("skill_ids", []) or [],
+            "priority": evidence.get("priority", 1),
+            "updated_at": evidence.get("updated_at"),
+            "created_at": evidence.get("created_at"),
+            "_source_collection": "evidence",
+        }
+        item["resume_display_title"] = _resume_display_title_for_item(item)
+        items.append(item)
     return items
 
 def _score_item(item: dict, job_skill_ids: set[str], keywords: set[str]) -> float:
@@ -435,6 +686,42 @@ def _attach_retrieved_context_to_items(items: list[dict], retrieved_context: lis
         if item_id in snippets_by_item_id:
             item["rag_snippets"] = _dedupe_preserve_order(snippets_by_item_id[item_id])[:3]
     return context_score_by_item_id
+
+
+def _select_tailored_resume_items(
+    scored_items: list[tuple[float, dict]],
+    max_items: int,
+    minimum_items: int = 3,
+) -> list[dict]:
+    selected: list[dict] = []
+    seen_ids: set[str] = set()
+    seen_kinds: set[str] = set()
+
+    positive_items = [(score, item) for score, item in scored_items if score > 0]
+    candidate_items = positive_items or scored_items
+
+    for score, item in candidate_items:
+        item_id = oid_str(item.get("_id"))
+        if not item_id or item_id in seen_ids:
+            continue
+        item_kind = str(item.get("type") or "other")
+        if item_kind not in seen_kinds or len(selected) < minimum_items:
+            selected.append(item)
+            seen_ids.add(item_id)
+            seen_kinds.add(item_kind)
+        if len(selected) >= max_items:
+            return selected[:max_items]
+
+    for _score, item in candidate_items:
+        item_id = oid_str(item.get("_id"))
+        if not item_id or item_id in seen_ids:
+            continue
+        selected.append(item)
+        seen_ids.add(item_id)
+        if len(selected) >= max(max_items, minimum_items):
+            break
+
+    return selected[:max(max_items, minimum_items)]
 
 def _dedupe_preserve_order(values: Iterable[str]) -> list[str]:
     out: list[str] = []
@@ -733,6 +1020,107 @@ def _display_skill_name(doc: dict | None, fallback: str = "") -> str:
         return fallback
     return str(doc.get("name") or fallback or "").strip()
 
+
+def _build_skill_display_maps(skill_docs: Iterable[dict]) -> tuple[dict[str, dict], dict[str, str]]:
+    skill_docs_by_id: dict[str, dict] = {}
+    display_name_by_term: dict[str, str] = {}
+    for doc in skill_docs:
+        merged_ids = list(doc.get("merged_ids") or [])
+        if not merged_ids and doc.get("_id") is not None:
+            merged_ids = [oid_str(doc.get("_id"))]
+        for merged_id in merged_ids:
+            text = str(merged_id or "").strip()
+            if text:
+                skill_docs_by_id[text] = doc
+        display_name = _display_skill_name(doc, "")
+        if not display_name:
+            continue
+        for term in _skill_terms(doc):
+            display_name_by_term.setdefault(term, display_name)
+    return skill_docs_by_id, display_name_by_term
+
+
+def _normalize_skill_name_list(
+    raw_names: Iterable[str] | None,
+    raw_ids: Iterable[str] | None,
+    skill_docs_by_id: dict[str, dict],
+    display_name_by_term: dict[str, str],
+) -> list[str]:
+    normalized: list[str] = []
+    for skill_id in raw_ids or []:
+        text = str(skill_id or "").strip()
+        if not text:
+            continue
+        doc = skill_docs_by_id.get(text)
+        if doc:
+            normalized.append(_display_skill_name(doc, text))
+    for raw_name in raw_names or []:
+        key = normalize_skill_text(str(raw_name or "").strip())
+        if not key:
+            continue
+        display_name = display_name_by_term.get(key)
+        if display_name:
+            normalized.append(display_name)
+    return _dedupe_preserve_order(normalized)
+
+
+def _normalize_gap_insights(
+    raw_insights: Iterable[dict] | None,
+    skill_docs_by_id: dict[str, dict],
+    display_name_by_term: dict[str, str],
+) -> list[dict]:
+    normalized: list[dict] = []
+    for raw in raw_insights or []:
+        if not isinstance(raw, dict):
+            continue
+        skill_id = str(raw.get("skill_id") or "").strip()
+        skill_name = ""
+        if skill_id and skill_id in skill_docs_by_id:
+            skill_name = _display_skill_name(skill_docs_by_id.get(skill_id), skill_id)
+        else:
+            skill_name = display_name_by_term.get(normalize_skill_text(str(raw.get("skill_name") or "").strip()), "")
+        if not skill_name:
+            continue
+        normalized.append({**raw, "skill_name": skill_name})
+    return normalized
+
+
+def _strip_transient_history_analysis_fields(analysis: dict) -> dict:
+    persisted = dict(analysis or {})
+    persisted["missing_skill_ids"] = []
+    persisted["missing_skills"] = []
+    persisted["missing_skill_count"] = 0
+    persisted["gap_reasoning_summary"] = ""
+    persisted["gap_insights"] = []
+    return persisted
+
+
+def _normalize_history_analysis_payload(
+    analysis: dict,
+    skill_docs_by_id: dict[str, dict],
+    display_name_by_term: dict[str, str],
+) -> dict:
+    normalized = dict(analysis or {})
+    normalized["matched_skills"] = _normalize_skill_name_list(
+        normalized.get("matched_skills") or [],
+        normalized.get("matched_skill_ids") or [],
+        skill_docs_by_id,
+        display_name_by_term,
+    )
+    normalized["missing_skill_ids"] = []
+    normalized["missing_skills"] = []
+    normalized["related_skills"] = _normalize_skill_name_list(
+        normalized.get("related_skills") or [],
+        [],
+        skill_docs_by_id,
+        display_name_by_term,
+    )
+    normalized["gap_insights"] = []
+    normalized["gap_reasoning_summary"] = ""
+    normalized["matched_skill_count"] = len(normalized["matched_skills"])
+    normalized["missing_skill_count"] = 0
+    return normalized
+
 _RESUME_SECTION_ALIASES: dict[str, tuple[str, ...]] = {
     "Header": (),
     "Summary": ("summary", "professional summary", "profile", "objective", "about"),
@@ -790,6 +1178,16 @@ async def _load_resume_template_snapshot(db, user_id: str, resume_snapshot_id: s
     )
 
 
+async def _load_resume_template_evidence(db, user_id: str, resume_evidence_id: str | None) -> dict | None:
+    if not resume_evidence_id:
+        return None
+    query = ref_query("_id", resume_evidence_id)
+    query.update(ref_query("user_id", user_id))
+    query["type"] = "resume"
+    query["origin"] = "user"
+    return await db["evidence"].find_one(query)
+
+
 def _parse_resume_sections(raw_text: str) -> list[ResumeSection]:
     sections: list[ResumeSection] = []
     current_title = "Header"
@@ -817,6 +1215,15 @@ def _parse_resume_sections(raw_text: str) -> list[ResumeSection]:
 
     flush()
     return sections
+
+
+def _split_resume_lines(raw_text: str) -> list[str]:
+    return str(raw_text or "").splitlines()
+
+
+def _join_resume_lines(lines: list[str]) -> str:
+    trimmed = "\n".join(lines).strip("\n")
+    return f"{trimmed}\n" if trimmed else ""
 
 
 def _build_default_header_lines(user_doc: dict | None) -> list[str]:
@@ -1021,7 +1428,7 @@ def _summarize_item_for_resume(item: dict, selected_skill_names: list[str], max_
         *[str(snippet or "") for snippet in (item.get("rag_snippets") or [])],
         *[str(bullet or "") for bullet in (item.get("bullets") or [])],
         str(item.get("summary") or ""),
-        str(item.get("title") or ""),
+        str(item.get("resume_display_title") or item.get("title") or ""),
     ]
     candidates: list[tuple[float, str]] = []
     normalized_skills = [normalize_skill_text(name) for name in selected_skill_names if normalize_skill_text(name)]
@@ -1050,10 +1457,10 @@ def _summarize_item_for_resume(item: dict, selected_skill_names: list[str], max_
     if ordered:
         return ordered
 
-    fallback = _clean_resume_line(str(item.get("summary") or item.get("title") or ""))
+    fallback = _clean_resume_line(str(item.get("summary") or item.get("resume_display_title") or item.get("title") or ""))
     if fallback:
         if _looks_like_formula_noise(fallback):
-            fallback = _clean_resume_line(str(item.get("title") or "Relevant work"))
+            fallback = _clean_resume_line(str(item.get("resume_display_title") or item.get("title") or "Relevant work"))
         if fallback:
             return [fallback.rstrip(".") + "."]
     return []
@@ -1112,60 +1519,151 @@ def _build_targeted_summary_lines(
     selected_items: list[dict],
 ) -> list[str]:
     lines: list[str] = []
-    seen: set[str] = set()
-    for line in (base_section.lines if base_section else []):
-        cleaned = _clean_resume_line(line)
-        key = normalize_skill_text(cleaned)
-        if cleaned and key not in seen:
-            seen.add(key)
-            lines.append(cleaned)
-        if len(lines) >= 2:
-            break
+    primary_skills = ", ".join(skill_names[:5]) if skill_names else "role-relevant strengths"
+    evidence_count = len(selected_items)
+    role_focus = _resume_submission_text(target_label or "the target role")
 
-    highlight_skills = ", ".join(skill_names[:6])
-    top_titles = ", ".join(_clean_resume_line(item.get("title", "")) for item in selected_items[:2] if item.get("title"))
-    tailored_line_parts = [f"Tailored for {target_label}"]
-    if highlight_skills:
-        tailored_line_parts.append(f"with emphasis on {highlight_skills}")
-    if top_titles:
-        tailored_line_parts.append(f"and evidence pulled from {top_titles}")
-    tailored_line = " ".join(tailored_line_parts).strip() + "."
-    if normalize_skill_text(tailored_line) not in seen:
-        lines.append(tailored_line)
+    lines.append(f"Hands-on experience in {primary_skills}, with relevant work aligned to {role_focus}.")
+    if evidence_count:
+        lines.append(
+            f"Background includes {evidence_count} relevant projects and experience entries focused on delivery, technical execution, and measurable outcomes."
+        )
+    else:
+        lines.append(
+            "Background emphasizes practical delivery, technical execution, and measurable outcomes across relevant work."
+        )
 
-    if not lines:
-        lines.append(f"Tailored for {target_label}.")
+    if base_section and base_section.lines:
+        for candidate in base_section.lines:
+            base_line = _resume_submission_text(candidate)
+            if not base_line or _looks_like_objective_or_meta_resume_line(base_line):
+                continue
+            if normalize_skill_text(base_line) not in {normalize_skill_text(line) for line in lines}:
+                lines.append(base_line.rstrip(".") + ".")
+                break
+
     return lines[:3]
 
 
-def _selected_item_lines(selected_items: list[dict], selected_skill_names: list[str], max_bullets_per_item: int) -> list[str]:
+async def _selected_item_lines(
+    selected_items: list[dict],
+    selected_skill_names: list[str],
+    max_bullets_per_item: int,
+    job_text: str,
+    rewrite_focus: str,
+    ai_preferences: dict | None = None,
+) -> list[str]:
     lines: list[str] = []
     for item in selected_items:
-        title = _clean_resume_line(item.get("title", "") or "Relevant experience")
-        item_type = str(item.get("type") or "work").replace("evidence:", "").replace("_", " ").title()
-        header = title if item_type.lower() == "work" else f"{title} [{item_type}]"
+        header = _format_resume_item_header(item)
         lines.append(header)
-        bullets = [f"- {bullet}" for bullet in _summarize_item_for_resume(item, selected_skill_names, max_bullets_per_item)]
-        if bullets:
-            lines.extend(bullets[:max_bullets_per_item])
+        raw_bullets = _summarize_item_for_resume(item, selected_skill_names, max_bullets_per_item)
+        bullets = [_normalize_resume_bullet(bullet) for bullet in raw_bullets]
+        bullets = [bullet for bullet in bullets if bullet]
+        deduped_bullets: list[str] = []
+        seen_bullets: set[str] = set()
+        for bullet in bullets:
+            key = normalize_skill_text(bullet)
+            if not key or key in seen_bullets:
+                continue
+            seen_bullets.add(key)
+            deduped_bullets.append(bullet)
+        if deduped_bullets:
+            rewritten_bullets, _provider = await rewrite_resume_bullets(
+                job_text,
+                deduped_bullets,
+                rewrite_focus,
+                ai_preferences,
+            )
+            normalized_bullets = [
+                _normalize_resume_bullet(_resume_submission_text(bullet))
+                for bullet in (rewritten_bullets or deduped_bullets)[:max_bullets_per_item]
+            ]
+            lines.extend([bullet for bullet in normalized_bullets if bullet])
         else:
-            summary = _clean_resume_line(_clean_evidence_text_for_resume(item.get("summary", "")))
+            summary = _resume_submission_text(str(item.get("summary", "")))
             if summary:
-                lines.append(f"- {summary}")
-        if item.get("links"):
+                lines.append(_normalize_resume_bullet(summary))
+        if item.get("links") and _is_project_like_item(item):
             links = [str(link).strip() for link in item.get("links", []) if str(link).strip()]
             if links:
-                lines.append(f"- Links: {', '.join(links[:3])}")
+                lines.append(_normalize_resume_bullet(f"Project links: {', '.join(links[:3])}"))
         lines.append("")
     return [line for line in lines if line != ""]
 
 
-def _build_sections_from_resume_template(
+def _apply_resume_template_variant(sections: list[ResumeSection], template_name: str) -> list[ResumeSection]:
+    normalized_template = _normalize_tailored_resume_template(template_name)
+    config = TAILORED_RESUME_TEMPLATES[normalized_template]
+    renames = dict(config.get("renames") or {})
+    order = list(config.get("order") or [])
+
+    renamed_sections = [
+        ResumeSection(title=str(renames.get(section.title, section.title)), lines=section.lines)
+        for section in sections
+    ]
+    order_index = {title: index for index, title in enumerate(order)}
+    ordered = sorted(
+        enumerate(renamed_sections),
+        key=lambda entry: (order_index.get(entry[1].title, len(order_index) + entry[0]), entry[0]),
+    )
+    return [section for _index, section in ordered]
+
+
+def _is_rewriteable_resume_section_title(title: str) -> bool:
+    normalized = str(title or "").strip().lower()
+    return normalized in {
+        "targeted highlights",
+        "selected impact",
+        "relevant work",
+        "experience",
+        "relevant experience",
+        "projects",
+        "selected projects",
+    }
+
+
+async def _rewrite_uploaded_resume_raw_text(
+    raw_text: str,
+    job_text: str,
+    focus: str = "balanced",
+    ai_preferences: dict | None = None,
+) -> tuple[str, str, int]:
+    lines = _split_resume_lines(raw_text)
+    bullet_pattern = re.compile(r"^(\s*)([-*•])\s+(.*)$")
+    bullet_indices: list[int] = []
+    bullet_prefixes: list[tuple[str, str]] = []
+    bullets: list[str] = []
+
+    for index, line in enumerate(lines):
+        match = bullet_pattern.match(str(line))
+        if not match:
+            continue
+        indent, marker, content = match.groups()
+        bullet_indices.append(index)
+        bullet_prefixes.append((indent, marker))
+        bullets.append(f"- {content.strip()}")
+
+    if not bullets:
+        return _join_resume_lines(lines), "", 0
+
+    rewritten_bullets, provider = await rewrite_resume_bullets(job_text, bullets, focus, ai_preferences)
+    for line_index, rewritten, (indent, marker) in zip(bullet_indices, rewritten_bullets or bullets, bullet_prefixes):
+        content = _resume_bullet_text(rewritten)
+        lines[line_index] = f"{indent}{marker} {content}".rstrip()
+
+    return _join_resume_lines(lines), provider, len(bullets)
+
+
+async def _build_sections_from_resume_template(
     template_sections: list[ResumeSection],
     target_label: str,
     selected_skill_names: list[str],
     selected_items: list[dict],
     max_bullets_per_item: int,
+    job_text: str,
+    template_name: str,
+    ai_preferences: dict | None = None,
     preserve_template_content: bool = True,
     header_lines: list[str] | None = None,
 ) -> list[ResumeSection]:
@@ -1175,9 +1673,31 @@ def _build_sections_from_resume_template(
     skills_section = next((section for section in template_sections if section.title == "Skills"), None)
     experience_items = [item for item in selected_items if not _is_project_like_item(item)]
     project_items = [item for item in selected_items if _is_project_like_item(item)]
-    experience_lines = _selected_item_lines(experience_items or selected_items[:2], selected_skill_names, max_bullets_per_item)
-    project_lines = _selected_item_lines(project_items or selected_items[2:] or selected_items[:2], selected_skill_names, max_bullets_per_item)
-    targeted_highlights_lines = _selected_item_lines(selected_items, selected_skill_names, max_bullets_per_item)
+    rewrite_focus = _template_rewrite_focus(template_name)
+    experience_lines = await _selected_item_lines(
+        experience_items or selected_items[:2],
+        selected_skill_names,
+        max_bullets_per_item,
+        job_text,
+        rewrite_focus,
+        ai_preferences,
+    )
+    project_lines = await _selected_item_lines(
+        project_items or selected_items[2:] or selected_items[:2],
+        selected_skill_names,
+        max_bullets_per_item,
+        job_text,
+        rewrite_focus,
+        ai_preferences,
+    )
+    targeted_highlights_lines = await _selected_item_lines(
+        selected_items,
+        selected_skill_names,
+        max_bullets_per_item,
+        job_text,
+        rewrite_focus,
+        ai_preferences,
+    )
     merged_skill_names = _dedupe_preserve_order(
         [*_extract_original_skills(skills_section), *selected_skill_names]
     )
@@ -1289,7 +1809,7 @@ def _build_sections_from_resume_template(
         sections.insert(insert_index, ResumeSection(title=title, lines=lines))
         existing_titles.add(title)
 
-    return [section for section in sections if section.lines]
+    return _apply_resume_template_variant([section for section in sections if section.lines], template_name)
 
 def _dedupe_skill_ids_by_name(skill_ids: Iterable[str], skill_docs: dict[str, dict]) -> list[str]:
     ordered: list[str] = []
@@ -1316,8 +1836,10 @@ def _dedupe_skill_ids_by_terms(skill_ids: Iterable[str], skill_docs: dict[str, d
         ordered.append(skill_id)
     return ordered
 
-def _serialize_history(doc: dict) -> JobMatchHistoryEntryOut:
+def _serialize_history(doc: dict, skill_docs_by_id: dict[str, dict] | None = None, display_name_by_term: dict[str, str] | None = None) -> JobMatchHistoryEntryOut:
     analysis = doc.get("analysis") or {}
+    if skill_docs_by_id is not None and display_name_by_term is not None:
+        analysis = _normalize_history_analysis_payload(analysis, skill_docs_by_id, display_name_by_term)
     return JobMatchHistoryEntryOut(
         id=oid_str(doc.get("_id")),
         job_id=oid_str(doc.get("job_id")),
@@ -1342,6 +1864,7 @@ def _serialize_tailored_resume(doc: dict) -> TailoredResumeOut:
         user_id=oid_str(doc.get("user_id")),
         job_id=str(doc.get("job_id")) if doc.get("job_id") is not None else None,
         resume_snapshot_id=str(doc.get("resume_snapshot_id")) if doc.get("resume_snapshot_id") is not None else None,
+        resume_evidence_id=str(doc.get("resume_evidence_id")) if doc.get("resume_evidence_id") is not None else None,
         template_source=str(doc.get("template_source") or "") or None,
         template=str(doc.get("template") or "ats_v1"),
         selected_skill_ids=[oid_str(value) for value in (doc.get("selected_skill_ids") or [])],
@@ -1385,7 +1908,8 @@ def _serialize_tailored_resume_detail(doc: dict, job_doc: dict | None = None) ->
 def _render_plain_text(sections: list[ResumeSection]) -> str:
     lines: list[str] = []
     for sec in sections:
-        lines.append(sec.title.upper())
+        if sec.title != "Header":
+            lines.append(sec.title)
         for ln in sec.lines:
             lines.append(ln)
         lines.append("")
@@ -1420,8 +1944,15 @@ async def _persist_job_ingest_snapshot(
     return doc
 
 @router.post("/job/ingest", response_model=JobIngestOut)
-async def ingest_job(payload: JobIngestIn, user=Depends(require_user)):
+async def ingest_job(payload: JobIngestIn, request: Request, user=Depends(require_user)):
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="ai.job_ingest",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AI_RATE_LIMITS["job_ingest"][0],
+        window_seconds=AI_RATE_LIMITS["job_ingest"][1],
+    )
     user_id = _scoped_user_id(user, payload.user_id)
     doc = await _persist_job_ingest_snapshot(
         db,
@@ -1451,7 +1982,7 @@ async def ingest_job(payload: JobIngestIn, user=Depends(require_user)):
     )
 
 @router.post("/match", response_model=JobMatchOut)
-async def match_job(payload: dict, user=Depends(require_user)):
+async def match_job(payload: dict, request: Request, user=Depends(require_user)):
     """
     Expects:
     {
@@ -1460,6 +1991,13 @@ async def match_job(payload: dict, user=Depends(require_user)):
     }
     """
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="ai.job_match",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AI_RATE_LIMITS["job_match"][0],
+        window_seconds=AI_RATE_LIMITS["job_match"][1],
+    )
     user_id = _scoped_user_id(user, payload.get("user_id"))
     user_doc = await db["users"].find_one(ref_query("_id", user_id), {"ai_preferences": 1})
     ai_preferences = normalize_ai_preferences((user_doc or {}).get("ai_preferences"))
@@ -1503,6 +2041,7 @@ async def match_job(payload: dict, user=Depends(require_user)):
     persist_history = bool(payload.get("persist_history", True))
     history_id = str(payload.get("history_id") or "").strip()
     requested_resume_snapshot_id = str(payload.get("resume_snapshot_id") or "").strip() or None
+    requested_resume_evidence_id = str(payload.get("resume_evidence_id") or "").strip() or None
     raw_extracted_skill_ids = _dedupe_preserve_order(str(e.get("skill_id")) for e in extracted if e.get("skill_id"))
 
     conf = await _load_profile_confirmation(db, user_id)
@@ -1819,7 +2358,14 @@ async def match_job(payload: dict, user=Depends(require_user)):
         match_confidence_label=confidence_label,
         analysis_summary=analysis_summary,
         resume_snapshot_id=requested_resume_snapshot_id,
-        template_source="user_resume" if requested_resume_snapshot_id else "default_template",
+        resume_evidence_id=requested_resume_evidence_id,
+        template_source=(
+            "user_resume"
+            if requested_resume_snapshot_id
+            else "evidence_resume"
+            if requested_resume_evidence_id
+            else "default_template"
+        ),
         ignored_skill_names=ignored_skill_names,
         added_from_missing_skills=added_from_missing_skills,
         matched_skill_ids=matched_ids,
@@ -1877,7 +2423,7 @@ async def match_job(payload: dict, user=Depends(require_user)):
                     "company": job_doc.get("company"),
                     "location": job_doc.get("location"),
                     "text_preview": job_doc.get("text", "")[:220],
-                    "analysis": result.model_dump(),
+                    "analysis": _strip_transient_history_analysis_fields(result.model_dump()),
                     "updated_at": now,
                 },
                 "$unset": {"tailored_resume_id": ""},
@@ -1893,21 +2439,32 @@ async def match_job(payload: dict, user=Depends(require_user)):
         "location": job_doc.get("location"),
         "text_preview": job_doc.get("text", "")[:220],
         "job_text_snapshot": job_doc.get("text", ""),
-        "analysis": result.model_dump(),
+        "analysis": _strip_transient_history_analysis_fields(result.model_dump()),
         "created_at": now,
         "updated_at": now,
     }
     history_res = await db["job_match_runs"].insert_one(history_doc)
     result.history_id = oid_str(history_res.inserted_id)
     await db["job_match_runs"].update_one({"_id": history_res.inserted_id}, {"$set": {"analysis.history_id": result.history_id}})
+    await increment_reward_counter(db, user_id, "job_matches_run")
     return result
 
 @router.post("/preview", response_model=TailoredResumeOut)
-async def preview_tailored_resume(payload: TailorPreviewIn, user=Depends(require_user)):
+async def preview_tailored_resume(payload: TailorPreviewIn, request: Request, user=Depends(require_user)):
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="ai.tailor_preview",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AI_RATE_LIMITS["tailor_preview"][0],
+        window_seconds=AI_RATE_LIMITS["tailor_preview"][1],
+    )
     user_id = _scoped_user_id(user, payload.user_id)
     user_doc = await db["users"].find_one(ref_query("_id", user_id), {"username": 1, "email": 1, "ai_preferences": 1})
     ai_preferences = normalize_ai_preferences((user_doc or {}).get("ai_preferences"))
+    template_name = _normalize_tailored_resume_template(payload.template)
+    if payload.resume_snapshot_id and payload.resume_evidence_id:
+        raise HTTPException(status_code=400, detail="Choose either resume_snapshot_id or resume_evidence_id, not both")
 
     job_text = payload.job_text
     job_id = payload.job_id
@@ -1968,7 +2525,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn, user=Depends(require
         scored.append((_score_item(it, job_skill_ids, keyword_set) + bonus, it))
     scored.sort(key=lambda x: x[0], reverse=True)
 
-    selected_items = [it for score, it in scored[: payload.max_items] if score > 0] or [it for score, it in scored[: payload.max_items]]
+    selected_items = _select_tailored_resume_items(scored, payload.max_items, minimum_items=min(3, payload.max_items))
     selected_item_ids = [oid_str(it["_id"]) for it in selected_items if "_id" in it]
 
     # Select skills: prioritize skills that appear in both job and user's confirmed skills if available
@@ -2002,49 +2559,82 @@ async def preview_tailored_resume(payload: TailorPreviewIn, user=Depends(require
     target_label = " ".join(part for part in [job_title, f"at {company}" if company else ""] if part).strip() or "this role"
 
     resume_snapshot = await _load_resume_template_snapshot(db, user_id, payload.resume_snapshot_id)
+    resume_evidence = None if resume_snapshot else await _load_resume_template_evidence(db, user_id, payload.resume_evidence_id)
     if resume_snapshot:
         resume_raw_text = str(resume_snapshot.get("raw_text") or "")
         template_sections = _parse_resume_sections(resume_raw_text)
         template_source = "user_resume"
         preserve_template_content = True
         header_lines = _extract_resume_header_lines(resume_raw_text, user_doc)
+    elif resume_evidence:
+        resume_raw_text = str(resume_evidence.get("text_excerpt") or "")
+        template_sections = _parse_resume_sections(resume_raw_text)
+        template_source = "evidence_resume"
+        preserve_template_content = True
+        header_lines = _extract_resume_header_lines(resume_raw_text, user_doc)
+        if _uses_uploaded_resume_reword_template(template_name):
+            template_name = "ats_v1"
     else:
         template_sections = _load_default_resume_template_sections(user_doc, include_content=False)
         template_source = "default_template" if template_sections else "generated_fallback"
         preserve_template_content = False
         header_lines = _build_default_header_lines(user_doc)
+        if _uses_uploaded_resume_reword_template(template_name):
+            template_name = "ats_v1"
 
+    plain_text: str | None = None
     if template_sections:
-        sections = _build_sections_from_resume_template(
-            template_sections=template_sections,
-            target_label=target_label,
-            selected_skill_names=skill_names,
+        if resume_snapshot and _uses_uploaded_resume_reword_template(template_name):
+            plain_text, _rewrite_provider, _rewritten_count = await _rewrite_uploaded_resume_raw_text(
+                resume_raw_text,
+                job_text or "",
+                _template_rewrite_focus(template_name),
+                ai_preferences,
+            )
+            sections = _parse_resume_sections(plain_text)
+        else:
+            sections = await _build_sections_from_resume_template(
+                template_sections=template_sections,
+                target_label=target_label,
+                selected_skill_names=skill_names,
             selected_items=selected_items,
             max_bullets_per_item=payload.max_bullets_per_item,
+            job_text=job_text or "",
+            template_name=template_name,
+            ai_preferences=ai_preferences,
             preserve_template_content=preserve_template_content,
             header_lines=header_lines,
         )
     else:
-        fallback_lines = [f"Tailored for {target_label}."]
+        fallback_lines = [f"Relevant experience aligned to {_resume_submission_text(target_label or 'the target role')}."]
         if skill_line:
-            fallback_lines.append(f"Prioritized skills: {skill_line}.")
+            fallback_lines.append(f"Core strengths include {_resume_submission_text(skill_line)}.")
         sections = [
             ResumeSection(title="Summary", lines=fallback_lines),
         ]
         if skill_names:
             sections.append(ResumeSection(title="Skills", lines=_chunk_skill_lines(skill_names)))
-        highlight_lines = _selected_item_lines(selected_items, payload.max_bullets_per_item)
+        highlight_lines = await _selected_item_lines(
+            selected_items,
+            skill_names,
+            payload.max_bullets_per_item,
+            job_text or "",
+            _template_rewrite_focus(template_name),
+            ai_preferences,
+        )
         if highlight_lines:
             sections.append(ResumeSection(title="Targeted Highlights", lines=highlight_lines))
         sections.append(
             ResumeSection(
                 title="Targeted Alignment",
                 lines=[
-                    f"Role focus: {target_label}",
-                    f"Selected evidence items: {len(selected_items)}",
+                    f"Role focus: {_resume_submission_text(target_label or 'the target role')}",
+                    f"Relevant experience entries: {len(selected_items)}",
                 ],
             )
         )
+        sections = _apply_resume_template_variant(sections, template_name)
+    plain_text = plain_text or _render_plain_text(sections)
 
     # Store tailored resume record
     now = now_utc()
@@ -2052,18 +2642,20 @@ async def preview_tailored_resume(payload: TailorPreviewIn, user=Depends(require
         "user_id": to_object_id(user_id),
         "job_id": job_id,
         "resume_snapshot_id": resume_snapshot.get("_id") if resume_snapshot else None,
+        "resume_evidence_id": resume_evidence.get("_id") if resume_evidence else None,
         "template_source": template_source,
         "job_text": job_text,
-        "template": payload.template,
+        "template": template_name,
         "selected_skill_ids": selected_skill_ids,
         "selected_item_ids": selected_item_ids,
         "retrieved_context": retrieved_context,
         "sections": [s.model_dump() for s in sections],
-        "plain_text": _render_plain_text(sections),
+        "plain_text": plain_text,
         "created_at": now,
         "updated_at": now,
     }
     res = await db["tailored_resumes"].insert_one(record)
+    await increment_reward_counter(db, user_id, "tailored_resumes_generated")
 
     if job_id and ObjectId.is_valid(job_id):
         latest_history = await db["job_match_runs"].find_one(
@@ -2077,6 +2669,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn, user=Depends(require
                     "$set": {
                         "tailored_resume_id": res.inserted_id,
                         "analysis.resume_snapshot_id": oid_str(resume_snapshot.get("_id")) if resume_snapshot else None,
+                        "analysis.resume_evidence_id": oid_str(resume_evidence.get("_id")) if resume_evidence else None,
                         "analysis.template_source": template_source,
                         "updated_at": now,
                     }
@@ -2168,7 +2761,9 @@ async def list_job_match_history(user_id: str | None = None, limit: int = 12, us
     scoped_user_id = _scoped_user_id(user, user_id)
     cursor = db["job_match_runs"].find(ref_query("user_id", scoped_user_id)).sort("created_at", -1).limit(max(1, min(limit, 30)))
     docs = await cursor.to_list(length=max(1, min(limit, 30)))
-    return [_serialize_history(doc) for doc in docs]
+    skill_catalog = await _load_skill_catalog(db)
+    skill_docs_by_id, display_name_by_term = _build_skill_display_maps(skill_catalog)
+    return [_serialize_history(doc, skill_docs_by_id, display_name_by_term) for doc in docs]
 
 @router.get("/history/{history_id}", response_model=JobMatchHistoryDetailOut | JobMatchCompareOut)
 async def get_job_match_history_detail(history_id: str, user_id: str | None = None, left_id: str | None = None, right_id: str | None = None, user=Depends(require_user)):
@@ -2187,7 +2782,9 @@ async def get_job_match_history_detail(history_id: str, user_id: str | None = No
     if not doc:
         raise HTTPException(status_code=404, detail="History entry not found")
 
-    base = _serialize_history(doc)
+    skill_catalog = await _load_skill_catalog(db)
+    skill_docs_by_id, display_name_by_term = _build_skill_display_maps(skill_catalog)
+    base = _serialize_history(doc, skill_docs_by_id, display_name_by_term)
     job_text = str(doc.get("job_text_snapshot") or "").strip() or None
     job_id = doc.get("job_id")
     if not job_text and job_id is not None and ObjectId.is_valid(str(job_id)):
@@ -2195,7 +2792,8 @@ async def get_job_match_history_detail(history_id: str, user_id: str | None = No
         if job_doc:
             job_text = job_doc.get("text")
 
-    analysis = JobMatchOut(**(doc.get("analysis") or {}))
+    normalized_analysis = _normalize_history_analysis_payload(doc.get("analysis") or {}, skill_docs_by_id, display_name_by_term)
+    analysis = JobMatchOut(**normalized_analysis)
     return JobMatchHistoryDetailOut(
         **base.model_dump(),
         text_preview=doc.get("text_preview"),
@@ -2205,8 +2803,15 @@ async def get_job_match_history_detail(history_id: str, user_id: str | None = No
 
 
 @router.post("/history/{history_id}/reanalyze", response_model=JobMatchOut)
-async def reanalyze_job_match_history(history_id: str, user_id: str | None = None, user=Depends(require_user)):
+async def reanalyze_job_match_history(history_id: str, request: Request, user_id: str | None = None, user=Depends(require_user)):
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="ai.job_reanalyze",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AI_RATE_LIMITS["job_reanalyze"][0],
+        window_seconds=AI_RATE_LIMITS["job_reanalyze"][1],
+    )
     scoped_user_id = _scoped_user_id(user, user_id)
     try:
         history_oid = ObjectId(history_id)
@@ -2238,9 +2843,11 @@ async def reanalyze_job_match_history(history_id: str, user_id: str | None = Non
     fresh_result = await match_job(
         {
             "job_id": oid_str(fresh_job_doc.get("_id")),
-            "resume_snapshot_id": None,
+            "resume_snapshot_id": str((history_doc.get("analysis") or {}).get("resume_snapshot_id") or "").strip() or None,
+            "resume_evidence_id": str((history_doc.get("analysis") or {}).get("resume_evidence_id") or "").strip() or None,
             "persist_history": True,
         },
+        request=request,
         user=user,
     )
     if fresh_result.history_id:
@@ -2292,8 +2899,10 @@ async def compare_job_match_history(user_id: str | None = None, left_id: str = "
     if left_id not in by_id or right_id not in by_id:
         raise HTTPException(status_code=404, detail="History entry not found")
 
-    left = _serialize_history(by_id[left_id])
-    right = _serialize_history(by_id[right_id])
+    skill_catalog = await _load_skill_catalog(db)
+    skill_docs_by_id, display_name_by_term = _build_skill_display_maps(skill_catalog)
+    left = _serialize_history(by_id[left_id], skill_docs_by_id, display_name_by_term)
+    right = _serialize_history(by_id[right_id], skill_docs_by_id, display_name_by_term)
     left_matched = set(left.matched_skills)
     right_matched = set(right.matched_skills)
     left_missing = set(left.missing_skills)
@@ -2333,35 +2942,83 @@ async def patch_ai_settings_preferences(payload: AIPreferencesPatchIn, user=Depe
     return _build_ai_settings_detail(updated)
 
 @router.post("/{tailored_id}/rewrite", response_model=RewriteBulletsOut)
-async def rewrite_tailored_resume_bullets(tailored_id: str, payload: RewriteBulletsIn):
+async def rewrite_tailored_resume_bullets(tailored_id: str, payload: RewriteBulletsIn, request: Request, user=Depends(require_user)):
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="ai.tailor_rewrite",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AI_RATE_LIMITS["tailor_rewrite"][0],
+        window_seconds=AI_RATE_LIMITS["tailor_rewrite"][1],
+    )
     try:
         oid = ObjectId(tailored_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid tailored_id")
 
-    doc = await db["tailored_resumes"].find_one({"_id": oid})
+    doc = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", oid_str(user["_id"]))})
     if not doc:
         raise HTTPException(status_code=404, detail="Tailored resume not found")
+
+    if _uses_uploaded_resume_reword_template(str(doc.get("template") or "")):
+        source_text = str(doc.get("plain_text") or "")
+        if not source_text and doc.get("resume_snapshot_id") and ObjectId.is_valid(str(doc.get("resume_snapshot_id"))):
+            resume_snapshot = await db["resume_snapshots"].find_one({"_id": ObjectId(str(doc.get("resume_snapshot_id")))})
+            source_text = str((resume_snapshot or {}).get("raw_text") or "")
+        if not source_text:
+            raise HTTPException(status_code=400, detail="Tailored resume has no source text to rewrite")
+
+        bullet_pattern = re.compile(r"^\s*[-*•]\s+")
+        existing_bullet_count = sum(1 for line in _split_resume_lines(source_text) if bullet_pattern.match(str(line)))
+        if existing_bullet_count == 0:
+            raise HTTPException(status_code=400, detail="Tailored resume has no bullets to rewrite")
+
+        job_text = str(doc.get("job_text") or "")
+        if not job_text and doc.get("job_id") and ObjectId.is_valid(str(doc.get("job_id"))):
+            job_doc = await db["job_ingests"].find_one({"_id": ObjectId(str(doc.get("job_id")))})
+            job_text = str((job_doc or {}).get("text") or "")
+
+        rewritten_text, provider, rewritten_count = await _rewrite_uploaded_resume_raw_text(
+            source_text,
+            job_text,
+            payload.focus,
+            None,
+        )
+        sections = _parse_resume_sections(rewritten_text)
+        updated_sections = [section.model_dump() for section in sections]
+        updated_at = now_utc()
+        await db["tailored_resumes"].update_one(
+            {"_id": oid},
+            {
+                "$set": {
+                    "sections": updated_sections,
+                    "plain_text": rewritten_text,
+                    "updated_at": updated_at,
+                    "rewrite_focus": payload.focus,
+                    "rewrite_provider": provider,
+                }
+            },
+        )
+
+        return RewriteBulletsOut(
+            tailored_id=tailored_id,
+            provider=provider,
+            focus=payload.focus,
+            rewritten_count=rewritten_count or existing_bullet_count,
+            sections=sections,
+            plain_text=rewritten_text,
+            updated_at=updated_at,
+        )
 
     sections = [ResumeSection(**section) for section in doc.get("sections", [])]
     relevant_index = next(
         (
             index
             for index, section in enumerate(sections)
-            if section.title.lower() in {"relevant work", "targeted highlights"}
+            if _is_rewriteable_resume_section_title(section.title)
         ),
         None,
     )
-    if relevant_index is None:
-        relevant_index = next(
-            (
-                index
-                for index, section in enumerate(sections)
-                if section.title.lower() in {"experience", "projects"}
-            ),
-            None,
-        )
     if relevant_index is None:
         raise HTTPException(status_code=400, detail="Tailored resume has no rewriteable work section")
 
@@ -2377,6 +3034,7 @@ async def rewrite_tailored_resume_bullets(tailored_id: str, payload: RewriteBull
         job_text = str((job_doc or {}).get("text") or "")
 
     rewritten_bullets, provider = await rewrite_resume_bullets(job_text, bullets, payload.focus)
+    rewritten_bullets = [_normalize_resume_bullet(bullet) for bullet in rewritten_bullets]
     rewritten_count = 0
     for line_index, bullet in zip(bullet_indices, rewritten_bullets):
         work_lines[line_index] = bullet
@@ -2410,20 +3068,145 @@ async def rewrite_tailored_resume_bullets(tailored_id: str, payload: RewriteBull
 
 def _docx_from_sections(sections: list[ResumeSection], out_path: str):
     from docx import Document
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Inches, Pt
+
+    def configure_document(document: Document):
+        section = document.sections[0]
+        section.top_margin = Inches(0.48)
+        section.bottom_margin = Inches(0.48)
+        section.left_margin = Inches(0.62)
+        section.right_margin = Inches(0.62)
+        normal_style = document.styles["Normal"]
+        normal_style.font.name = "Aptos"
+        normal_style.font.size = Pt(10.5)
+
     doc = Document()
+    configure_document(doc)
+
     for sec in sections:
-        doc.add_heading(sec.title, level=2)
+        if sec.title == "Header":
+            for index, line in enumerate(sec.lines):
+                paragraph = doc.add_paragraph()
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                paragraph.paragraph_format.space_after = Pt(0 if index == 0 else 2)
+                run = paragraph.add_run(line)
+                run.bold = index == 0
+                run.font.size = Pt(17 if index == 0 else 10.3)
+                if index == 0:
+                    run.font.name = "Aptos Display"
+            doc.add_paragraph()
+            continue
+
+        title_paragraph = doc.add_paragraph()
+        title_paragraph.paragraph_format.space_before = Pt(7)
+        title_paragraph.paragraph_format.space_after = Pt(2)
+        title_run = title_paragraph.add_run(sec.title)
+        title_run.bold = True
+        title_run.font.size = Pt(11.3)
+        title_run.font.name = "Aptos"
+
         for ln in sec.lines:
-            if ln.startswith("- "):
-                doc.add_paragraph(ln[2:], style="List Bullet")
+            if _is_resume_bullet_line(ln):
+                bullet_paragraph = doc.add_paragraph(style="List Bullet")
+                bullet_paragraph.paragraph_format.space_after = Pt(0)
+                bullet_paragraph.paragraph_format.left_indent = Inches(0.16)
+                bullet_paragraph.paragraph_format.first_line_indent = Inches(-0.12)
+                bullet_paragraph.add_run(_resume_bullet_text(ln))
             else:
-                doc.add_paragraph(ln)
+                paragraph = doc.add_paragraph()
+                paragraph.paragraph_format.space_after = Pt(0)
+                paragraph.add_run(ln)
     doc.save(out_path)
+
+
+def _docx_from_plain_text(text: str, out_path: str):
+    from docx import Document
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Inches, Pt
+
+    def configure_document(document: Document):
+        section = document.sections[0]
+        section.top_margin = Inches(0.48)
+        section.bottom_margin = Inches(0.48)
+        section.left_margin = Inches(0.62)
+        section.right_margin = Inches(0.62)
+        normal_style = document.styles["Normal"]
+        normal_style.font.name = "Aptos"
+        normal_style.font.size = Pt(10.5)
+
+    doc = Document()
+    configure_document(doc)
+
+    first_body_line = True
+    for line in _split_resume_lines(text):
+        clean = _clean_resume_line(line)
+        if not clean:
+            continue
+        if _is_resume_bullet_line(clean):
+            paragraph = doc.add_paragraph(style="List Bullet")
+            paragraph.paragraph_format.space_after = Pt(0)
+            paragraph.paragraph_format.left_indent = Inches(0.16)
+            paragraph.paragraph_format.first_line_indent = Inches(-0.12)
+            paragraph.add_run(_resume_bullet_text(clean))
+            first_body_line = False
+            continue
+        if clean == clean.upper() and len(clean.split()) <= 5:
+            paragraph = doc.add_paragraph()
+            paragraph.paragraph_format.space_before = Pt(6)
+            paragraph.paragraph_format.space_after = Pt(2)
+            run = paragraph.add_run(clean.title())
+            run.bold = True
+            run.font.size = Pt(11.3)
+            first_body_line = False
+            continue
+
+        paragraph = doc.add_paragraph()
+        paragraph.paragraph_format.space_after = Pt(0)
+        run = paragraph.add_run(clean)
+        if first_body_line:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run.bold = True
+            run.font.size = Pt(17)
+            run.font.name = "Aptos Display"
+            first_body_line = False
+    doc.save(out_path)
+
+
+def _docx_from_source_resume_docx(source_docx: bytes, rewritten_text: str, out_path: str):
+    from docx import Document
+
+    document = Document(io.BytesIO(source_docx))
+    rewritten_lines = _split_resume_lines(rewritten_text)
+    rewritten_bullets = [
+        _resume_bullet_text(line)
+        for line in rewritten_lines
+        if _is_resume_bullet_line(line)
+    ]
+    bullet_iter = iter(rewritten_bullets)
+
+    for paragraph in document.paragraphs:
+        style_name = str(getattr(paragraph.style, "name", "") or "").lower()
+        is_bullet = style_name.startswith("list") or _is_resume_bullet_line(paragraph.text or "")
+        if not is_bullet:
+            continue
+        replacement = next(bullet_iter, None)
+        if replacement is None:
+            break
+        if paragraph.runs:
+            paragraph.runs[0].text = replacement
+            for run in paragraph.runs[1:]:
+                run.text = ""
+        else:
+            paragraph.add_run(replacement)
+
+    document.save(out_path)
+
 
 def _pdf_from_sections(sections: list[ResumeSection], out_path: str):
     from reportlab.lib.pagesizes import LETTER
+    from reportlab.lib.colors import HexColor
     from reportlab.pdfgen import canvas
-    from reportlab.pdfbase.pdfmetrics import stringWidth
     from reportlab.lib.utils import simpleSplit
 
     c = canvas.Canvas(out_path, pagesize=LETTER)
@@ -2431,75 +3214,210 @@ def _pdf_from_sections(sections: list[ResumeSection], out_path: str):
     x = 54
     y = height - 54
     max_width = width - (x * 2)
-    line_h = 14
+    line_h = 13
+    text_color = HexColor("#0f172a")
+    muted_color = HexColor("#475569")
+    rule_color = HexColor("#cbd5e1")
 
-    def draw_wrapped(text: str, bold: bool = False, indent: int = 0):
+    def ensure_space(required: int):
         nonlocal y
-        font_name = "Helvetica-Bold" if bold else "Helvetica"
-        font_size = 12 if bold else 11
+        if y < 54 + required:
+            c.showPage()
+            y = height - 54
+
+    def draw_wrapped(text: str, font_name: str = "Helvetica", font_size: float = 10.5, indent: int = 0, leading: int | None = None, color=text_color):
+        nonlocal y
         wrapped = simpleSplit(text, font_name, font_size, max_width - indent)
         for line in wrapped or [""]:
-            if y < 54:
-                c.showPage()
-                y = height - 54
+            ensure_space(leading or line_h)
             c.setFont(font_name, font_size)
+            c.setFillColor(color)
+            c.drawString(x + indent, y, line)
+            y -= leading or line_h
+
+    def draw_bullet(text: str):
+        nonlocal y
+        indent = 12
+        wrapped = simpleSplit(text, "Helvetica", 10.5, max_width - indent)
+        for index, line in enumerate(wrapped or [""]):
+            ensure_space(line_h)
+            c.setFont("Helvetica", 10.5)
+            c.setFillColor(text_color)
+            if index == 0:
+                c.drawString(x, y, u"\u2022")
             c.drawString(x + indent, y, line)
             y -= line_h
 
-    for sec in sections:
-        draw_wrapped(sec.title.upper(), bold=True)
+    start_index = 0
+    if sections and sections[0].title == "Header":
+        for index, line in enumerate(sections[0].lines):
+            draw_wrapped(
+                line,
+                font_name="Helvetica-Bold" if index == 0 else "Helvetica",
+                font_size=17 if index == 0 else 10,
+                leading=20 if index == 0 else 12,
+                color=text_color if index == 0 else muted_color,
+            )
+        y -= 4
+        start_index = 1
+
+    for sec in sections[start_index:]:
+        ensure_space(20)
+        c.setFont("Helvetica-Bold", 11.5)
+        c.setFillColor(text_color)
+        c.drawString(x, y, sec.title)
+        y -= 6
+        c.setStrokeColor(rule_color)
+        c.setLineWidth(0.7)
+        c.line(x, y, width - x, y)
+        y -= 9
         for ln in sec.lines:
-            if ln.startswith("- "):
-                bullet = u"\u2022"
-                bullet_width = stringWidth(bullet, "Helvetica", 11)
-                if y < 54:
-                    c.showPage()
-                    y = height - 54
-                c.setFont("Helvetica", 11)
-                c.drawString(x, y, bullet)
-                draw_wrapped(ln[2:], indent=int(bullet_width + 10))
+            if _is_resume_bullet_line(ln):
+                draw_bullet(_resume_bullet_text(ln))
             else:
                 draw_wrapped(ln)
         draw_wrapped("")
 
     c.save()
 
+
+def _pdf_from_plain_text(text: str, out_path: str):
+    from reportlab.lib.pagesizes import LETTER
+    from reportlab.lib.colors import HexColor
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.utils import simpleSplit
+
+    c = canvas.Canvas(out_path, pagesize=LETTER)
+    width, height = LETTER
+    x = 54
+    y = height - 54
+    max_width = width - (x * 2)
+    line_h = 13
+    text_color = HexColor("#0f172a")
+    rule_color = HexColor("#cbd5e1")
+
+    def ensure_space(required: int):
+        nonlocal y
+        if y < 54 + required:
+            c.showPage()
+            y = height - 54
+
+    def draw_wrapped(text_value: str, font_name: str = "Helvetica", font_size: float = 10.5, indent: int = 0, leading: int | None = None):
+        nonlocal y
+        wrapped = simpleSplit(text_value, font_name, font_size, max_width - indent)
+        for line in wrapped or [""]:
+            ensure_space(leading or line_h)
+            c.setFont(font_name, font_size)
+            c.setFillColor(text_color)
+            c.drawString(x + indent, y, line)
+            y -= leading or line_h
+
+    def draw_bullet(text_value: str):
+        nonlocal y
+        indent = 12
+        wrapped = simpleSplit(text_value, "Helvetica", 10.5, max_width - indent)
+        for index, line in enumerate(wrapped or [""]):
+            ensure_space(line_h)
+            c.setFont("Helvetica", 10.5)
+            c.setFillColor(text_color)
+            if index == 0:
+                c.drawString(x, y, u"\u2022")
+            c.drawString(x + indent, y, line)
+            y -= line_h
+
+    lines = [line for line in _split_resume_lines(text) if _clean_resume_line(line)]
+    for index, raw_line in enumerate(lines):
+        clean = _clean_resume_line(raw_line)
+        if _is_resume_bullet_line(clean):
+            draw_bullet(_resume_bullet_text(clean))
+            continue
+        if clean == clean.upper() and len(clean.split()) <= 5:
+            ensure_space(18)
+            c.setFont("Helvetica-Bold", 11.5)
+            c.setFillColor(text_color)
+            c.drawString(x, y, clean.title())
+            y -= 5
+            c.setStrokeColor(rule_color)
+            c.setLineWidth(0.7)
+            c.line(x, y, width - x, y)
+            y -= 9
+            continue
+        if index == 0:
+            draw_wrapped(clean, font_name="Helvetica-Bold", font_size=17, leading=20)
+            y -= 4
+            continue
+        draw_wrapped(clean)
+    c.save()
+
 @router.get("/{tailored_id}/export/docx")
-async def export_docx(tailored_id: str):
+async def export_docx(tailored_id: str, user=Depends(require_user)):
     db = get_db()
     try:
         oid = ObjectId(tailored_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid tailored_id")
 
-    d = await db["tailored_resumes"].find_one({"_id": oid})
+    d = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", oid_str(user["_id"]))})
     if not d:
         raise HTTPException(status_code=404, detail="Tailored resume not found")
 
     sections = [ResumeSection(**s) for s in d.get("sections", [])]
+    plain_text = str(d.get("plain_text") or "")
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
     tmp.close()
-    _docx_from_sections(sections, tmp.name)
+    if _uses_uploaded_resume_reword_template(str(d.get("template") or "")) and plain_text:
+        resume_snapshot = None
+        if d.get("resume_snapshot_id") and ObjectId.is_valid(str(d.get("resume_snapshot_id"))):
+            resume_snapshot = await db["resume_snapshots"].find_one({"_id": ObjectId(str(d.get("resume_snapshot_id")))})
+        source_document = (resume_snapshot or {}).get("source_document")
+        if (
+            resume_snapshot
+            and str(resume_snapshot.get("source_type") or "").lower() == "docx"
+            and source_document
+        ):
+            _docx_from_source_resume_docx(bytes(source_document), plain_text, tmp.name)
+        else:
+            _docx_from_plain_text(plain_text, tmp.name)
+    else:
+        _docx_from_sections(sections, tmp.name)
 
     filename = f"tailored_resume_{tailored_id}.docx"
-    return FileResponse(tmp.name, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", filename=filename)
+    return FileResponse(
+        tmp.name,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=filename,
+        background=BackgroundTask(_cleanup_temp_export, tmp.name),
+    )
 
 @router.get("/{tailored_id}/export/pdf")
-async def export_pdf(tailored_id: str):
+async def export_pdf(tailored_id: str, user=Depends(require_user)):
     db = get_db()
     try:
         oid = ObjectId(tailored_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid tailored_id")
 
-    d = await db["tailored_resumes"].find_one({"_id": oid})
+    d = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", oid_str(user["_id"]))})
     if not d:
         raise HTTPException(status_code=404, detail="Tailored resume not found")
 
     sections = [ResumeSection(**s) for s in d.get("sections", [])]
+    plain_text = str(d.get("plain_text") or "")
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     tmp.close()
-    _pdf_from_sections(sections, tmp.name)
+    if _uses_uploaded_resume_reword_template(str(d.get("template") or "")) and plain_text:
+        parsed_sections = _parse_resume_sections(plain_text)
+        if parsed_sections:
+            _pdf_from_sections(parsed_sections, tmp.name)
+        else:
+            _pdf_from_plain_text(plain_text, tmp.name)
+    else:
+        _pdf_from_sections(sections, tmp.name)
 
     filename = f"tailored_resume_{tailored_id}.pdf"
-    return FileResponse(tmp.name, media_type="application/pdf", filename=filename)
+    return FileResponse(
+        tmp.name,
+        media_type="application/pdf",
+        filename=filename,
+        background=BackgroundTask(_cleanup_temp_export, tmp.name),
+    )

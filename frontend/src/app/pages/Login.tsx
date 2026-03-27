@@ -32,7 +32,7 @@ export function Login() {
       await login(formData.email, formData.password);
       toast.success("Welcome back!");
       navigate("/app");
-    } catch (error) {
+    } catch (_error) {
       toast.error("Invalid credentials. Please try again.");
     } finally {
       setLoading(false);

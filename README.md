@@ -26,6 +26,7 @@ SkillBridge is a full-stack career intelligence platform for collecting evidence
 - Backend contract tests with `pytest` + `httpx`
 - ML sandbox notebooks under `backend/ml_sandbox/`
 - Docker assets under `infra/`
+- Draft launch and legal docs under `docs/`
 
 ## What the App Does
 
@@ -102,20 +103,31 @@ cd skillbridge
 Create `backend/.env` with at least:
 
 ```env
+APP_ENV=development
+ALLOWED_ORIGINS=http://localhost:5173
 MONGO_URI=mongodb://localhost:27017
 MONGO_DB=skillbridge
+PUBLIC_APP_URL=http://localhost:5173
+PUBLIC_API_URL=http://localhost:8000
 ```
 
 Optional variables you may want during development:
 
 ```env
-ALLOWED_ORIGINS=http://localhost:5173
 LOCAL_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 LOCAL_ZERO_SHOT_MODEL=MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33
 LOCAL_MODEL_DEVICE=-1
 LOCAL_MODEL_PREWARM=true
 ADMIN_OWNER_EMAILS=owner@example.com
 ADMIN_TEAM_EMAILS=teammate1@example.com,teammate2@example.com
+MEDIA_STORAGE_MODE=local
+MEDIA_S3_ENDPOINT_URL=
+MEDIA_S3_BUCKET=
+MEDIA_S3_REGION=
+MEDIA_S3_ACCESS_KEY_ID=
+MEDIA_S3_SECRET_ACCESS_KEY=
+MEDIA_S3_PUBLIC_BASE_URL=
+MEDIA_S3_KEY_PREFIX=avatars
 ```
 
 Notes:
@@ -123,6 +135,8 @@ Notes:
 - `LOCAL_MODEL_DEVICE=-1` keeps inference on CPU.
 - `LOCAL_MODEL_PREWARM=true` loads transformer models during backend startup.
 - `ADMIN_OWNER_EMAILS` and `ADMIN_TEAM_EMAILS` bootstrap admin access on registration.
+- Keep `MEDIA_STORAGE_MODE=local` for development. Switch to `s3` only when the backend has real S3/R2-compatible bucket credentials and a public media URL.
+- Use `backend/.env.staging.example` and `backend/.env.production.example` as the starting point for deployed environments.
 
 ### 3. Start MongoDB
 
@@ -170,6 +184,14 @@ Frontend URL:
 - App: `http://localhost:5173`
 
 The Vite dev server proxies `/api/*` requests to the backend at `http://localhost:8000`.
+For deployed frontend environments, start from `frontend/.env.staging.example` or `frontend/.env.production.example` and set `VITE_API_BASE` to the deployed backend URL.
+
+Frontend quality commands:
+
+```bash
+npm run lint
+npm test
+```
 
 ## First-Run Checklist
 
@@ -233,6 +255,24 @@ pytest -q
 
 The current backend tests cover route surface validation plus major API flows including auth, admin access, dashboard, skills, evidence, projects, portfolio, and tailoring endpoints.
 
+Run the frontend baseline checks:
+
+```bash
+cd frontend
+npm run lint
+npm test
+```
+
+## Launch Docs
+
+The main launch artifacts live in `docs/`:
+
+- [Launch Plan Draft](./docs/launch_plan.md)
+- [Release Runbook Checklist](./docs/release_runbook_checklist.md)
+- [Privacy Policy Draft](./docs/privacy_policy_draft.md)
+- [Terms Draft](./docs/terms_draft.md)
+- [Data Retention Policy Draft](./docs/data_retention_policy_draft.md)
+
 ## Local Transformer Inference
 
 SkillBridge can run semantic matching and extraction fully in the backend.
@@ -273,8 +313,13 @@ At minimum, a production deployment needs:
 - a backend environment with the variables shown above
 - a frontend build served with an API base that reaches the backend
 - correct `ALLOWED_ORIGINS` configuration for the deployed frontend domain
+- structured backend request logs with `X-Request-ID` correlation
+- uptime checks against `GET /health/` and `GET /health/db_counts`
 
 If you deploy with Docker, the current compose assets live in `infra/` and the service Dockerfiles live under `backend/` and `frontend/`.
+
+For the current launch plan and ship-progress tracker, see [docs/ship_checklist.md](/Users/cordellstonecipher/OU_Undergrad/skillbridge/docs/ship_checklist.md).
+For request logging and monitoring entry points, see [docs/observability.md](/Users/cordellstonecipher/OU_Undergrad/skillbridge/docs/observability.md).
 
 ## Version
 
@@ -290,3 +335,4 @@ Versioned surfaces in this repo:
 - [backend/README.md](/Users/cordellstonecipher/OU_Undergrad/skillbridge/backend/README.md)
 - [frontend/README.md](/Users/cordellstonecipher/OU_Undergrad/skillbridge/frontend/README.md)
 - [backend/ml_sandbox/README.md](/Users/cordellstonecipher/OU_Undergrad/skillbridge/backend/ml_sandbox/README.md)
+- [docs/observability.md](/Users/cordellstonecipher/OU_Undergrad/skillbridge/docs/observability.md)

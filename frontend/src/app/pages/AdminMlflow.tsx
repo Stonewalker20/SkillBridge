@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Boxes, Clock3, DatabaseZap, FlaskConical, Gauge, Play, RefreshCw, ScrollText } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../components/ui/card";
@@ -308,7 +308,7 @@ export function AdminMlflow() {
     mongoDb: "",
   });
 
-  const refreshCore = async () => {
+  const refreshCore = useCallback(async () => {
     const [overviewData, datasetData, jobData, localOptionsData] = await Promise.all([
       api.getAdminMlflowOverview(),
       api.listAdminMlflowDatasets(),
@@ -334,9 +334,9 @@ export function AdminMlflow() {
         rewriteModels: current.rewriteModels || localOptionsData.default_rewrite_model,
       };
     });
-  };
+  }, []);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       await refreshCore();
@@ -345,11 +345,11 @@ export function AdminMlflow() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshCore]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   useEffect(() => {
     if (!overview?.available || !selectedExperimentId) {
@@ -419,7 +419,7 @@ export function AdminMlflow() {
       void refreshCore().catch(() => {});
     }, 4000);
     return () => window.clearInterval(timer);
-  }, [jobs]);
+  }, [jobs, refreshCore]);
 
   const selectedExperiment = useMemo(
     () => overview?.experiments.find((experiment) => experiment.id === selectedExperimentId) ?? null,

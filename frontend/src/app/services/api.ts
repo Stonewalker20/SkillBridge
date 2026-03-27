@@ -1,3 +1,5 @@
+import { REWARD_TIERS, nextRewardTierForValue, rewardTierForValue, rewardTierTarget, type RewardTier } from "../lib/rewardTiers";
+
 export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 const TOKEN_KEY = "sb_token";
@@ -170,9 +172,146 @@ function normalizeEvidence(raw: any): Evidence {
   };
 }
 
-export type AuthUser = { id: string; email: string; username: string; role: string; avatar_url?: string | null; avatar_preset?: string | null };
+export type AuthUser = {
+  id: string;
+  email: string;
+  username: string;
+  role: string;
+  avatar_url?: string | null;
+  avatar_preset?: string | null;
+  subscription_status: string;
+  subscription_plan?: string | null;
+  subscription_started_at?: string | null;
+  subscription_renewal_at?: string | null;
+  billing_provider?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  stripe_checkout_session_id?: string | null;
+};
 export type AuthOut = { token: string; user: AuthUser };
 export type UserPatch = { email?: string; username?: string; avatar_preset?: string | null };
+export type BillingStatus = {
+  provider: string;
+  mode: string;
+  configured: boolean;
+  checkout_available: boolean;
+  portal_available: boolean;
+  dev_fallback_available: boolean;
+  message: string;
+  subscription_status: string;
+  billing_provider?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  stripe_checkout_session_id?: string | null;
+};
+export type BillingCheckoutSession = {
+  provider: string;
+  mode: string;
+  status: string;
+  checkout_url?: string | null;
+  session_id?: string | null;
+  customer_id?: string | null;
+  subscription_id?: string | null;
+  dev_fallback_available: boolean;
+  subscription_status: string;
+  plan?: string | null;
+  renewal_at?: string | null;
+  message?: string | null;
+};
+export type BillingPortalSession = {
+  provider: string;
+  mode: string;
+  status: string;
+  portal_url?: string | null;
+  customer_id?: string | null;
+  message?: string | null;
+};
+export type RewardCounters = {
+  evidence_saved: number;
+  profile_skills_confirmed: number;
+  resume_snapshots_uploaded: number;
+  job_matches_run: number;
+  tailored_resumes_generated: number;
+};
+export type RewardAchievement = {
+  key: string;
+  icon_key?: string;
+  tier?: RewardTier;
+  current_tier?: RewardTier | null;
+  next_tier?: RewardTier | null;
+  title: string;
+  description: string;
+  reward: string;
+  counter_key: keyof RewardCounters;
+  current_value: number;
+  target_value: number;
+  progress_pct: number;
+  unlocked: boolean;
+  unlocked_at?: string | null;
+  tier_progress?: Array<{
+    key: string;
+    tier: RewardTier;
+    target_value: number;
+    unlocked: boolean;
+    unlocked_at?: string | null;
+  }>;
+};
+export type RewardBadge = RewardAchievement;
+export type RewardsSummary = {
+  counters: RewardCounters;
+  unlockedCount: number;
+  totalCount: number;
+  achievements: RewardAchievement[];
+  badges?: RewardBadge[];
+  badgeCount?: number;
+  unlockedBadgeCount?: number;
+  nextAchievement: RewardAchievement | null;
+  recentUnlocks: RewardAchievement[];
+};
+
+const REWARD_BADGES: Array<{
+  key: string;
+  iconKey: string;
+  title: string;
+  description: string;
+  counterKey: keyof RewardCounters;
+}> = [
+  {
+    key: "evidence_saved",
+    iconKey: "spark",
+    counterKey: "evidence_saved",
+    title: "Proof Builder",
+    description: "Save evidence consistently so your profile is grounded in visible proof of work.",
+  },
+  {
+    key: "profile_skills_confirmed",
+    iconKey: "shield",
+    counterKey: "profile_skills_confirmed",
+    title: "Skill Verifier",
+    description: "Confirm profile skills to turn extracted signals into trusted data for matching and analytics.",
+  },
+  {
+    key: "resume_snapshots_uploaded",
+    iconKey: "scroll",
+    counterKey: "resume_snapshots_uploaded",
+    title: "Resume Foundation",
+    description: "Add resume sources so tailoring starts from your real materials instead of a blank draft.",
+  },
+  {
+    key: "job_matches_run",
+    iconKey: "compass",
+    counterKey: "job_matches_run",
+    title: "Match Navigator",
+    description: "Run grounded job matches repeatedly to sharpen fit feedback and gap analysis over time.",
+  },
+  {
+    key: "tailored_resumes_generated",
+    iconKey: "badge",
+    counterKey: "tailored_resumes_generated",
+    title: "Tailor Forge",
+    description: "Generate tailored resumes so analysis turns into polished, submission-ready artifacts.",
+  },
+];
 
 function normalizeAuthUser(raw: any): AuthUser {
   return {
@@ -182,6 +321,153 @@ function normalizeAuthUser(raw: any): AuthUser {
     role: String(raw?.role ?? "user").trim() || "user",
     avatar_url: resolveAssetUrl(raw?.avatar_url),
     avatar_preset: raw?.avatar_preset ? String(raw.avatar_preset).trim() : null,
+    subscription_status: String(raw?.subscription_status ?? "inactive").trim() || "inactive",
+    subscription_plan: raw?.subscription_plan ? String(raw.subscription_plan).trim() : null,
+    subscription_started_at: raw?.subscription_started_at ? String(raw.subscription_started_at) : null,
+    subscription_renewal_at: raw?.subscription_renewal_at ? String(raw.subscription_renewal_at) : null,
+    billing_provider: raw?.billing_provider ? String(raw.billing_provider).trim() : null,
+    stripe_customer_id: raw?.stripe_customer_id ? String(raw.stripe_customer_id).trim() : null,
+    stripe_subscription_id: raw?.stripe_subscription_id ? String(raw.stripe_subscription_id).trim() : null,
+    stripe_checkout_session_id: raw?.stripe_checkout_session_id ? String(raw.stripe_checkout_session_id).trim() : null,
+  };
+}
+
+function normalizeRewardAchievement(raw: any): RewardAchievement {
+  return {
+    key: String(raw?.key ?? "").trim(),
+    icon_key: String(raw?.icon_key ?? raw?.iconKey ?? "award").trim() || "award",
+    tier: String(raw?.tier ?? "bronze").trim() as RewardTier,
+    current_tier: raw?.current_tier ? (String(raw.current_tier).trim() as RewardTier) : null,
+    next_tier: raw?.next_tier ? (String(raw.next_tier).trim() as RewardTier) : null,
+    title: String(raw?.title ?? "").trim(),
+    description: String(raw?.description ?? "").trim(),
+    reward: String(raw?.reward ?? "").trim(),
+    counter_key: String(raw?.counter_key ?? "evidence_saved").trim() as keyof RewardCounters,
+    current_value: Number(raw?.current_value ?? 0) || 0,
+    target_value: Number(raw?.target_value ?? 0) || 0,
+    progress_pct: Number(raw?.progress_pct ?? 0) || 0,
+    unlocked: Boolean(raw?.unlocked),
+    unlocked_at: raw?.unlocked_at ? String(raw.unlocked_at) : null,
+    tier_progress: asArray(raw?.tier_progress).map((entry) => ({
+      key: String(entry?.key ?? "").trim(),
+      tier: String(entry?.tier ?? "bronze").trim() as RewardTier,
+      target_value: Number(entry?.target_value ?? 0) || 0,
+      unlocked: Boolean(entry?.unlocked),
+      unlocked_at: entry?.unlocked_at ? String(entry.unlocked_at) : null,
+    })),
+  };
+}
+
+function buildRewardAchievementsFromCounters(counters: RewardCounters, unlockedLookup: Record<string, string | null> = {}): RewardAchievement[] {
+  return REWARD_BADGES.map((badge) => {
+    const currentValue = Number(counters[badge.counterKey] ?? 0) || 0;
+    const currentTier = rewardTierForValue(currentValue);
+    const nextTier = nextRewardTierForValue(currentValue);
+    const targetValue = nextTier ? rewardTierTarget(nextTier) : rewardTierTarget("master");
+    const tierProgress = REWARD_TIERS.map((tier) => {
+      const stepTarget = rewardTierTarget(tier);
+      const stepUnlocked = currentValue >= stepTarget;
+      return {
+        key: `${badge.key}:${tier}`,
+        tier,
+        target_value: stepTarget,
+        unlocked: stepUnlocked,
+        unlocked_at: stepUnlocked ? unlockedLookup[`${badge.key}:${tier}`] ?? null : null,
+      };
+    });
+    return {
+      key: badge.key,
+      icon_key: badge.iconKey,
+      tier: currentTier ?? "bronze",
+      current_tier: currentTier,
+      next_tier: nextTier,
+      title: badge.title,
+      description: badge.description,
+      reward: nextTier
+        ? `Next tier: ${String(nextTier).charAt(0).toUpperCase()}${String(nextTier).slice(1)} at ${targetValue} ${badge.counterKey.replaceAll("_", " ")}.`
+        : `Master tier reached at ${rewardTierTarget("master")} ${badge.counterKey.replaceAll("_", " ")}.`,
+      counter_key: badge.counterKey,
+      current_value: currentValue,
+      target_value: targetValue,
+      progress_pct: targetValue > 0 ? Math.min(100, Number(((currentValue / targetValue) * 100).toFixed(2))) : 100,
+      unlocked: currentTier !== null,
+      unlocked_at: tierProgress.filter((step) => step.unlocked).at(-1)?.unlocked_at ?? null,
+      tier_progress: tierProgress,
+    };
+  });
+}
+
+async function buildFallbackRewardsSummary(): Promise<RewardsSummary> {
+  const [evidenceResult, profileResult, snapshotsResult, historyResult, tailoredResult] = await Promise.allSettled([
+    api.listEvidence(),
+    api.getProfileConfirmation(),
+    api.listResumeSnapshots(),
+    api.listJobMatchHistory(1000),
+    api.listTailoredResumes(1000),
+  ]);
+
+  const evidence =
+    evidenceResult.status === "fulfilled"
+      ? evidenceResult.value.filter((item) => String(item?.origin ?? "user").trim().toLowerCase() !== "system")
+      : [];
+  const confirmation = profileResult.status === "fulfilled" ? profileResult.value : null;
+  const snapshots = snapshotsResult.status === "fulfilled" ? snapshotsResult.value : [];
+  const history = historyResult.status === "fulfilled" ? historyResult.value : [];
+  const tailored = tailoredResult.status === "fulfilled" ? tailoredResult.value : [];
+
+  const counters: RewardCounters = {
+    evidence_saved: evidence.length,
+    profile_skills_confirmed: asArray(confirmation?.confirmed).length,
+    resume_snapshots_uploaded:
+      snapshots.length + evidence.filter((item) => String(item?.type ?? "").trim().toLowerCase() === "resume").length,
+    job_matches_run: history.length,
+    tailored_resumes_generated: tailored.length,
+  };
+  return normalizeRewardsSummary({ counters });
+}
+
+export function normalizeRewardsSummary(raw: any): RewardsSummary {
+  const counters: RewardCounters = {
+    evidence_saved: Number(raw?.counters?.evidence_saved ?? 0) || 0,
+    profile_skills_confirmed: Number(raw?.counters?.profile_skills_confirmed ?? 0) || 0,
+    resume_snapshots_uploaded: Number(raw?.counters?.resume_snapshots_uploaded ?? 0) || 0,
+    job_matches_run: Number(raw?.counters?.job_matches_run ?? 0) || 0,
+    tailored_resumes_generated: Number(raw?.counters?.tailored_resumes_generated ?? 0) || 0,
+  };
+  const unlockedLookup = Object.fromEntries(
+    asArray(raw?.achievements)
+      .map((achievement) => normalizeRewardAchievement(achievement))
+      .flatMap((achievement) =>
+        asArray(achievement.tier_progress)
+          .filter((step) => step.unlocked)
+          .map((step) => [step.key, step.unlocked_at ?? null] as const)
+      )
+  ) as Record<string, string | null>;
+  const achievements = asArray(raw?.achievements).length
+    ? asArray(raw?.achievements).map(normalizeRewardAchievement)
+    : buildRewardAchievementsFromCounters(counters, unlockedLookup);
+  const badges = asArray(raw?.badges).length ? asArray(raw?.badges).map(normalizeRewardAchievement) : achievements;
+  const unlockedCount = achievements.filter((achievement) => achievement.unlocked).length;
+  const nextAchievement =
+    [...achievements]
+      .filter((achievement) => achievement.next_tier)
+      .sort(
+        (left, right) =>
+          (left.target_value - left.current_value) - (right.target_value - right.current_value) ||
+          right.current_value - left.current_value
+      )[0] ?? null;
+  return {
+    counters,
+    unlockedCount: Number(raw?.unlocked_count ?? unlockedCount) || unlockedCount,
+    totalCount: Number(raw?.total_count ?? achievements.length) || achievements.length,
+    achievements,
+    badges,
+    badgeCount: Number(raw?.badge_count ?? raw?.badgeCount ?? badges.length) || badges.length,
+    unlockedBadgeCount:
+      Number(raw?.unlocked_badge_count ?? raw?.unlockedBadgeCount ?? badges.filter((badge) => badge.unlocked).length) ||
+      badges.filter((badge) => badge.unlocked).length,
+    nextAchievement: raw?.next_achievement ? normalizeRewardAchievement(raw.next_achievement) : nextAchievement,
+    recentUnlocks: asArray(raw?.recent_unlocks).map(normalizeRewardAchievement),
   };
 }
 
@@ -473,6 +759,9 @@ export type TailoredResumeListEntry = {
 };
 
 export type TailoredResumeDetail = TailoredResumeListEntry & {
+  resume_snapshot_id?: string | null;
+  resume_evidence_id?: string | null;
+  template_source?: string | null;
   selected_skill_ids: string[];
   selected_item_ids: string[];
   retrieved_context?: RAGContextItem[];
@@ -719,6 +1008,10 @@ export const api = {
     return out ? normalizeAuthUser(out) : null;
   },
   patchMe: async (payload: UserPatch) => normalizeAuthUser(await request<AuthUser>("/auth/me", "PATCH", payload)),
+  activateSubscription: async () => normalizeAuthUser(await request<AuthUser>("/auth/me/subscription", "POST")),
+  getBillingStatus: async () => request<BillingStatus>("/billing/status", "GET"),
+  createBillingCheckout: async () => request<BillingCheckoutSession>("/billing/checkout", "POST"),
+  createBillingPortal: async () => request<BillingPortalSession>("/billing/portal", "POST"),
   changeMyPassword: async (payload: { current_password: string; new_password: string }) => {
     const out = await request<AuthOut>("/auth/me/password", "POST", payload);
     out.user = normalizeAuthUser(out.user);
@@ -748,6 +1041,19 @@ export const api = {
     form.append("file", payload.file);
     return request<{ snapshot_id: string; preview: string }>(
       "/ingest/resume/pdf",
+      "POST",
+      undefined,
+      {},
+      { body: form }
+    );
+  },
+
+  submitResumeDocx: async (payload: { user_id: string; file: File }) => {
+    const form = new FormData();
+    form.append("user_id", payload.user_id);
+    form.append("file", payload.file);
+    return request<{ snapshot_id: string; preview: string }>(
+      "/ingest/resume/docx",
       "POST",
       undefined,
       {},
@@ -1027,6 +1333,14 @@ export const api = {
       })),
     };
   },
+  getRewardsSummary: async (): Promise<RewardsSummary> => {
+    try {
+      const raw = await request<any>("/rewards/summary", "GET");
+      return normalizeRewardsSummary(raw);
+    } catch {
+      return buildFallbackRewardsSummary();
+    }
+  },
 
   listRoles: () => request<any[]>("/roles/", "GET"),
   createRole: (payload: any) => request<any>("/roles/", "POST", payload),
@@ -1064,7 +1378,7 @@ export const api = {
     return request<any>("/tailor/job/ingest", "POST", payload);
   },
 
-  matchJob: async (payload: { user_id?: string; job_id: string; history_id?: string; resume_snapshot_id?: string | null; ignored_skill_names?: string[]; added_from_missing_skills?: Array<{ skill_id: string; skill_name: string }>; persist_history?: boolean }) => {
+  matchJob: async (payload: { user_id?: string; job_id: string; history_id?: string; resume_snapshot_id?: string | null; resume_evidence_id?: string | null; ignored_skill_names?: string[]; added_from_missing_skills?: Array<{ skill_id: string; skill_name: string }>; persist_history?: boolean }) => {
     return request<any>("/tailor/match", "POST", payload);
   },
 
@@ -1133,7 +1447,7 @@ export const api = {
   launchAdminMlflowExperiment: (payload: AdminMlflowRunLaunchPayload) =>
     request<AdminMlflowJob>("/admin/mlflow/experiments/run", "POST", payload),
 
-  previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; resume_snapshot_id?: string | null; ignored_skill_names?: string[]; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
+  previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; resume_snapshot_id?: string | null; resume_evidence_id?: string | null; ignored_skill_names?: string[]; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
     return request<any>("/tailor/preview", "POST", payload);
   },
 

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "./AuthContext";
 
 export type ActivityItem = {
@@ -50,11 +50,11 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id]);
 
-  const persist = (next: ActivityItem[]) => {
+  const persist = useCallback((next: ActivityItem[]) => {
     setActivities(next);
     if (!user?.id) return;
     localStorage.setItem(storageKey(user.id), JSON.stringify(next));
-  };
+  }, [user?.id]);
 
   const value = useMemo<ActivityContextType>(
     () => ({
@@ -73,7 +73,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
       },
       clearActivities: () => persist([]),
     }),
-    [activities, user?.id]
+    [activities, persist]
   );
 
   return <ActivityContext.Provider value={value}>{children}</ActivityContext.Provider>;

@@ -55,7 +55,7 @@ async def _async_fake_extract_skill_candidates(text: str, max_candidates: int = 
     return candidates[:max_candidates], "test-transformer"
 
 
-async def _async_fake_rewrite(job_text: str, bullets: list[str], focus: str):
+async def _async_fake_rewrite(job_text: str, bullets: list[str], focus: str, preferences: dict | None = None):
     return [f"- Rewritten ({focus}): {bullet[2:] if bullet.startswith('- ') else bullet}" for bullet in bullets], "test-rewriter"
 
 
@@ -66,6 +66,7 @@ def _seed(fake_db: FakeDatabase):
     role_id = ObjectId()
     session_id = ObjectId()
     password_parts = hash_password("password123")
+    seeded_now = now_utc()
 
     fake_db["users"].docs = [
         {
@@ -75,7 +76,11 @@ def _seed(fake_db: FakeDatabase):
             "password_salt": password_parts["salt"],
             "password_hash": password_parts["hash"],
             "role": "user",
-            "created_at": now_utc(),
+            "subscription_status": "active",
+            "subscription_plan": "pro",
+            "subscription_started_at": seeded_now,
+            "subscription_renewal_at": seeded_now + timedelta(days=30),
+            "created_at": seeded_now,
         }
     ]
     fake_db["sessions"].docs = [
@@ -83,8 +88,8 @@ def _seed(fake_db: FakeDatabase):
             "_id": session_id,
             "user_id": user_id,
             "token": "test-token",
-            "created_at": now_utc(),
-            "expires_at": now_utc() + timedelta(days=7),
+            "created_at": seeded_now,
+            "expires_at": seeded_now + timedelta(days=30),
         }
     ]
     fake_db["skills"].docs = [
@@ -97,8 +102,8 @@ def _seed(fake_db: FakeDatabase):
             "tags": ["language"],
             "origin": "default",
             "hidden": False,
-            "created_at": now_utc(),
-            "updated_at": now_utc(),
+            "created_at": seeded_now,
+            "updated_at": seeded_now,
         },
         {
             "_id": skill_ml,
@@ -109,8 +114,8 @@ def _seed(fake_db: FakeDatabase):
             "tags": ["ai"],
             "origin": "default",
             "hidden": False,
-            "created_at": now_utc(),
-            "updated_at": now_utc(),
+            "created_at": seeded_now,
+            "updated_at": seeded_now,
         },
     ]
     fake_db["roles"].docs = [
@@ -118,8 +123,8 @@ def _seed(fake_db: FakeDatabase):
             "_id": role_id,
             "name": "ML Engineer",
             "description": "Build ML systems",
-            "created_at": now_utc(),
-            "updated_at": now_utc(),
+            "created_at": seeded_now,
+            "updated_at": seeded_now,
         }
     ]
     fake_db["role_skill_weights"].docs = [
@@ -127,7 +132,7 @@ def _seed(fake_db: FakeDatabase):
             "_id": ObjectId(),
             "role_id": role_id,
             "role_name": "ML Engineer",
-            "computed_at": now_utc(),
+            "computed_at": seeded_now,
             "weights": [
                 {"skill_id": str(skill_python), "skill_name": "Python", "weight": 0.9},
                 {"skill_id": str(skill_ml), "skill_name": "ML", "weight": 1.0},
