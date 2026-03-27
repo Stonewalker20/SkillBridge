@@ -126,12 +126,25 @@ def normalize_unlock_records(raw: list[dict] | None) -> list[dict]:
     return records
 
 
+def _user_authored_evidence_query(user_refs: list[object], **extra_filters: object) -> dict:
+    return {
+        "user_id": {"$in": user_refs},
+        "$or": [
+            {"origin": "user"},
+            {"origin": {"$exists": False}},
+            {"origin": None},
+            {"origin": ""},
+        ],
+        **extra_filters,
+    }
+
+
 async def _count_profile_confirmed_skills(db, user_refs: list[object]) -> int:
     rows = await (
         db["resume_skill_confirmations"]
         .aggregate(
             [
-                {"$match": {"user_id": {"$in": user_refs}, "resume_snapshot_id": None}},
+                {"$match": {"user_id": {"$in": user_refs}, "resume_snapshot_id": {"$in": [None, ""]}}},
                 {"$unwind": {"path": "$confirmed", "preserveNullAndEmptyArrays": False}},
                 {"$group": {"_id": "$confirmed.skill_id"}},
                 {"$count": "n"},
@@ -144,16 +157,14 @@ async def _count_profile_confirmed_skills(db, user_refs: list[object]) -> int:
 
 async def _count_resume_sources(db, user_refs: list[object]) -> int:
     resume_snapshot_count = await db["resume_snapshots"].count_documents({"user_id": {"$in": user_refs}})
-    resume_evidence_count = await db["evidence"].count_documents(
-        {"user_id": {"$in": user_refs}, "origin": "user", "type": "resume"}
-    )
+    resume_evidence_count = await db["evidence"].count_documents(_user_authored_evidence_query(user_refs, type="resume"))
     return resume_snapshot_count + resume_evidence_count
 
 
 async def calculate_reward_counters(db, user_id: str) -> dict[str, int]:
     user_refs = ref_values(user_id)
     return {
-        "evidence_saved": await db["evidence"].count_documents({"user_id": {"$in": user_refs}, "origin": "user"}),
+        "evidence_saved": await db["evidence"].count_documents(_user_authored_evidence_query(user_refs)),
         "profile_skills_confirmed": await _count_profile_confirmed_skills(db, user_refs),
         "resume_snapshots_uploaded": await _count_resume_sources(db, user_refs),
         "job_matches_run": await db["job_match_runs"].count_documents({"user_id": {"$in": user_refs}}),

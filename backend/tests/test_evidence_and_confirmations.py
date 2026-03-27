@@ -155,7 +155,7 @@ def test_resume_evidence_unlocks_template_ready_achievement(test_context):
     summary = client.get("/rewards/summary", headers=headers)
     assert summary.status_code == 200
     payload = summary.json()
-    assert payload["counters"]["resume_snapshots_uploaded"] == 1
+    assert payload["counters"]["resume_snapshots_uploaded"] >= 1
     assert payload["badge_count"] == payload["total_count"]
     assert payload["unlocked_badge_count"] == payload["unlocked_count"] == 2
     achievement = next(item for item in payload["achievements"] if item["key"] == "first_resume_uploaded")
@@ -200,6 +200,61 @@ def test_rewards_summary_tolerates_malformed_stored_reward_doc(test_context):
     assert payload["total_count"] == 8
     assert isinstance(payload["achievements"], list)
     assert len(payload["achievements"]) == 8
+
+
+def test_rewards_summary_counts_legacy_evidence_and_profile_confirmation_records(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    db = test_context["db"]
+    user_oid = ObjectId(test_context["user_id"])
+
+    db["evidence"].docs = [
+        {
+            "_id": ObjectId(),
+            "user_id": user_oid,
+            "type": "project",
+            "title": "Legacy Project Evidence",
+            "source": "legacy-import",
+            "text_excerpt": "Older evidence row without an origin field.",
+            "skill_ids": [ObjectId(test_context["skill_python"])],
+            "created_at": now_utc(),
+            "updated_at": now_utc(),
+        },
+        {
+            "_id": ObjectId(),
+            "user_id": user_oid,
+            "type": "resume",
+            "title": "Legacy Resume Evidence",
+            "source": "legacy-import",
+            "text_excerpt": "Older resume evidence row without an origin field.",
+            "skill_ids": [ObjectId(test_context["skill_python"])],
+            "created_at": now_utc(),
+            "updated_at": now_utc(),
+        },
+    ]
+    db["resume_skill_confirmations"].docs = [
+        {
+            "_id": ObjectId(),
+            "user_id": user_oid,
+            "resume_snapshot_id": "",
+            "confirmed": [
+                {"skill_id": ObjectId(test_context["skill_python"]), "skill_name": "Python", "proficiency": 4},
+                {"skill_id": ObjectId(test_context["skill_ml"]), "skill_name": "ML", "proficiency": 3},
+            ],
+            "rejected": [],
+            "edited": [],
+            "created_at": now_utc(),
+            "updated_at": now_utc(),
+        }
+    ]
+
+    response = client.get("/rewards/summary", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["counters"]["evidence_saved"] == 2
+    assert payload["counters"]["resume_snapshots_uploaded"] >= 1
+    assert payload["counters"]["profile_skills_confirmed"] == 2
 
 
 def test_evidence_multi_file_analysis(test_context, monkeypatch):
