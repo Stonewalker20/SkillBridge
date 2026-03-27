@@ -114,7 +114,9 @@ export function AccountPersonalization() {
         (rewards.totalCount ?? 0) > 0)
   );
   const highestTier = hasRewardsData
-    ? highestUnlockedRewardTier((rewards?.badges ?? rewards?.achievements ?? []).filter((badge) => badge.unlocked).map((badge) => badge.tier))
+    ? highestUnlockedRewardTier(
+        (rewards?.badges ?? rewards?.achievements ?? []).filter((badge) => badge.unlocked).map((badge) => badge.current_tier ?? badge.tier)
+      )
     : null;
   const unlockedThemeCount = themes.filter((themeOption) => rewardTierAtLeast(highestTier, themeOption.unlockTier)).length;
   const unlockedAvatarPresetCount = AVATAR_PRESETS.filter((preset) => rewardTierAtLeast(highestTier, preset.unlockTier)).length;

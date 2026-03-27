@@ -82,7 +82,7 @@ export function AccountAchievements() {
   const recentUnlocks = rewards?.recentUnlocks ?? [];
   const badges = useMemo(() => rewards?.badges ?? rewards?.achievements ?? [], [rewards]);
   const highestTier = useMemo(
-    () => highestUnlockedRewardTier(badges.filter((badge) => badge.unlocked).map((badge) => badge.tier)),
+    () => highestUnlockedRewardTier(badges.filter((badge) => badge.unlocked).map((badge) => badge.current_tier ?? badge.tier)),
     [badges]
   );
   const unlockedThemeCount = useMemo(
@@ -96,15 +96,14 @@ export function AccountAchievements() {
   const tierProgression = useMemo(
     () =>
       REWARD_TIERS.map((tier) => {
-        const tierBadges = badges.filter((badge) => badge.tier === tier);
-        const unlockedTierBadges = tierBadges.filter((badge) => badge.unlocked).length;
+        const unlockedTierBadges = badges.filter((badge) => rewardTierAtLeast(badge.current_tier ?? null, tier)).length;
         return {
           tier,
-          total: tierBadges.length,
+          total: badges.length,
           unlocked: unlockedTierBadges,
-          status: tierBadges.length > 0 && unlockedTierBadges === tierBadges.length ? "Completed" : tierBadges.length > 0 && unlockedTierBadges > 0 ? "In progress" : "Locked",
+          status: unlockedTierBadges === badges.length ? "Completed" : unlockedTierBadges > 0 ? "In progress" : "Locked",
         };
-      }).filter((entry) => entry.total > 0),
+      }),
     [badges]
   );
   const unlockRate = useMemo(() => {
@@ -187,7 +186,9 @@ export function AccountAchievements() {
               {nextAchievement ? (
                 <>
                   <p className="mt-4 text-lg font-semibold text-slate-900 dark:text-slate-100">{nextAchievement.title}</p>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{nextAchievement.description}</p>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                    {nextAchievement.next_tier ? `${rewardTierLabel(nextAchievement.next_tier)} tier is next.` : "Master tier complete."}
+                  </p>
                   <div className="mt-4 flex items-center justify-between gap-3 text-sm">
                     <span className="font-medium text-slate-700 dark:text-slate-200">
                       {nextAchievement.current_value}/{nextAchievement.target_value}
@@ -199,11 +200,13 @@ export function AccountAchievements() {
                   <div className="mt-3 h-2.5 rounded-full bg-slate-200 dark:bg-slate-700">
                     <div className={`h-2.5 rounded-full ${activeHeaderTheme.barClass}`} style={{ width: `${Math.max(6, nextAchievement.progress_pct)}%` }} />
                   </div>
-                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{nextAchievement.reward}</p>
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                    {milestoneNextStep(nextAchievement.counter_key, Math.max(0, nextAchievement.target_value - nextAchievement.current_value))}
+                  </p>
                 </>
               ) : (
                 <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">
-                  All current milestones are unlocked. New badges can be layered onto this system without losing your history.
+                  All current activity badges are at master tier.
                 </p>
               )}
             </Card>
@@ -222,7 +225,9 @@ export function AccountAchievements() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{achievement.title}</p>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{achievement.reward}</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {achievement.current_tier ? `${rewardTierLabel(achievement.current_tier)} tier reached` : achievement.reward}
+                          </p>
                         </div>
                         <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
                           Unlocked
@@ -250,7 +255,8 @@ export function AccountAchievements() {
 
             <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
               {badges.map((badge) => {
-                const tierClass = rewardTierClasses(badge.tier);
+                const displayTier = badge.current_tier ?? badge.next_tier ?? badge.tier;
+                const tierClass = rewardTierClasses(displayTier);
                 const unlocked = Boolean(badge.unlocked);
                 return (
                   <div key={badge.key} className="group relative flex flex-col items-center">
@@ -263,7 +269,7 @@ export function AccountAchievements() {
                         className={unlocked ? "" : "opacity-45 saturate-0"}
                       />
                       <span className={`absolute bottom-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${unlocked ? tierClass.chip : tierClass.muted}`}>
-                        {rewardTierLabel(badge.tier)}
+                        {rewardTierLabel(displayTier)}
                       </span>
                     </div>
                     <div className="mt-2 text-center text-xs font-medium text-slate-700 dark:text-slate-300">
@@ -274,7 +280,7 @@ export function AccountAchievements() {
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{badge.title}</p>
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${unlocked ? tierClass.chip : tierClass.muted}`}>
-                          {rewardTierLabel(badge.tier)}
+                          {rewardTierLabel(displayTier)}
                         </span>
                       </div>
                       <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">{badge.description}</p>
@@ -306,7 +312,8 @@ export function AccountAchievements() {
               <div className="space-y-4">
                 {badges.map((badge) => {
                   const remaining = Math.max(0, badge.target_value - badge.current_value);
-                  const tierClass = rewardTierClasses(badge.tier);
+                  const displayTier = badge.current_tier ?? badge.next_tier ?? badge.tier;
+                  const tierClass = rewardTierClasses(displayTier);
                   return (
                     <div
                       key={`${badge.key}:milestone`}
@@ -317,10 +324,10 @@ export function AccountAchievements() {
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{badge.title}</p>
                             <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${badge.unlocked ? tierClass.chip : tierClass.muted}`}>
-                              {rewardTierLabel(badge.tier)}
+                              {badge.current_tier ? rewardTierLabel(badge.current_tier) : `${rewardTierLabel(displayTier)} next`}
                             </span>
                             <Badge variant={badge.unlocked ? "default" : "secondary"} className="gap-1.5 rounded-full">
-                              {badge.unlocked ? "Unlocked" : "In Progress"}
+                              {badge.current_tier ? `${rewardTierLabel(badge.current_tier)} tier` : "Locked"}
                             </Badge>
                           </div>
                           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{badge.description}</p>
@@ -345,6 +352,21 @@ export function AccountAchievements() {
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                         <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{milestoneNextStep(badge.counter_key, remaining)}</p>
                         <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{badge.reward}</p>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+                        {(badge.tier_progress ?? []).map((step) => {
+                          const stepClass = rewardTierClasses(step.tier);
+                          return (
+                            <div
+                              key={step.key}
+                              className={`rounded-xl border px-2 py-2 text-center ${step.unlocked ? stepClass.chip : stepClass.muted}`}
+                            >
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.14em]">{rewardTierLabel(step.tier)}</p>
+                              <p className="mt-1 text-xs">{step.target_value}</p>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );

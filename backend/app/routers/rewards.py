@@ -42,7 +42,20 @@ async def rewards_summary(user=Depends(require_user)):
         key=lambda achievement: recent_unlock_lookup.get(achievement.key) or datetime.min.replace(tzinfo=timezone.utc),
         reverse=True,
     )
-    next_achievement = next((achievement for achievement in achievements if not achievement.unlocked), None)
+    next_achievement = next(
+        (
+            achievement
+            for achievement in sorted(
+                achievements,
+                key=lambda achievement: (
+                    achievement.target_value - achievement.current_value if achievement.next_tier else 10**9,
+                    -achievement.current_value,
+                ),
+            )
+            if achievement.next_tier
+        ),
+        None,
+    )
     progress_counts = reward_progress_counts([achievement.model_dump() for achievement in achievements])
     return RewardsSummaryOut(
         counters=RewardCountersOut(**counters),

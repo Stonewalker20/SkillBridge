@@ -35,6 +35,7 @@ export function RewardBadgeCollection({
         <div className="grid grid-cols-1 gap-3">
           {badges.map((badge) => {
             const isUnlocked = Boolean(badge.unlocked);
+            const displayTier = badge.current_tier ?? badge.next_tier ?? badge.tier;
             return (
               <div
                 key={badge.key}
@@ -50,10 +51,10 @@ export function RewardBadgeCollection({
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{badge.title}</p>
                       <Badge variant={isUnlocked ? "default" : "secondary"} className="gap-1.5 rounded-full">
                         {isUnlocked ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                        {isUnlocked ? "Unlocked" : "Locked"}
+                        {isUnlocked ? `${rewardTierLabel(badge.current_tier ?? badge.tier)} tier` : "Locked"}
                       </Badge>
-                      <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${rewardTierClasses(badge.tier).chip}`}>
-                        {rewardTierLabel(badge.tier)}
+                      <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${isUnlocked ? rewardTierClasses(displayTier).chip : rewardTierClasses(displayTier).muted}`}>
+                        {isUnlocked ? rewardTierLabel(displayTier) : `${rewardTierLabel(displayTier)} next`}
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{badge.description}</p>
@@ -62,7 +63,7 @@ export function RewardBadgeCollection({
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                    {badge.reward}
+                    {badge.next_tier ? `${rewardTierLabel(badge.next_tier)} at ${badge.target_value}` : "Master tier reached"}
                   </p>
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
                     {badge.current_value}/{badge.target_value}

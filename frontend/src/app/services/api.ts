@@ -1,3 +1,5 @@
+import { REWARD_TIERS, nextRewardTierForValue, rewardTierForValue, rewardTierTarget, type RewardTier } from "../lib/rewardTiers";
+
 export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 const TOKEN_KEY = "sb_token";
@@ -234,7 +236,9 @@ export type RewardCounters = {
 export type RewardAchievement = {
   key: string;
   icon_key?: string;
-  tier?: "bronze" | "silver" | "gold" | "plat" | "emerald" | "diamond" | "master";
+  tier?: RewardTier;
+  current_tier?: RewardTier | null;
+  next_tier?: RewardTier | null;
   title: string;
   description: string;
   reward: string;
@@ -244,6 +248,13 @@ export type RewardAchievement = {
   progress_pct: number;
   unlocked: boolean;
   unlocked_at?: string | null;
+  tier_progress?: Array<{
+    key: string;
+    tier: RewardTier;
+    target_value: number;
+    unlocked: boolean;
+    unlocked_at?: string | null;
+  }>;
 };
 export type RewardBadge = RewardAchievement;
 export type RewardsSummary = {
@@ -258,95 +269,47 @@ export type RewardsSummary = {
   recentUnlocks: RewardAchievement[];
 };
 
-const REWARD_MILESTONES: Array<{
+const REWARD_BADGES: Array<{
   key: string;
   iconKey: string;
-  tier: "bronze" | "silver" | "gold" | "plat" | "emerald" | "diamond" | "master";
   title: string;
   description: string;
-  reward: string;
   counterKey: keyof RewardCounters;
-  targetValue: number;
 }> = [
   {
-    key: "first_evidence_saved",
+    key: "evidence_saved",
     iconKey: "spark",
-    tier: "bronze",
     counterKey: "evidence_saved",
-    targetValue: 1,
-    title: "First Proof Added",
-    description: "Save your first evidence item to start building a verifiable portfolio.",
-    reward: "Unlocked: Evidence Starter badge",
+    title: "Proof Builder",
+    description: "Save evidence consistently so your profile is grounded in visible proof of work.",
   },
   {
-    key: "evidence_starter",
-    iconKey: "stack",
-    tier: "gold",
-    counterKey: "evidence_saved",
-    targetValue: 3,
-    title: "Proof Stack",
-    description: "Save three evidence items so your profile starts showing repeatable proof of work.",
-    reward: "Unlocked: Proof Stack badge",
-  },
-  {
-    key: "first_skill_confirmed",
+    key: "profile_skills_confirmed",
     iconKey: "shield",
-    tier: "bronze",
     counterKey: "profile_skills_confirmed",
-    targetValue: 1,
-    title: "First Skill Locked In",
-    description: "Confirm your first profile skill to turn extracted signals into trusted profile data.",
-    reward: "Unlocked: Skill Claim badge",
+    title: "Skill Verifier",
+    description: "Confirm profile skills to turn extracted signals into trusted data for matching and analytics.",
   },
   {
-    key: "skill_stack",
-    iconKey: "layers",
-    tier: "emerald",
-    counterKey: "profile_skills_confirmed",
-    targetValue: 5,
-    title: "Skill Stack",
-    description: "Build a profile with five confirmed skills to strengthen job-match reasoning.",
-    reward: "Unlocked: Skill Stack badge",
-  },
-  {
-    key: "first_resume_uploaded",
+    key: "resume_snapshots_uploaded",
     iconKey: "scroll",
-    tier: "silver",
     counterKey: "resume_snapshots_uploaded",
-    targetValue: 1,
-    title: "Template Ready",
-    description: "Upload or paste a resume so tailoring starts from your actual baseline materials.",
-    reward: "Unlocked: Resume Template badge",
+    title: "Resume Foundation",
+    description: "Add resume sources so tailoring starts from your real materials instead of a blank draft.",
   },
   {
-    key: "first_job_match",
+    key: "job_matches_run",
     iconKey: "compass",
-    tier: "plat",
     counterKey: "job_matches_run",
-    targetValue: 1,
-    title: "First Match Run",
-    description: "Run your first grounded job analysis to unlock targeted fit feedback.",
-    reward: "Unlocked: Match Runner badge",
+    title: "Match Navigator",
+    description: "Run grounded job matches repeatedly to sharpen fit feedback and gap analysis over time.",
   },
   {
-    key: "match_momentum",
-    iconKey: "rocket",
-    tier: "diamond",
-    counterKey: "job_matches_run",
-    targetValue: 3,
-    title: "Match Momentum",
-    description: "Run three job matches to build a stronger signal about what roles align with your profile.",
-    reward: "Unlocked: Momentum badge",
-  },
-  {
-    key: "first_tailored_resume",
+    key: "tailored_resumes_generated",
     iconKey: "badge",
-    tier: "master",
     counterKey: "tailored_resumes_generated",
-    targetValue: 1,
-    title: "Resume Tailored",
-    description: "Generate your first tailored resume to turn analysis into a submission-ready artifact.",
-    reward: "Unlocked: Tailor Ready badge",
+    title: "Tailor Forge",
+    description: "Generate tailored resumes so analysis turns into polished, submission-ready artifacts.",
   },
 ];
 
@@ -373,7 +336,9 @@ function normalizeRewardAchievement(raw: any): RewardAchievement {
   return {
     key: String(raw?.key ?? "").trim(),
     icon_key: String(raw?.icon_key ?? raw?.iconKey ?? "award").trim() || "award",
-    tier: String(raw?.tier ?? "bronze").trim() as RewardAchievement["tier"],
+    tier: String(raw?.tier ?? "bronze").trim() as RewardTier,
+    current_tier: raw?.current_tier ? (String(raw.current_tier).trim() as RewardTier) : null,
+    next_tier: raw?.next_tier ? (String(raw.next_tier).trim() as RewardTier) : null,
     title: String(raw?.title ?? "").trim(),
     description: String(raw?.description ?? "").trim(),
     reward: String(raw?.reward ?? "").trim(),
@@ -383,26 +348,51 @@ function normalizeRewardAchievement(raw: any): RewardAchievement {
     progress_pct: Number(raw?.progress_pct ?? 0) || 0,
     unlocked: Boolean(raw?.unlocked),
     unlocked_at: raw?.unlocked_at ? String(raw.unlocked_at) : null,
+    tier_progress: asArray(raw?.tier_progress).map((entry) => ({
+      key: String(entry?.key ?? "").trim(),
+      tier: String(entry?.tier ?? "bronze").trim() as RewardTier,
+      target_value: Number(entry?.target_value ?? 0) || 0,
+      unlocked: Boolean(entry?.unlocked),
+      unlocked_at: entry?.unlocked_at ? String(entry.unlocked_at) : null,
+    })),
   };
 }
 
 function buildRewardAchievementsFromCounters(counters: RewardCounters, unlockedLookup: Record<string, string | null> = {}): RewardAchievement[] {
-  return REWARD_MILESTONES.map((milestone) => {
-    const currentValue = Number(counters[milestone.counterKey] ?? 0) || 0;
-    const unlocked = currentValue >= milestone.targetValue;
+  return REWARD_BADGES.map((badge) => {
+    const currentValue = Number(counters[badge.counterKey] ?? 0) || 0;
+    const currentTier = rewardTierForValue(currentValue);
+    const nextTier = nextRewardTierForValue(currentValue);
+    const targetValue = nextTier ? rewardTierTarget(nextTier) : rewardTierTarget("master");
+    const tierProgress = REWARD_TIERS.map((tier) => {
+      const stepTarget = rewardTierTarget(tier);
+      const stepUnlocked = currentValue >= stepTarget;
+      return {
+        key: `${badge.key}:${tier}`,
+        tier,
+        target_value: stepTarget,
+        unlocked: stepUnlocked,
+        unlocked_at: stepUnlocked ? unlockedLookup[`${badge.key}:${tier}`] ?? null : null,
+      };
+    });
     return {
-      key: milestone.key,
-      icon_key: milestone.iconKey,
-      tier: milestone.tier,
-      title: milestone.title,
-      description: milestone.description,
-      reward: milestone.reward,
-      counter_key: milestone.counterKey,
+      key: badge.key,
+      icon_key: badge.iconKey,
+      tier: currentTier ?? "bronze",
+      current_tier: currentTier,
+      next_tier: nextTier,
+      title: badge.title,
+      description: badge.description,
+      reward: nextTier
+        ? `Next tier: ${String(nextTier).charAt(0).toUpperCase()}${String(nextTier).slice(1)} at ${targetValue} ${badge.counterKey.replaceAll("_", " ")}.`
+        : `Master tier reached at ${rewardTierTarget("master")} ${badge.counterKey.replaceAll("_", " ")}.`,
+      counter_key: badge.counterKey,
       current_value: currentValue,
-      target_value: milestone.targetValue,
-      progress_pct: milestone.targetValue > 0 ? Math.min(100, Number(((currentValue / milestone.targetValue) * 100).toFixed(2))) : 100,
-      unlocked,
-      unlocked_at: unlocked ? unlockedLookup[milestone.key] ?? null : null,
+      target_value: targetValue,
+      progress_pct: targetValue > 0 ? Math.min(100, Number(((currentValue / targetValue) * 100).toFixed(2))) : 100,
+      unlocked: currentTier !== null,
+      unlocked_at: tierProgress.filter((step) => step.unlocked).at(-1)?.unlocked_at ?? null,
+      tier_progress: tierProgress,
     };
   });
 }
@@ -447,15 +437,25 @@ export function normalizeRewardsSummary(raw: any): RewardsSummary {
   const unlockedLookup = Object.fromEntries(
     asArray(raw?.achievements)
       .map((achievement) => normalizeRewardAchievement(achievement))
-      .filter((achievement) => achievement.unlocked)
-      .map((achievement) => [achievement.key, achievement.unlocked_at ?? null])
+      .flatMap((achievement) =>
+        asArray(achievement.tier_progress)
+          .filter((step) => step.unlocked)
+          .map((step) => [step.key, step.unlocked_at ?? null] as const)
+      )
   ) as Record<string, string | null>;
   const achievements = asArray(raw?.achievements).length
     ? asArray(raw?.achievements).map(normalizeRewardAchievement)
     : buildRewardAchievementsFromCounters(counters, unlockedLookup);
   const badges = asArray(raw?.badges).length ? asArray(raw?.badges).map(normalizeRewardAchievement) : achievements;
   const unlockedCount = achievements.filter((achievement) => achievement.unlocked).length;
-  const nextAchievement = achievements.find((achievement) => !achievement.unlocked) ?? null;
+  const nextAchievement =
+    [...achievements]
+      .filter((achievement) => achievement.next_tier)
+      .sort(
+        (left, right) =>
+          (left.target_value - left.current_value) - (right.target_value - right.current_value) ||
+          right.current_value - left.current_value
+      )[0] ?? null;
   return {
     counters,
     unlockedCount: Number(raw?.unlocked_count ?? unlockedCount) || unlockedCount,

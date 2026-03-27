@@ -158,9 +158,11 @@ def test_resume_evidence_unlocks_template_ready_achievement(test_context):
     assert payload["counters"]["resume_snapshots_uploaded"] >= 1
     assert payload["badge_count"] == payload["total_count"]
     assert payload["unlocked_badge_count"] == payload["unlocked_count"] == 2
-    achievement = next(item for item in payload["achievements"] if item["key"] == "first_resume_uploaded")
+    achievement = next(item for item in payload["achievements"] if item["key"] == "resume_snapshots_uploaded")
     assert achievement["unlocked"] is True
-    badge = next(item for item in payload["badges"] if item["key"] == "first_resume_uploaded")
+    assert achievement["current_tier"] == "bronze"
+    assert achievement["next_tier"] == "silver"
+    badge = next(item for item in payload["badges"] if item["key"] == "resume_snapshots_uploaded")
     assert badge["unlocked"] is True
 
 
@@ -172,10 +174,11 @@ def test_rewards_summary_exposes_badges_and_counts(test_context):
     assert response.status_code == 200
     payload = response.json()
 
-    assert payload["badge_count"] == payload["total_count"] == 8
+    assert payload["badge_count"] == payload["total_count"] == 5
     assert payload["unlocked_badge_count"] == payload["unlocked_count"] == 0
-    assert len(payload["badges"]) == 8
+    assert len(payload["badges"]) == 5
     assert all("reward" in badge for badge in payload["badges"])
+    assert all(len(badge["tier_progress"]) == 7 for badge in payload["badges"])
 
 
 def test_rewards_summary_tolerates_malformed_stored_reward_doc(test_context):
@@ -197,9 +200,9 @@ def test_rewards_summary_tolerates_malformed_stored_reward_doc(test_context):
     response = client.get("/rewards/summary", headers=headers)
     assert response.status_code == 200
     payload = response.json()
-    assert payload["total_count"] == 8
+    assert payload["total_count"] == 5
     assert isinstance(payload["achievements"], list)
-    assert len(payload["achievements"]) == 8
+    assert len(payload["achievements"]) == 5
 
 
 def test_rewards_summary_counts_legacy_evidence_and_profile_confirmation_records(test_context):
@@ -255,6 +258,39 @@ def test_rewards_summary_counts_legacy_evidence_and_profile_confirmation_records
     assert payload["counters"]["evidence_saved"] == 2
     assert payload["counters"]["resume_snapshots_uploaded"] >= 1
     assert payload["counters"]["profile_skills_confirmed"] == 2
+
+
+def test_rewards_summary_scales_badge_tiers_up_to_master(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    db = test_context["db"]
+    user_oid = ObjectId(test_context["user_id"])
+
+    db["evidence"].docs = [
+        {
+            "_id": ObjectId(),
+            "user_id": user_oid,
+            "type": "project",
+            "title": f"Evidence {index}",
+            "source": "manual-entry",
+            "text_excerpt": "Proof item",
+            "skill_ids": [ObjectId(test_context["skill_python"])],
+            "origin": "user",
+            "created_at": now_utc(),
+            "updated_at": now_utc(),
+        }
+        for index in range(100)
+    ]
+
+    response = client.get("/rewards/summary", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+
+    evidence_badge = next(item for item in payload["badges"] if item["key"] == "evidence_saved")
+    assert evidence_badge["current_tier"] == "master"
+    assert evidence_badge["next_tier"] is None
+    assert evidence_badge["target_value"] == 100
+    assert evidence_badge["progress_pct"] == 100.0
 
 
 def test_evidence_multi_file_analysis(test_context, monkeypatch):

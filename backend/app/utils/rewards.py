@@ -14,86 +14,51 @@ REWARD_COUNTER_KEYS = (
     "tailored_resumes_generated",
 )
 
-REWARD_MILESTONES: list[dict[str, object]] = [
+REWARD_TIER_STEPS: list[dict[str, object]] = [
+    {"tier": "bronze", "target_value": 1},
+    {"tier": "silver", "target_value": 3},
+    {"tier": "gold", "target_value": 5},
+    {"tier": "plat", "target_value": 10},
+    {"tier": "emerald", "target_value": 25},
+    {"tier": "diamond", "target_value": 50},
+    {"tier": "master", "target_value": 100},
+]
+
+REWARD_BADGES: list[dict[str, object]] = [
     {
-        "key": "first_evidence_saved",
+        "key": "evidence_saved",
         "icon_key": "spark",
-        "tier": "bronze",
         "counter_key": "evidence_saved",
-        "target_value": 1,
-        "title": "First Proof Added",
-        "description": "Save your first evidence item to start building a verifiable portfolio.",
-        "reward": "Unlocked: Evidence Starter badge",
+        "title": "Proof Builder",
+        "description": "Save evidence consistently so your profile is grounded in visible proof of work.",
     },
     {
-        "key": "evidence_starter",
-        "icon_key": "stack",
-        "tier": "gold",
-        "counter_key": "evidence_saved",
-        "target_value": 3,
-        "title": "Proof Stack",
-        "description": "Save three evidence items so your profile starts showing repeatable proof of work.",
-        "reward": "Unlocked: Proof Stack badge",
-    },
-    {
-        "key": "first_skill_confirmed",
+        "key": "profile_skills_confirmed",
         "icon_key": "shield",
-        "tier": "bronze",
         "counter_key": "profile_skills_confirmed",
-        "target_value": 1,
-        "title": "First Skill Locked In",
-        "description": "Confirm your first profile skill to turn extracted signals into trusted profile data.",
-        "reward": "Unlocked: Skill Claim badge",
+        "title": "Skill Verifier",
+        "description": "Confirm profile skills to turn extracted signals into trusted data for matching and analytics.",
     },
     {
-        "key": "skill_stack",
-        "icon_key": "layers",
-        "tier": "emerald",
-        "counter_key": "profile_skills_confirmed",
-        "target_value": 5,
-        "title": "Skill Stack",
-        "description": "Build a profile with five confirmed skills to strengthen job-match reasoning.",
-        "reward": "Unlocked: Skill Stack badge",
-    },
-    {
-        "key": "first_resume_uploaded",
+        "key": "resume_snapshots_uploaded",
         "icon_key": "scroll",
-        "tier": "silver",
         "counter_key": "resume_snapshots_uploaded",
-        "target_value": 1,
-        "title": "Template Ready",
-        "description": "Upload or paste a resume so tailoring starts from your actual baseline materials.",
-        "reward": "Unlocked: Resume Template badge",
+        "title": "Resume Foundation",
+        "description": "Add resume sources so tailoring starts from your real materials instead of a blank draft.",
     },
     {
-        "key": "first_job_match",
+        "key": "job_matches_run",
         "icon_key": "compass",
-        "tier": "plat",
         "counter_key": "job_matches_run",
-        "target_value": 1,
-        "title": "First Match Run",
-        "description": "Run your first grounded job analysis to unlock targeted fit feedback.",
-        "reward": "Unlocked: Match Runner badge",
+        "title": "Match Navigator",
+        "description": "Run grounded job matches repeatedly to sharpen fit feedback and gap analysis over time.",
     },
     {
-        "key": "match_momentum",
-        "icon_key": "rocket",
-        "tier": "diamond",
-        "counter_key": "job_matches_run",
-        "target_value": 3,
-        "title": "Match Momentum",
-        "description": "Run three job matches to build a stronger signal about what roles align with your profile.",
-        "reward": "Unlocked: Momentum badge",
-    },
-    {
-        "key": "first_tailored_resume",
+        "key": "tailored_resumes_generated",
         "icon_key": "badge",
-        "tier": "master",
         "counter_key": "tailored_resumes_generated",
-        "target_value": 1,
-        "title": "Resume Tailored",
-        "description": "Generate your first tailored resume to turn analysis into a submission-ready artifact.",
-        "reward": "Unlocked: Tailor Ready badge",
+        "title": "Tailor Forge",
+        "description": "Generate tailored resumes so analysis turns into polished, submission-ready artifacts.",
     },
 ]
 
@@ -111,6 +76,39 @@ def _safe_int(value: object) -> int:
         return max(0, int(value or 0))
     except (TypeError, ValueError):
         return 0
+
+
+def _tier_unlock_key(badge_key: str, tier: str) -> str:
+    return f"{badge_key}:{tier}"
+
+
+def _reward_counter_label(counter_key: str) -> str:
+    if counter_key == "evidence_saved":
+        return "evidence items"
+    if counter_key == "profile_skills_confirmed":
+        return "confirmed skills"
+    if counter_key == "resume_snapshots_uploaded":
+        return "resume sources"
+    if counter_key == "job_matches_run":
+        return "job matches"
+    if counter_key == "tailored_resumes_generated":
+        return "tailored resumes"
+    return "actions"
+
+
+def _current_reward_tier(current_value: int) -> str | None:
+    current_tier: str | None = None
+    for step in REWARD_TIER_STEPS:
+        if current_value >= _safe_int(step["target_value"]):
+            current_tier = str(step["tier"])
+    return current_tier
+
+
+def _next_reward_tier(current_value: int) -> dict[str, object] | None:
+    for step in REWARD_TIER_STEPS:
+        if current_value < _safe_int(step["target_value"]):
+            return step
+    return None
 
 
 def normalize_reward_counters(raw: dict | None) -> dict[str, int]:
@@ -196,30 +194,60 @@ def build_reward_achievements(
     unlocked_lookup = unlocked_lookup or {}
     default_unlocked_at = default_unlocked_at or now_utc()
     achievements: list[dict] = []
-    for milestone in REWARD_MILESTONES:
-        counter_key = str(milestone["counter_key"])
+    for badge in REWARD_BADGES:
+        badge_key = str(badge["key"])
+        counter_key = str(badge["counter_key"])
         current_value = _safe_int(counters.get(counter_key))
-        target_value = _safe_int(milestone["target_value"])
-        unlocked = current_value >= target_value
+        current_tier = _current_reward_tier(current_value)
+        next_tier_step = _next_reward_tier(current_value)
+        target_value = _safe_int((next_tier_step or REWARD_TIER_STEPS[-1])["target_value"])
+        unlocked = current_tier is not None
         progress_pct = 100.0 if target_value <= 0 else round(min(100.0, (current_value / target_value) * 100.0), 2)
+        tier_progress: list[dict] = []
+        for step in REWARD_TIER_STEPS:
+            tier = str(step["tier"])
+            step_target_value = _safe_int(step["target_value"])
+            step_unlocked = current_value >= step_target_value
+            unlocked_at = unlocked_lookup.get(_tier_unlock_key(badge_key, tier)) if step_unlocked else None
+            if step_unlocked and unlocked_at is None:
+                unlocked_at = default_unlocked_at
+            tier_progress.append(
+                {
+                    "key": _tier_unlock_key(badge_key, tier),
+                    "tier": tier,
+                    "target_value": step_target_value,
+                    "unlocked": step_unlocked,
+                    "unlocked_at": unlocked_at,
+                }
+            )
+        latest_unlocked_at = next(
+            (step.get("unlocked_at") for step in reversed(tier_progress) if step.get("unlocked")),
+            None,
+        )
+        next_tier = str(next_tier_step["tier"]) if next_tier_step else None
+        if next_tier_step:
+            reward = f"Next tier: {next_tier.title()} at {target_value} {_reward_counter_label(counter_key)}."
+        else:
+            reward = f"Master tier reached at {REWARD_TIER_STEPS[-1]['target_value']} {_reward_counter_label(counter_key)}."
         achievements.append(
             {
-                "key": str(milestone["key"]),
-                "icon_key": str(milestone.get("icon_key") or "award"),
-                "tier": str(milestone.get("tier") or "bronze"),
-                "title": str(milestone["title"]),
-                "description": str(milestone["description"]),
-                "reward": str(milestone["reward"]),
+                "key": badge_key,
+                "icon_key": str(badge.get("icon_key") or "award"),
+                "tier": current_tier or "bronze",
+                "current_tier": current_tier,
+                "next_tier": next_tier,
+                "title": str(badge["title"]),
+                "description": str(badge["description"]),
+                "reward": reward,
                 "counter_key": counter_key,
                 "current_value": current_value,
                 "target_value": target_value,
                 "progress_pct": progress_pct,
                 "unlocked": unlocked,
-                "unlocked_at": unlocked_lookup.get(str(milestone["key"])) if unlocked else None,
+                "unlocked_at": latest_unlocked_at,
+                "tier_progress": tier_progress,
             }
         )
-        if unlocked and achievements[-1]["unlocked_at"] is None:
-            achievements[-1]["unlocked_at"] = default_unlocked_at
     return achievements
 
 
@@ -263,12 +291,13 @@ async def _save_reward_state(db, user_id: str, counters: dict[str, int]) -> dict
         "counters": stored_counters,
         "unlocked": [
             {
-                "key": achievement["key"],
-                "unlocked_at": achievement.get("unlocked_at"),
+                "key": step["key"],
+                "unlocked_at": step.get("unlocked_at"),
                 "progress_value": achievement.get("current_value", 0),
             }
             for achievement in achievements
-            if achievement.get("unlocked")
+            for step in achievement.get("tier_progress", [])
+            if step.get("unlocked")
         ],
         "recent_unlocks": _recent_unlock_records(achievements),
         "updated_at": now_utc(),

@@ -19,6 +19,8 @@ class RewardAchievementOut(BaseModel):
     key: str
     icon_key: str = "award"
     tier: str = "bronze"
+    current_tier: str | None = None
+    next_tier: str | None = None
     title: str
     description: str
     reward: str
@@ -28,6 +30,7 @@ class RewardAchievementOut(BaseModel):
     progress_pct: float = 0.0
     unlocked: bool = False
     unlocked_at: datetime | None = None
+    tier_progress: list[dict] = Field(default_factory=list)
 
 
 class RewardBadgeOut(RewardAchievementOut):

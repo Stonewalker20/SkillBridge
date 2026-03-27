@@ -1,4 +1,13 @@
 export const REWARD_TIERS = ["bronze", "silver", "gold", "plat", "emerald", "diamond", "master"] as const;
+export const REWARD_TIER_TARGETS = {
+  bronze: 1,
+  silver: 3,
+  gold: 5,
+  plat: 10,
+  emerald: 25,
+  diamond: 50,
+  master: 100,
+} as const;
 
 export type RewardTier = (typeof REWARD_TIERS)[number];
 
@@ -42,6 +51,25 @@ export function rewardTierLabel(tier: RewardTier | null | undefined): string {
     default:
       return "Starter";
   }
+}
+
+export function rewardTierTarget(tier: RewardTier): number {
+  return REWARD_TIER_TARGETS[tier];
+}
+
+export function rewardTierForValue(value: number): RewardTier | null {
+  let best: RewardTier | null = null;
+  for (const tier of REWARD_TIERS) {
+    if (value >= rewardTierTarget(tier)) best = tier;
+  }
+  return best;
+}
+
+export function nextRewardTierForValue(value: number): RewardTier | null {
+  for (const tier of REWARD_TIERS) {
+    if (value < rewardTierTarget(tier)) return tier;
+  }
+  return null;
 }
 
 export function rewardTierClasses(tier: RewardTier | null | undefined): { chip: string; ring: string; muted: string } {
