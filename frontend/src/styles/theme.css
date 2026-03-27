@@ -235,3 +235,41 @@
     background-color: #2563eb;
   }
 }
+
+@keyframes theme-neon-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes theme-rainbow-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes theme-blood-pulse {
+  0%,
+  100% {
+    filter: saturate(1) brightness(1);
+    background-position: 0% 50%;
+  }
+
+  50% {
+    filter: saturate(1.12) brightness(1.04);
+    background-position: 100% 50%;
+  }
+}

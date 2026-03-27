@@ -10,7 +10,6 @@ import { Button } from "../components/ui/button";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAccountPreferences } from "../context/AccountPreferencesContext";
-import { RewardBadgeCollection } from "../components/RewardBadgeCollection";
 
 interface DashboardSummary {
   totalSkills: number;
@@ -579,35 +578,82 @@ export function Dashboard() {
           </div>
         </div>
 
-        {hasRewardsData && (rewards?.badges?.length ?? rewards?.achievements.length ?? 0) > 0 ? (
-          <div className="mt-5">
-            <RewardBadgeCollection
-              badges={rewards?.badges ?? rewards?.achievements ?? []}
-              unlockedCount={rewards?.unlockedBadgeCount ?? rewards?.unlockedCount ?? 0}
-              totalCount={rewards?.badgeCount ?? rewards?.totalCount ?? rewards?.achievements.length ?? 0}
-            />
-          </div>
-        ) : null}
+        {hasRewardsData ? (
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Award className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+                  <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Achievement Progress</h4>
+                </div>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  {rewards?.unlockedCount ?? 0}/{Math.max(rewards?.totalCount ?? 0, rewards?.achievements.length ?? 0)} milestones unlocked.
+                </p>
+              </div>
+              <Badge variant="outline" className="w-fit shrink-0 dark:border-slate-700 dark:text-slate-200">
+                {rewards?.nextAchievement ? "Next up" : "All set"}
+              </Badge>
+            </div>
 
-        {hasRewardsData && (rewards?.achievements.length ?? 0) > 0 ? (
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {rewards?.achievements.map((achievement) => (
-              <div key={achievement.key} className="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{achievement.title}</div>
-                    <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{achievement.description}</p>
+            <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
+                {rewards?.nextAchievement ? (
+                  <>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next unlock</div>
+                        <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">{rewards.nextAchievement.title}</div>
+                        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.description}</p>
+                        <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">{rewardProgressLabel(rewards.nextAchievement)}</p>
+                      </div>
+                      {REWARD_ACTIONS[rewards.nextAchievement.counter_key] ? (
+                        <Button asChild size="sm" className={activeHeaderTheme.buttonClass}>
+                          <Link to={REWARD_ACTIONS[rewards.nextAchievement.counter_key].href}>
+                            {REWARD_ACTIONS[rewards.nextAchievement.counter_key].label}
+                          </Link>
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="mt-4 h-2.5 rounded-full bg-slate-200 dark:bg-slate-700">
+                      <div
+                        className={`h-2.5 rounded-full ${activeHeaderTheme.barClass}`}
+                        style={{ width: `${Math.max(6, Math.min(100, rewards.nextAchievement.progress_pct))}%` }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next unlock</div>
+                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                      You’ve cleared the current milestone track. New rewards will appear here when additional milestones are added.
+                    </p>
                   </div>
-                  <Badge variant={achievement.unlocked ? "secondary" : "outline"} className="shrink-0 dark:border-slate-700 dark:text-slate-200">
-                    {achievement.unlocked ? "Done" : `${Math.round(achievement.progress_pct)}%`}
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900/70">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recent unlocks</div>
+                {rewards?.recentUnlocks.length ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {rewards.recentUnlocks.slice(0, 3).map((achievement) => (
+                      <Badge key={achievement.key} variant="secondary" className="max-w-full truncate rounded-full px-3 py-1 text-xs">
+                        {achievement.title}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Unlock activity will appear here as milestones are earned.</p>
+                )}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Badge variant="outline" className="rounded-full dark:border-slate-700 dark:text-slate-200">
+                    {rewards?.unlockedCount ?? 0} unlocked
+                  </Badge>
+                  <Badge variant="outline" className="rounded-full dark:border-slate-700 dark:text-slate-200">
+                    {Math.max(rewards?.totalCount ?? 0, rewards?.achievements.length ?? 0)} total
                   </Badge>
                 </div>
-                <div className="mt-4 h-2 rounded-full bg-slate-100 dark:bg-slate-800">
-                  <div className={`h-2 rounded-full ${activeHeaderTheme.barClass}`} style={{ width: `${Math.max(4, achievement.progress_pct)}%` }} />
-                </div>
-                <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">{rewardProgressLabel(achievement)}</p>
               </div>
-            ))}
+            </div>
           </div>
         ) : null}
       </Card>

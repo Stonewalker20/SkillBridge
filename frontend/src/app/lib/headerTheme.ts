@@ -1,8 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import type { RewardTier } from "./rewardTiers";
 
 export const ACCOUNT_HEADER_THEME_STORAGE_KEY = "account:headerTheme";
 export const ACCOUNT_HEADER_THEME_EVENT = "skillbridge:header-theme-change";
+
+type HeaderThemeConfig = {
+  value: string;
+  label: string;
+  unlockTier: RewardTier | null;
+  adminOnly?: boolean;
+  swatchColors: readonly [string, string, string];
+  heroClass: string;
+  avatarClass: string;
+  buttonClass: string;
+  barClass: string;
+  accentTextClass: string;
+  softPanelClass: string;
+  sidebarClass: string;
+  sidebarActiveClass: string;
+};
 
 export const ACCOUNT_HEADER_THEMES = [
   {
@@ -20,6 +37,39 @@ export const ACCOUNT_HEADER_THEMES = [
     sidebarClass:
       "bg-[linear-gradient(180deg,_rgba(236,244,255,0.98),_rgba(219,234,254,0.92)_52%,_rgba(241,245,249,0.96))] dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.96))]",
     sidebarActiveClass: "bg-[linear-gradient(135deg,_#1E3A8A,_#0F766E)] text-white shadow-sm",
+  },
+  {
+    value: "neon",
+    label: "Neon Pulse",
+    unlockTier: "master" as RewardTier,
+    swatchColors: ["#22D3EE", "#A855F7", "#EC4899"],
+    heroClass:
+      "animate-[theme-neon-flow_16s_ease-in-out_infinite] bg-[length:220%_220%] bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.30),_transparent_38%),radial-gradient(circle_at_bottom_right,_rgba(236,72,153,0.18),_transparent_32%),linear-gradient(135deg,_#effbff,_#fdf2ff_54%,_#eff6ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.18),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(236,72,153,0.12),_transparent_26%),linear-gradient(135deg,_#04111f,_#16081f_56%,_#0a1630)]",
+    avatarClass: "bg-[linear-gradient(135deg,_#22D3EE,_#A855F7)]",
+    buttonClass: "bg-[#7C3AED] text-white hover:bg-[#6d28d9]",
+    barClass: "bg-[linear-gradient(90deg,_#22D3EE,_#A855F7,_#EC4899)]",
+    accentTextClass: "text-cyan-500 dark:text-fuchsia-300",
+    softPanelClass: "bg-[linear-gradient(135deg,_rgba(34,211,238,0.12),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(168,85,247,0.12),_rgba(10,22,48,0.94))]",
+    sidebarClass:
+      "bg-[linear-gradient(180deg,_rgba(239,251,255,0.98),_rgba(253,242,255,0.90)_52%,_rgba(239,246,255,0.96))] dark:bg-[linear-gradient(180deg,_rgba(4,17,31,0.98),_rgba(10,22,48,0.96))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#22D3EE,_#A855F7)] text-white shadow-sm",
+  },
+  {
+    value: "prism",
+    label: "Prism Flow",
+    unlockTier: "master" as RewardTier,
+    swatchColors: ["#F59E0B", "#22C55E", "#3B82F6"],
+    heroClass:
+      "animate-[theme-rainbow-flow_14s_linear_infinite] bg-[length:280%_280%] bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_34%),radial-gradient(circle_at_70%_20%,_rgba(34,197,94,0.16),_transparent_26%),linear-gradient(135deg,_#fff7ed,_#fef3c7_28%,_#ecfeff_60%,_#eef2ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.16),_transparent_28%),radial-gradient(circle_at_70%_20%,_rgba(34,197,94,0.12),_transparent_22%),linear-gradient(135deg,_#1d0f09,_#102618_30%,_#031a31_62%,_#1b1028)]",
+    avatarClass: "bg-[linear-gradient(135deg,_#F59E0B,_#22C55E,_#3B82F6)]",
+    buttonClass: "bg-[#3B82F6] text-white hover:bg-[#2563eb]",
+    barClass: "bg-[linear-gradient(90deg,_#F59E0B,_#22C55E,_#3B82F6)]",
+    accentTextClass: "text-amber-600 dark:text-cyan-300",
+    softPanelClass:
+      "bg-[linear-gradient(135deg,_rgba(245,158,11,0.10),_rgba(34,197,94,0.08),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(245,158,11,0.10),_rgba(34,197,94,0.10),_rgba(3,20,49,0.94))]",
+    sidebarClass:
+      "bg-[linear-gradient(180deg,_rgba(255,247,237,0.98),_rgba(254,243,199,0.90)_42%,_rgba(236,254,255,0.96)_72%,_rgba(238,242,255,0.98))] dark:bg-[linear-gradient(180deg,_rgba(29,15,9,0.98),_rgba(16,38,24,0.94)_42%,_rgba(3,26,49,0.96)_72%,_rgba(27,16,40,0.98))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#F59E0B,_#22C55E,_#3B82F6)] text-white shadow-sm",
   },
   {
     value: "sunrise",
@@ -198,6 +248,24 @@ export const ACCOUNT_HEADER_THEMES = [
     sidebarActiveClass: "bg-[linear-gradient(135deg,_#0F172A,_#1D4ED8)] text-white shadow-sm",
   },
   {
+    value: "blood",
+    label: "Blood Ember",
+    unlockTier: null as RewardTier | null,
+    adminOnly: true,
+    swatchColors: ["#7F1D1D", "#DC2626", "#FCA5A5"],
+    heroClass:
+      "animate-[theme-blood-pulse_12s_ease-in-out_infinite] bg-[length:220%_220%] bg-[radial-gradient(circle_at_top_left,_rgba(248,113,113,0.26),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(127,29,29,0.24),_transparent_28%),linear-gradient(135deg,_#fff1f2,_#fee2e2_40%,_#fecaca_68%,_#fca5a5)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(248,113,113,0.20),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(127,29,29,0.20),_transparent_24%),linear-gradient(135deg,_#1f0507,_#3f0a0d_50%,_#7f1d1d_100%)]",
+    avatarClass: "bg-[linear-gradient(135deg,_#7F1D1D,_#DC2626)]",
+    buttonClass: "bg-[#B91C1C] text-white hover:bg-[#991b1b]",
+    barClass: "bg-[linear-gradient(90deg,_#7F1D1D,_#DC2626,_#FCA5A5)]",
+    accentTextClass: "text-red-700 dark:text-red-300",
+    softPanelClass:
+      "animate-[theme-blood-pulse_12s_ease-in-out_infinite] bg-[linear-gradient(135deg,_rgba(127,29,29,0.14),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(127,29,29,0.18),_rgba(31,5,7,0.94))]",
+    sidebarClass:
+      "animate-[theme-blood-pulse_12s_ease-in-out_infinite] bg-[linear-gradient(180deg,_rgba(255,241,242,0.98),_rgba(254,226,226,0.94)_50%,_rgba(252,165,165,0.96))] dark:bg-[linear-gradient(180deg,_rgba(31,5,7,0.98),_rgba(63,10,13,0.96))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#7F1D1D,_#DC2626)] text-white shadow-sm",
+  },
+  {
     value: "neptune",
     label: "Neptune Flux",
     unlockTier: "master" as RewardTier,
@@ -229,9 +297,21 @@ export const ACCOUNT_HEADER_THEMES = [
       "bg-[linear-gradient(180deg,_rgba(245,247,255,0.98),_rgba(224,231,255,0.92)_52%,_rgba(238,242,255,0.96))] dark:bg-[linear-gradient(180deg,_rgba(11,16,33,0.98),_rgba(20,10,35,0.96))]",
     sidebarActiveClass: "bg-[linear-gradient(135deg,_#60A5FA,_#A78BFA)] text-white shadow-sm",
   },
-] as const;
+] as const satisfies readonly HeaderThemeConfig[];
 
+export type AccountHeaderTheme = (typeof ACCOUNT_HEADER_THEMES)[number];
 export type AccountHeaderThemeValue = (typeof ACCOUNT_HEADER_THEMES)[number]["value"];
+export const ADMIN_HEADER_THEME: AccountHeaderTheme =
+  ACCOUNT_HEADER_THEMES.find((theme) => theme.value === "blood") ?? ACCOUNT_HEADER_THEMES[0];
+
+function isAdminRole(role: string | null | undefined): boolean {
+  return ["team", "admin", "owner"].includes(String(role ?? "").trim().toLowerCase());
+}
+
+export function getAccessibleHeaderThemes(role: string | null | undefined) {
+  const admin = isAdminRole(role);
+  return ACCOUNT_HEADER_THEMES.filter((theme) => !theme.adminOnly || admin);
+}
 
 export function readStoredHeaderTheme(): AccountHeaderThemeValue {
   if (typeof window === "undefined") return "ocean";
@@ -246,6 +326,8 @@ export function writeStoredHeaderTheme(value: AccountHeaderThemeValue) {
 }
 
 export function useHeaderTheme() {
+  const { user } = useAuth();
+  const accessibleThemes = useMemo(() => getAccessibleHeaderThemes(user?.role), [user?.role]);
   const [headerTheme, setHeaderThemeState] = useState<AccountHeaderThemeValue>(() => readStoredHeaderTheme());
 
   useEffect(() => {
@@ -271,14 +353,15 @@ export function useHeaderTheme() {
   }, []);
 
   const activeHeaderTheme = useMemo(
-    () => ACCOUNT_HEADER_THEMES.find((theme) => theme.value === headerTheme) ?? ACCOUNT_HEADER_THEMES[0],
-    [headerTheme]
+    () => accessibleThemes.find((theme) => theme.value === headerTheme) ?? accessibleThemes[0] ?? ACCOUNT_HEADER_THEMES[0],
+    [accessibleThemes, headerTheme]
   );
 
   const setHeaderTheme = (value: AccountHeaderThemeValue) => {
+    if (!accessibleThemes.some((theme) => theme.value === value)) return;
     setHeaderThemeState(value);
     writeStoredHeaderTheme(value);
   };
 
-  return { headerTheme, setHeaderTheme, activeHeaderTheme, themes: ACCOUNT_HEADER_THEMES };
+  return { headerTheme, setHeaderTheme, activeHeaderTheme, themes: accessibleThemes };
 }
