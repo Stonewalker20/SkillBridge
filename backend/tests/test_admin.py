@@ -8,6 +8,8 @@ def test_admin_workspace_endpoints(test_context):
     client = test_context["client"]
     db = test_context["db"]
     user_id = test_context["user_id"]
+    role_id = test_context["role_id"]
+    skill_python = test_context["skill_python"]
 
     db["users"].docs[0]["role"] = "owner"
     job_id = db["jobs"].docs[0]["_id"] if db["jobs"].docs else None
@@ -53,6 +55,39 @@ def test_admin_workspace_endpoints(test_context):
     )
     assert moderation.status_code == 200
     assert moderation.json()["moderation_status"] == "approved"
+
+    weighted_job = client.post(
+        "/jobs/submit",
+        headers=test_context["headers"],
+        json={
+            "title": "Data Platform Engineer",
+            "company": "Acme",
+            "location": "Remote",
+            "source": "board",
+            "description_excerpt": "Approved job should refresh role weights",
+            "required_skills": ["Python"],
+            "required_skill_ids": [skill_python],
+            "role_ids": [role_id],
+        },
+    )
+    assert weighted_job.status_code == 200
+
+    weighted_job_moderation = client.patch(
+        f"/admin/jobs/{weighted_job.json()['id']}/moderation",
+        headers=test_context["headers"],
+        json={"moderation_status": "approved", "moderation_reason": None},
+    )
+    assert weighted_job_moderation.status_code == 200
+
+    role_weights = client.get(f"/roles/{role_id}/weights", headers=test_context["headers"])
+    assert role_weights.status_code == 200
+    weights = role_weights.json()["weights"]
+    assert len(weights) == 1
+    assert weights[0]["skill_name"] == "Python"
+
+    audit_actions = {doc["action"] for doc in db["audit_events"].docs}
+    assert "admin.user.role_updated" in audit_actions
+    assert "admin.job.moderation_updated" in audit_actions
 
 
 def test_admin_mlflow_endpoints(test_context, monkeypatch):
@@ -320,6 +355,10 @@ def test_admin_mlflow_endpoints(test_context, monkeypatch):
     assert run_job.status_code == 200
     assert run_job.json()["summary"]["experiment_name"] == "skillbridge-admin-sweep"
 
+    audit_actions = [doc["action"] for doc in db["audit_events"].docs]
+    assert "admin.mlflow.dataset_export_launched" in audit_actions
+    assert "admin.mlflow.experiment_launched" in audit_actions
+
 
 def test_admin_can_deactivate_user_without_deleting_row(test_context):
     client = test_context["client"]
@@ -372,6 +411,8 @@ def test_admin_can_deactivate_user_without_deleting_row(test_context):
     assert users.status_code == 200
     listed = next(item for item in users.json() if item["id"] == str(other_user_id))
     assert listed["is_active"] is False
+
+    assert any(doc["action"] == "admin.user.deactivated" for doc in db["audit_events"].docs)
 
 
 def test_admin_workspace_blocks_standard_users(test_context):

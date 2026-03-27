@@ -10,6 +10,7 @@ import { Button } from "../components/ui/button";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAccountPreferences } from "../context/AccountPreferencesContext";
+import { RewardBadgeCollection } from "../components/RewardBadgeCollection";
 
 interface DashboardSummary {
   totalSkills: number;
@@ -74,7 +75,7 @@ const EMPTY_REWARDS: RewardsSummary = {
 const REWARD_ACTIONS: Record<string, { href: string; label: string }> = {
   evidence_saved: { href: "/app/evidence", label: "Add evidence" },
   profile_skills_confirmed: { href: "/app/skills", label: "Confirm skills" },
-  resume_snapshots_uploaded: { href: "/app/jobs", label: "Upload resume" },
+  resume_snapshots_uploaded: { href: "/app/evidence?add=1&type=resume", label: "Add resume evidence" },
   job_matches_run: { href: "/app/jobs", label: "Run match" },
   tailored_resumes_generated: { href: "/app/jobs", label: "Generate resume" },
 };
@@ -153,6 +154,49 @@ function mergeRecentActivity(sources: Array<Array<any>>): DashboardSummary["rece
     }
   }
   return Array.from(byId.values()).sort((a, b) => activityTimestamp(b.date) - activityTimestamp(a.date));
+}
+
+function RecentActivityRow({
+  activity,
+  onHide,
+}: {
+  activity: DashboardSummary["recentActivity"][number];
+  onHide: (eventKey: string) => void;
+}) {
+  const eventKey = String(activity.eventKey ?? `${activity.id}:${activity.date}`);
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3 last:border-slate-100 dark:border-slate-800 dark:bg-slate-800/60">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+        <div className="min-w-0 space-y-2">
+          <div className="flex flex-wrap items-start gap-2">
+            <Badge variant="outline" className="shrink-0 capitalize bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+              {activity.type}
+            </Badge>
+            <p className="min-w-0 flex-1 break-words text-sm font-medium leading-5 text-gray-900 dark:text-slate-100">
+              {activity.name}
+            </p>
+          </div>
+          <p className="break-words text-xs capitalize text-gray-500 dark:text-slate-400">{activity.action}</p>
+        </div>
+        <div className="flex shrink-0 items-start gap-2">
+          <span className="pt-0.5 text-xs text-gray-500 dark:text-slate-400">
+            {activity.date ? new Date(activity.date).toLocaleDateString() : ""}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 rounded-full text-slate-400 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-900 dark:hover:text-slate-100"
+            onClick={() => onHide(eventKey)}
+            aria-label={`Hide activity ${activity.name}`}
+            title="Hide activity"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 async function loadAllSkills(): Promise<Skill[]> {
@@ -529,6 +573,16 @@ export function Dashboard() {
           </div>
         </div>
 
+        {(rewards.badges?.length ?? rewards.achievements.length) > 0 ? (
+          <div className="mt-5">
+            <RewardBadgeCollection
+              badges={rewards.badges ?? rewards.achievements}
+              unlockedCount={rewards.unlockedBadgeCount ?? rewards.unlockedCount}
+              totalCount={rewards.badgeCount ?? rewards.totalCount ?? rewards.achievements.length}
+            />
+          </div>
+        ) : null}
+
         {rewards.achievements.length > 0 ? (
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {rewards.achievements.map((achievement) => (
@@ -574,35 +628,11 @@ export function Dashboard() {
             ) : (
               <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
                 {visibleRecentActivity.map((activity) => (
-                  <div
+                  <RecentActivityRow
                     key={activity.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3 last:border-slate-100 dark:border-slate-800 dark:bg-slate-800/60"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Badge variant="outline" className="capitalize bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                        {activity.type}
-                      </Badge>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{activity.name}</p>
-                        <p className="text-xs text-gray-500 capitalize dark:text-slate-400">{activity.action}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 dark:text-slate-400">
-                        {activity.date ? new Date(activity.date).toLocaleDateString() : ""}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-full text-slate-400 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-900 dark:hover:text-slate-100"
-                        onClick={() => hideRecentActivityItem(activity.eventKey ?? `${activity.id}:${activity.date}`)}
-                        aria-label={`Hide activity ${activity.name}`}
-                        title="Hide activity"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
+                    activity={activity}
+                    onHide={hideRecentActivityItem}
+                  />
                 ))}
               </div>
             )}

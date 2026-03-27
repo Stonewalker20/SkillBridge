@@ -98,6 +98,8 @@ def _safe_int(value: object) -> int:
 
 
 def normalize_reward_counters(raw: dict | None) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        raw = {}
     counters = empty_reward_counters()
     for key in REWARD_COUNTER_KEYS:
         counters[key] = _safe_int((raw or {}).get(key))
@@ -105,8 +107,12 @@ def normalize_reward_counters(raw: dict | None) -> dict[str, int]:
 
 
 def normalize_unlock_records(raw: list[dict] | None) -> list[dict]:
+    if not isinstance(raw, list):
+        return []
     records: list[dict] = []
     for entry in raw or []:
+        if not isinstance(entry, dict):
+            continue
         key = str((entry or {}).get("key") or "").strip()
         if not key:
             continue
@@ -136,12 +142,20 @@ async def _count_profile_confirmed_skills(db, user_refs: list[object]) -> int:
     return _safe_int((rows[0] or {}).get("n")) if rows else 0
 
 
+async def _count_resume_sources(db, user_refs: list[object]) -> int:
+    resume_snapshot_count = await db["resume_snapshots"].count_documents({"user_id": {"$in": user_refs}})
+    resume_evidence_count = await db["evidence"].count_documents(
+        {"user_id": {"$in": user_refs}, "origin": "user", "type": "resume"}
+    )
+    return resume_snapshot_count + resume_evidence_count
+
+
 async def calculate_reward_counters(db, user_id: str) -> dict[str, int]:
     user_refs = ref_values(user_id)
     return {
         "evidence_saved": await db["evidence"].count_documents({"user_id": {"$in": user_refs}, "origin": "user"}),
         "profile_skills_confirmed": await _count_profile_confirmed_skills(db, user_refs),
-        "resume_snapshots_uploaded": await db["resume_snapshots"].count_documents({"user_id": {"$in": user_refs}}),
+        "resume_snapshots_uploaded": await _count_resume_sources(db, user_refs),
         "job_matches_run": await db["job_match_runs"].count_documents({"user_id": {"$in": user_refs}}),
         "tailored_resumes_generated": await db["tailored_resumes"].count_documents({"user_id": {"$in": user_refs}}),
     }
@@ -196,6 +210,17 @@ def _recent_unlock_records(achievements: list[dict]) -> list[dict]:
     ]
 
 
+def reward_progress_counts(achievements: list[dict]) -> dict[str, int]:
+    return {
+        "total_count": len(achievements),
+        "unlocked_count": sum(1 for achievement in achievements if achievement.get("unlocked")),
+    }
+
+
+def build_reward_badges(achievements: list[dict]) -> list[dict]:
+    return [dict(achievement) for achievement in achievements]
+
+
 async def _save_reward_state(db, user_id: str, counters: dict[str, int]) -> dict:
     stored_counters = normalize_reward_counters(counters)
     current = await db["user_rewards"].find_one({"user_id": to_object_id(user_id)})
@@ -232,6 +257,15 @@ async def get_or_create_reward_doc(db, user_id: str) -> dict:
         return existing
     counters = await calculate_reward_counters(db, user_id)
     return await _save_reward_state(db, user_id, counters)
+
+
+async def refresh_reward_doc(db, user_id: str) -> dict:
+    current = await get_or_create_reward_doc(db, user_id)
+    recalculated_counters = await calculate_reward_counters(db, user_id)
+    stored_counters = normalize_reward_counters((current or {}).get("counters"))
+    if recalculated_counters == stored_counters:
+        return current
+    return await _save_reward_state(db, user_id, recalculated_counters)
 
 
 async def increment_reward_counter(db, user_id: str, counter_key: str, amount: int = 1) -> dict:

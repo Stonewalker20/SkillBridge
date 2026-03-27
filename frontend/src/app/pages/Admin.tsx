@@ -111,15 +111,7 @@ export function Admin() {
         moderation_status: moderationStatus,
         moderation_reason: moderationStatus === "rejected" ? "Rejected from admin workspace" : null,
       });
-      setJobs((current) => current.filter((job) => job.id !== jobId));
-      setSummary((current) =>
-        current
-          ? {
-              ...current,
-              pending_jobs: Math.max(0, current.pending_jobs - (jobFilter === "pending" ? 1 : 0)),
-            }
-          : current
-      );
+      await load(jobFilter);
       toast.success(`Job ${moderationStatus}`);
     } catch (error: any) {
       toast.error(error?.message || "Failed to moderate job");

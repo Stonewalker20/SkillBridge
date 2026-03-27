@@ -28,10 +28,17 @@ class RewardAchievementOut(BaseModel):
     unlocked_at: datetime | None = None
 
 
+class RewardBadgeOut(RewardAchievementOut):
+    pass
+
+
 class RewardsSummaryOut(BaseModel):
     counters: RewardCountersOut
     unlocked_count: int = 0
     total_count: int = 0
+    badge_count: int = 0
+    unlocked_badge_count: int = 0
     achievements: list[RewardAchievementOut] = Field(default_factory=list)
+    badges: list[RewardBadgeOut] = Field(default_factory=list)
     next_achievement: RewardAchievementOut | None = None
     recent_unlocks: list[RewardAchievementOut] = Field(default_factory=list)

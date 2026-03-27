@@ -181,9 +181,49 @@ export type AuthUser = {
   subscription_plan?: string | null;
   subscription_started_at?: string | null;
   subscription_renewal_at?: string | null;
+  billing_provider?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  stripe_checkout_session_id?: string | null;
 };
 export type AuthOut = { token: string; user: AuthUser };
 export type UserPatch = { email?: string; username?: string; avatar_preset?: string | null };
+export type BillingStatus = {
+  provider: string;
+  mode: string;
+  configured: boolean;
+  checkout_available: boolean;
+  portal_available: boolean;
+  dev_fallback_available: boolean;
+  message: string;
+  subscription_status: string;
+  billing_provider?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  stripe_checkout_session_id?: string | null;
+};
+export type BillingCheckoutSession = {
+  provider: string;
+  mode: string;
+  status: string;
+  checkout_url?: string | null;
+  session_id?: string | null;
+  customer_id?: string | null;
+  subscription_id?: string | null;
+  dev_fallback_available: boolean;
+  subscription_status: string;
+  plan?: string | null;
+  renewal_at?: string | null;
+  message?: string | null;
+};
+export type BillingPortalSession = {
+  provider: string;
+  mode: string;
+  status: string;
+  portal_url?: string | null;
+  customer_id?: string | null;
+  message?: string | null;
+};
 export type RewardCounters = {
   evidence_saved: number;
   profile_skills_confirmed: number;
@@ -203,11 +243,15 @@ export type RewardAchievement = {
   unlocked: boolean;
   unlocked_at?: string | null;
 };
+export type RewardBadge = RewardAchievement;
 export type RewardsSummary = {
   counters: RewardCounters;
   unlockedCount: number;
   totalCount: number;
   achievements: RewardAchievement[];
+  badges?: RewardBadge[];
+  badgeCount?: number;
+  unlockedBadgeCount?: number;
   nextAchievement: RewardAchievement | null;
   recentUnlocks: RewardAchievement[];
 };
@@ -224,6 +268,10 @@ function normalizeAuthUser(raw: any): AuthUser {
     subscription_plan: raw?.subscription_plan ? String(raw.subscription_plan).trim() : null,
     subscription_started_at: raw?.subscription_started_at ? String(raw.subscription_started_at) : null,
     subscription_renewal_at: raw?.subscription_renewal_at ? String(raw.subscription_renewal_at) : null,
+    billing_provider: raw?.billing_provider ? String(raw.billing_provider).trim() : null,
+    stripe_customer_id: raw?.stripe_customer_id ? String(raw.stripe_customer_id).trim() : null,
+    stripe_subscription_id: raw?.stripe_subscription_id ? String(raw.stripe_subscription_id).trim() : null,
+    stripe_checkout_session_id: raw?.stripe_checkout_session_id ? String(raw.stripe_checkout_session_id).trim() : null,
   };
 }
 
@@ -242,7 +290,9 @@ function normalizeRewardAchievement(raw: any): RewardAchievement {
   };
 }
 
-function normalizeRewardsSummary(raw: any): RewardsSummary {
+export function normalizeRewardsSummary(raw: any): RewardsSummary {
+  const achievements = asArray(raw?.achievements).map(normalizeRewardAchievement);
+  const badges = asArray(raw?.badges).length ? asArray(raw?.badges).map(normalizeRewardAchievement) : achievements;
   return {
     counters: {
       evidence_saved: Number(raw?.counters?.evidence_saved ?? 0) || 0,
@@ -253,7 +303,12 @@ function normalizeRewardsSummary(raw: any): RewardsSummary {
     },
     unlockedCount: Number(raw?.unlocked_count ?? 0) || 0,
     totalCount: Number(raw?.total_count ?? 0) || 0,
-    achievements: asArray(raw?.achievements).map(normalizeRewardAchievement),
+    achievements,
+    badges,
+    badgeCount: Number(raw?.badge_count ?? raw?.badgeCount ?? badges.length) || badges.length,
+    unlockedBadgeCount:
+      Number(raw?.unlocked_badge_count ?? raw?.unlockedBadgeCount ?? badges.filter((badge) => badge.unlocked).length) ||
+      badges.filter((badge) => badge.unlocked).length,
     nextAchievement: raw?.next_achievement ? normalizeRewardAchievement(raw.next_achievement) : null,
     recentUnlocks: asArray(raw?.recent_unlocks).map(normalizeRewardAchievement),
   };
@@ -547,6 +602,9 @@ export type TailoredResumeListEntry = {
 };
 
 export type TailoredResumeDetail = TailoredResumeListEntry & {
+  resume_snapshot_id?: string | null;
+  resume_evidence_id?: string | null;
+  template_source?: string | null;
   selected_skill_ids: string[];
   selected_item_ids: string[];
   retrieved_context?: RAGContextItem[];
@@ -794,6 +852,9 @@ export const api = {
   },
   patchMe: async (payload: UserPatch) => normalizeAuthUser(await request<AuthUser>("/auth/me", "PATCH", payload)),
   activateSubscription: async () => normalizeAuthUser(await request<AuthUser>("/auth/me/subscription", "POST")),
+  getBillingStatus: async () => request<BillingStatus>("/billing/status", "GET"),
+  createBillingCheckout: async () => request<BillingCheckoutSession>("/billing/checkout", "POST"),
+  createBillingPortal: async () => request<BillingPortalSession>("/billing/portal", "POST"),
   changeMyPassword: async (payload: { current_password: string; new_password: string }) => {
     const out = await request<AuthOut>("/auth/me/password", "POST", payload);
     out.user = normalizeAuthUser(out.user);
@@ -1156,7 +1217,7 @@ export const api = {
     return request<any>("/tailor/job/ingest", "POST", payload);
   },
 
-  matchJob: async (payload: { user_id?: string; job_id: string; history_id?: string; resume_snapshot_id?: string | null; ignored_skill_names?: string[]; added_from_missing_skills?: Array<{ skill_id: string; skill_name: string }>; persist_history?: boolean }) => {
+  matchJob: async (payload: { user_id?: string; job_id: string; history_id?: string; resume_snapshot_id?: string | null; resume_evidence_id?: string | null; ignored_skill_names?: string[]; added_from_missing_skills?: Array<{ skill_id: string; skill_name: string }>; persist_history?: boolean }) => {
     return request<any>("/tailor/match", "POST", payload);
   },
 
@@ -1225,7 +1286,7 @@ export const api = {
   launchAdminMlflowExperiment: (payload: AdminMlflowRunLaunchPayload) =>
     request<AdminMlflowJob>("/admin/mlflow/experiments/run", "POST", payload),
 
-  previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; resume_snapshot_id?: string | null; ignored_skill_names?: string[]; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
+  previewTailoredResume: async (payload: { user_id?: string; job_id?: string; job_text?: string; resume_snapshot_id?: string | null; resume_evidence_id?: string | null; ignored_skill_names?: string[]; template?: string; max_items?: number; max_bullets_per_item?: number }) => {
     return request<any>("/tailor/preview", "POST", payload);
   },
 

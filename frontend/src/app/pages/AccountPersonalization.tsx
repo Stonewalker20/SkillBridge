@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
-import { Check, MonitorCog, Palette, Sparkles, Upload } from "lucide-react";
+import { Check, Lock, MonitorCog, Palette, Sparkles, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -20,8 +20,9 @@ import { useActivity } from "../context/ActivityContext";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { useAccountPreferences, SIDEBAR_DENSITY_OPTIONS, START_PAGE_OPTIONS } from "../context/AccountPreferencesContext";
 import { AVATAR_PRESETS, avatarPresetClass, type AvatarPresetValue } from "../lib/avatarPresets";
-import { api } from "../services/api";
+import { api, type RewardsSummary } from "../services/api";
 import { AccountSectionNav } from "../components/AccountSectionNav";
+import { RewardBadgeCollection } from "../components/RewardBadgeCollection";
 
 function PreferenceRow({
   title,
@@ -58,16 +59,23 @@ export function AccountPersonalization() {
   const [email, setEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarPreset, setAvatarPreset] = useState<string | null>("midnight");
+  const [rewards, setRewards] = useState<RewardsSummary | null>(null);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const me = await api.me();
-        setUsername(me?.username || "");
-        setEmail(me?.email || "");
-        setAvatarUrl(me?.avatar_url || null);
-        setAvatarPreset(me?.avatar_preset || "midnight");
+        const [meResult, rewardsResult] = await Promise.allSettled([api.me(), api.getRewardsSummary()]);
+        if (meResult.status === "fulfilled") {
+          const me = meResult.value;
+          setUsername(me?.username || "");
+          setEmail(me?.email || "");
+          setAvatarUrl(me?.avatar_url || null);
+          setAvatarPreset(me?.avatar_preset || "midnight");
+        } else {
+          toast.error(meResult.reason?.message || "Failed to load personalization");
+        }
+        setRewards(rewardsResult.status === "fulfilled" ? rewardsResult.value : null);
       } catch (e: any) {
         toast.error(e?.message || "Failed to load personalization");
       } finally {
@@ -97,6 +105,9 @@ export function AccountPersonalization() {
     START_PAGE_OPTIONS.find((option) => option.value === preferences.startPage)?.label ?? "Dashboard";
   const densityLabel =
     SIDEBAR_DENSITY_OPTIONS.find((option) => option.value === preferences.sidebarDensity)?.label ?? "Comfortable";
+  const unlockedBadgeCount = rewards?.unlockedBadgeCount ?? rewards?.unlockedCount ?? 0;
+  const badgeCount = rewards?.badgeCount ?? rewards?.totalCount ?? rewards?.badges?.length ?? rewards?.achievements.length ?? 0;
+  const availableThemeCount = Math.min(themes.length, 3 + unlockedBadgeCount);
 
   const handleSelectAvatarPreset = async (preset: AvatarPresetValue) => {
     try {
@@ -136,6 +147,14 @@ export function AccountPersonalization() {
       name: "Workspace preferences reset",
     });
     toast.success("Workspace preferences reset");
+  };
+
+  const handleSelectTheme = (themeValue: (typeof themes)[number]["value"], isLocked: boolean) => {
+    if (isLocked) {
+      toast("Unlock more badges to use this theme.");
+      return;
+    }
+    setHeaderTheme(themeValue);
   };
 
   if (loading) {
@@ -251,18 +270,26 @@ export function AccountPersonalization() {
               </div>
             </div>
 
+            <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
+              {availableThemeCount}/{themes.length} header themes are available with {unlockedBadgeCount}/{badgeCount || rewards?.achievements.length || 0} badges unlocked.
+            </div>
+
             <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-3">
-              {themes.map((themeOption) => {
+              {themes.map((themeOption, index) => {
                 const isSelected = headerTheme === themeOption.value;
+                const isLocked = index >= availableThemeCount && !isSelected;
                 return (
                   <button
                     key={themeOption.value}
                     type="button"
-                    onClick={() => setHeaderTheme(themeOption.value)}
+                    onClick={() => handleSelectTheme(themeOption.value, isLocked)}
+                    disabled={isLocked}
                     className={`rounded-2xl border p-3 text-left transition ${
                       isSelected
                         ? "border-slate-900 bg-slate-50 shadow-sm dark:border-slate-100 dark:bg-slate-900"
-                        : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950/70 dark:hover:border-slate-500"
+                        : isLocked
+                          ? "border-slate-200 bg-white/70 opacity-70 dark:border-slate-800 dark:bg-slate-950/40"
+                          : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950/70 dark:hover:border-slate-500"
                     }`}
                     aria-pressed={isSelected}
                     aria-label={`Use ${themeOption.label}`}
@@ -289,9 +316,17 @@ export function AccountPersonalization() {
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{themeOption.label}</p>
-                      <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${themeOption.avatarClass} text-white`}>
-                        {initials}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {isLocked ? (
+                          <span className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                            <Lock className="h-3 w-3" />
+                            Locked
+                          </span>
+                        ) : null}
+                        <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${themeOption.avatarClass} text-white`}>
+                          {initials}
+                        </span>
+                      </div>
                     </div>
                   </button>
                 );
@@ -366,6 +401,20 @@ export function AccountPersonalization() {
         </div>
 
         <div className="space-y-6">
+          {rewards ? (
+            <RewardBadgeCollection
+              badges={rewards.badges ?? rewards.achievements}
+              unlockedCount={rewards.unlockedBadgeCount ?? rewards.unlockedCount}
+              totalCount={rewards.badgeCount ?? rewards.totalCount ?? rewards.achievements.length}
+            />
+          ) : (
+            <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+              <div className="text-sm text-slate-600 dark:text-slate-300">
+                Badge progress is unavailable right now, but your personalization settings are still available.
+              </div>
+            </Card>
+          )}
+
           <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
             <div className="mb-5 flex items-center gap-3">
               <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>

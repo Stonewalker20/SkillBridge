@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
 
 from app.core.auth import require_admin_user
 from app.core.db import get_db
@@ -24,6 +24,8 @@ from app.models.admin import (
     AdminUserRolePatch,
 )
 from app.utils.ai import get_inference_status
+from app.utils.role_weights import refresh_role_weights
+from app.utils.security import record_admin_audit_event
 from app.utils.mlflow_admin import (
     MlflowAdminUnavailable,
     get_mlflow_experiment_runs,
@@ -119,7 +121,12 @@ async def admin_list_users(limit: int = Query(default=250, ge=1, le=1000), _user
 
 
 @router.patch("/users/{user_id}", response_model=AdminUserOut)
-async def admin_update_user_role(user_id: str, payload: AdminUserRolePatch, current_user=Depends(require_admin_user)):
+async def admin_update_user_role(
+    user_id: str,
+    payload: AdminUserRolePatch,
+    request: Request,
+    current_user=Depends(require_admin_user),
+):
     db = get_db()
     try:
         user_oid = ObjectId(user_id)
@@ -139,11 +146,20 @@ async def admin_update_user_role(user_id: str, payload: AdminUserRolePatch, curr
 
     await db["users"].update_one({"_id": user_oid}, {"$set": {"role": next_role, "updated_at": now_utc()}})
     updated = await db["users"].find_one({"_id": user_oid}, {"email": 1, "username": 1, "role": 1, "is_active": 1, "created_at": 1, "deactivated_at": 1})
+    await record_admin_audit_event(
+        db,
+        actor=current_user,
+        action="admin.user.role_updated",
+        target_type="user",
+        target_id=user_id,
+        details={"role": next_role},
+        request=request,
+    )
     return serialize_user(updated)
 
 
 @router.delete("/users/{user_id}")
-async def admin_deactivate_user(user_id: str, current_user=Depends(require_admin_user)):
+async def admin_deactivate_user(user_id: str, request: Request, current_user=Depends(require_admin_user)):
     db = get_db()
     try:
         user_oid = ObjectId(user_id)
@@ -165,6 +181,15 @@ async def admin_deactivate_user(user_id: str, current_user=Depends(require_admin
         {"$set": {"is_active": False, "deactivated_at": now_utc(), "updated_at": now_utc()}},
     )
     await db["sessions"].delete_many({"user_id": user_oid})
+    await record_admin_audit_event(
+        db,
+        actor=current_user,
+        action="admin.user.deactivated",
+        target_type="user",
+        target_id=user_id,
+        details={"was_active": True},
+        request=request,
+    )
     return {"ok": True}
 
 
@@ -189,7 +214,7 @@ async def admin_list_jobs(
 
 
 @router.patch("/jobs/{job_id}/moderation", response_model=AdminJobOut)
-async def admin_moderate_job(job_id: str, payload: dict, _user=Depends(require_admin_user)):
+async def admin_moderate_job(job_id: str, payload: dict, request: Request, _user=Depends(require_admin_user)):
     db = get_db()
     try:
         job_oid = ObjectId(job_id)
@@ -210,6 +235,17 @@ async def admin_moderate_job(job_id: str, payload: dict, _user=Depends(require_a
         raise HTTPException(status_code=404, detail="Job not found")
 
     updated = await db["jobs"].find_one({"_id": job_oid})
+    for role_id in sorted({str(role_id).strip() for role_id in (updated.get("role_ids") or []) if str(role_id).strip()}):
+        await refresh_role_weights(db, role_id)
+    await record_admin_audit_event(
+        db,
+        actor=_user,
+        action="admin.job.moderation_updated",
+        target_type="job",
+        target_id=job_id,
+        details={"moderation_status": next_status},
+        request=request,
+    )
     return serialize_job(updated)
 
 
@@ -268,20 +304,42 @@ async def admin_mlflow_job(job_id: str, _user=Depends(require_admin_user)):
 
 
 @router.post("/mlflow/datasets/export", response_model=AdminMlflowJobOut)
-async def admin_launch_mlflow_dataset_export(payload: AdminMlflowExportLaunchIn, _user=Depends(require_admin_user)):
+async def admin_launch_mlflow_dataset_export(payload: AdminMlflowExportLaunchIn, request: Request, _user=Depends(require_admin_user)):
     try:
-        return AdminMlflowJobOut(**launch_eval_export_job(payload.model_dump()))
+        result = AdminMlflowJobOut(**launch_eval_export_job(payload.model_dump()))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Unable to launch dataset export: {exc}") from exc
+    db = get_db()
+    await record_admin_audit_event(
+        db,
+        actor=_user,
+        action="admin.mlflow.dataset_export_launched",
+        target_type="mlflow_job",
+        target_id=result.id,
+        details={"max_users": payload.max_users, "max_per_user": payload.max_per_user, "negative_count": payload.negative_count},
+        request=request,
+    )
+    return result
 
 
 @router.post("/mlflow/experiments/run", response_model=AdminMlflowJobOut)
-async def admin_launch_mlflow_experiment(payload: AdminMlflowRunLaunchIn, _user=Depends(require_admin_user)):
+async def admin_launch_mlflow_experiment(payload: AdminMlflowRunLaunchIn, request: Request, _user=Depends(require_admin_user)):
     try:
-        return AdminMlflowJobOut(**launch_mlflow_experiment_job(payload.model_dump()))
+        result = AdminMlflowJobOut(**launch_mlflow_experiment_job(payload.model_dump()))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Unable to launch MLflow experiment: {exc}") from exc
+    db = get_db()
+    await record_admin_audit_event(
+        db,
+        actor=_user,
+        action="admin.mlflow.experiment_launched",
+        target_type="mlflow_job",
+        target_id=result.id,
+        details={"experiment_name": payload.experiment_name, "dataset_id": payload.dataset_id},
+        request=request,
+    )
+    return result
