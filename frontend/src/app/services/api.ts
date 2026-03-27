@@ -383,6 +383,35 @@ function buildRewardAchievementsFromCounters(counters: RewardCounters, unlockedL
   });
 }
 
+async function buildFallbackRewardsSummary(): Promise<RewardsSummary> {
+  const [evidenceResult, profileResult, snapshotsResult, historyResult, tailoredResult] = await Promise.allSettled([
+    api.listEvidence(),
+    api.getProfileConfirmation(),
+    api.listResumeSnapshots(),
+    api.listJobMatchHistory(1000),
+    api.listTailoredResumes(1000),
+  ]);
+
+  const evidence =
+    evidenceResult.status === "fulfilled"
+      ? evidenceResult.value.filter((item) => String(item?.origin ?? "user").trim().toLowerCase() !== "system")
+      : [];
+  const confirmation = profileResult.status === "fulfilled" ? profileResult.value : null;
+  const snapshots = snapshotsResult.status === "fulfilled" ? snapshotsResult.value : [];
+  const history = historyResult.status === "fulfilled" ? historyResult.value : [];
+  const tailored = tailoredResult.status === "fulfilled" ? tailoredResult.value : [];
+
+  const counters: RewardCounters = {
+    evidence_saved: evidence.length,
+    profile_skills_confirmed: asArray(confirmation?.confirmed).length,
+    resume_snapshots_uploaded:
+      snapshots.length + evidence.filter((item) => String(item?.type ?? "").trim().toLowerCase() === "resume").length,
+    job_matches_run: history.length,
+    tailored_resumes_generated: tailored.length,
+  };
+  return normalizeRewardsSummary({ counters });
+}
+
 export function normalizeRewardsSummary(raw: any): RewardsSummary {
   const counters: RewardCounters = {
     evidence_saved: Number(raw?.counters?.evidence_saved ?? 0) || 0,
@@ -1281,8 +1310,12 @@ export const api = {
     };
   },
   getRewardsSummary: async (): Promise<RewardsSummary> => {
-    const raw = await request<any>("/rewards/summary", "GET");
-    return normalizeRewardsSummary(raw);
+    try {
+      const raw = await request<any>("/rewards/summary", "GET");
+      return normalizeRewardsSummary(raw);
+    } catch {
+      return buildFallbackRewardsSummary();
+    }
   },
 
   listRoles: () => request<any[]>("/roles/", "GET"),
