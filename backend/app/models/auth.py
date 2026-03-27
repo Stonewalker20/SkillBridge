@@ -25,6 +25,10 @@ class UserOut(BaseModel):
     subscription_plan: Optional[str] = None
     subscription_started_at: Optional[datetime] = None
     subscription_renewal_at: Optional[datetime] = None
+    billing_provider: Optional[str] = None
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    stripe_checkout_session_id: Optional[str] = None
 
 class AuthOut(BaseModel):
     token: str

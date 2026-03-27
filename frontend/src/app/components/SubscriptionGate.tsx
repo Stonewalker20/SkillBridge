@@ -16,6 +16,9 @@ type SubscriptionGateProps = {
   activating?: boolean;
   ctaHref?: string;
   ctaLabel?: string;
+  secondaryAction?: () => void | Promise<void>;
+  secondaryActionLabel?: string;
+  statusMessage?: string;
 };
 
 function formatRenewal(value?: string | null) {
@@ -36,6 +39,9 @@ export function SubscriptionGate({
   activating = false,
   ctaHref = "/app/account",
   ctaLabel,
+  secondaryAction,
+  secondaryActionLabel,
+  statusMessage,
 }: SubscriptionGateProps) {
   const isAdminRole = ["owner", "admin", "team"].includes(String(role ?? "").toLowerCase());
   const surfaceClass = compact
@@ -85,10 +91,10 @@ export function SubscriptionGate({
             </Badge>
           </div>
           <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            Unlock the platform with a mock subscription
+            Subscribe to unlock the platform
           </h3>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-            You can sign in and manage your account, but core workflow tools stay locked until you activate the subscription state.
+            You can sign in and manage your account, but core workflow tools stay locked until a live subscription is active.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {["Evidence", "Skills", "Job Match", "Tailored resumes"].map((item) => (
@@ -101,7 +107,7 @@ export function SubscriptionGate({
             {onActivate ? (
               <Button onClick={onActivate} disabled={activating} className="bg-[#1E3A8A] text-white hover:bg-[#1d4ed8]">
                 <Sparkles className="h-4 w-4" />
-                {activating ? "Activating..." : ctaLabel || "Activate subscription"}
+                {activating ? "Starting..." : ctaLabel || "Start checkout"}
               </Button>
             ) : (
               <Button asChild className="bg-[#1E3A8A] text-white hover:bg-[#1d4ed8]">
@@ -111,8 +117,13 @@ export function SubscriptionGate({
                 </Link>
               </Button>
             )}
+            {secondaryAction ? (
+              <Button type="button" variant="outline" onClick={secondaryAction} className="border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900">
+                {secondaryActionLabel || "Use dev fallback"}
+              </Button>
+            ) : null}
             <div className="text-sm text-slate-500 dark:text-slate-400">
-              This is a mocked activation flow. No payment processor is connected.
+              {statusMessage || "Billing connects through the backend. If Stripe is not configured, you can still use the development fallback locally."}
             </div>
           </div>
         </div>

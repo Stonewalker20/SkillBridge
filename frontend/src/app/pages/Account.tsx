@@ -42,8 +42,12 @@ export function Account() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingAI, setSavingAI] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
-  const [activatingSubscription, setActivatingSubscription] = useState(false);
+  const [startingBilling, setStartingBilling] = useState(false);
+  const [openingBillingPortal, setOpeningBillingPortal] = useState(false);
+  const [usingDevFallback, setUsingDevFallback] = useState(false);
   const [aiSettings, setAiSettings] = useState<any>(null);
+  const [billingStatus, setBillingStatus] = useState<any>(null);
+  const [billingMessage, setBillingMessage] = useState<string | null>(null);
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -62,7 +66,10 @@ export function Account() {
     const load = async () => {
       setLoading(true);
       try {
-        const me = await api.me();
+        const [me, billing] = await Promise.all([
+          api.me(),
+          api.getBillingStatus().catch(() => null),
+        ]);
         setUsername(me?.username || "");
         setEmail(me?.email || "");
         setAccountRole(me?.role || "user");
@@ -71,6 +78,8 @@ export function Account() {
         setSubscriptionRenewalAt(me?.subscription_renewal_at || null);
         setAvatarUrl(me?.avatar_url || null);
         setAvatarPreset(me?.avatar_preset || "midnight");
+        setBillingStatus(billing);
+        setBillingMessage(billing?.message ?? null);
         const hasAccess = ["owner", "admin", "team"].includes(String(me?.role ?? "").toLowerCase()) || String(me?.subscription_status ?? "").toLowerCase() === "active";
         setAiSettings(hasAccess ? await api.getAIPreferences().catch(() => null) : null);
       } catch (e: any) {
@@ -94,13 +103,87 @@ export function Account() {
   const isAdminRole = ["owner", "admin", "team"].includes(String(accountRole).toLowerCase());
   const hasSubscriptionAccess = isAdminRole || subscriptionStatus === "active";
 
-  const handleActivateSubscription = async () => {
-    setActivatingSubscription(true);
+  const refreshBillingState = async () => {
+    const [me, billing] = await Promise.all([
+      api.me(),
+      api.getBillingStatus().catch(() => null),
+    ]);
+    setUsername(me?.username || "");
+    setEmail(me?.email || "");
+    setAccountRole(me?.role || "user");
+    setSubscriptionStatus(me?.subscription_status || "inactive");
+    setSubscriptionPlan(me?.subscription_plan || null);
+    setSubscriptionRenewalAt(me?.subscription_renewal_at || null);
+    setBillingStatus(billing);
+    setBillingMessage(billing?.message ?? null);
+  };
+
+  const handleStartCheckout = async () => {
+    setStartingBilling(true);
+    setBillingMessage(null);
+    try {
+      const session = await api.createBillingCheckout();
+      setBillingStatus((current: any) => (current ? { ...current, ...session } : session));
+      setBillingMessage(session.message ?? null);
+      if (session.status === "created" && session.checkout_url) {
+        window.location.assign(session.checkout_url);
+        return;
+      }
+      if (session.status === "already_active") {
+        toast.success("Subscription already active");
+        await refreshBillingState();
+        const settings = await api.getAIPreferences().catch(() => null);
+        setAiSettings(settings);
+        await refreshUser();
+        return;
+      }
+      toast.error(session.message || "Checkout is not available yet");
+    } catch (e: any) {
+      const message = e?.message || "Failed to start checkout";
+      setBillingMessage(message);
+      toast.error(message);
+    } finally {
+      setStartingBilling(false);
+    }
+  };
+
+  const handleOpenBillingPortal = async () => {
+    setOpeningBillingPortal(true);
+    setBillingMessage(null);
+    try {
+      const portal = await api.createBillingPortal();
+      setBillingMessage(portal.message ?? null);
+      if (portal.status === "created" && portal.portal_url) {
+        window.location.assign(portal.portal_url);
+        return;
+      }
+      toast.error(portal.message || "Billing portal is not available");
+    } catch (e: any) {
+      const message = e?.message || "Failed to open billing portal";
+      setBillingMessage(message);
+      toast.error(message);
+    } finally {
+      setOpeningBillingPortal(false);
+    }
+  };
+
+  const handleUseDevFallback = async () => {
+    setUsingDevFallback(true);
+    setBillingMessage(null);
     try {
       const updated = await api.activateSubscription();
       setSubscriptionStatus(updated.subscription_status || "active");
       setSubscriptionPlan(updated.subscription_plan || "pro");
       setSubscriptionRenewalAt(updated.subscription_renewal_at || null);
+      setBillingStatus((current: any) => ({
+        ...(current || {}),
+        billing_provider: updated.billing_provider || "mock",
+        stripe_customer_id: updated.stripe_customer_id ?? null,
+        stripe_subscription_id: updated.stripe_subscription_id ?? null,
+        stripe_checkout_session_id: updated.stripe_checkout_session_id ?? null,
+        subscription_status: updated.subscription_status || "active",
+        message: "Development fallback activated.",
+      }));
       const settings = await api.getAIPreferences().catch(() => null);
       setAiSettings(settings);
       await refreshUser();
@@ -110,11 +193,11 @@ export function Account() {
         action: "activated",
         name: "Subscription activated",
       });
-      toast.success("Subscription activated");
+      toast.success("Development fallback activated");
     } catch (e: any) {
-      toast.error(e?.message || "Failed to activate subscription");
+      toast.error(e?.message || "Failed to activate the development fallback");
     } finally {
-      setActivatingSubscription(false);
+      setUsingDevFallback(false);
     }
   };
 
@@ -271,10 +354,45 @@ export function Account() {
         renewalAt={subscriptionRenewalAt}
         role={accountRole}
         compact
-        onActivate={hasSubscriptionAccess ? undefined : handleActivateSubscription}
-        activating={activatingSubscription}
-        ctaLabel="Activate subscription"
+        onActivate={hasSubscriptionAccess ? undefined : handleStartCheckout}
+        activating={startingBilling}
+        ctaLabel="Start checkout"
+        secondaryAction={billingStatus?.dev_fallback_available ? handleUseDevFallback : undefined}
+        secondaryActionLabel="Use dev fallback"
+        statusMessage={billingMessage || billingStatus?.message || undefined}
       />
+
+      {!hasSubscriptionAccess ? (
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Billing status</h3>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                Use Stripe checkout when billing is configured. If Stripe is missing in local development, the explicit fallback stays available.
+              </p>
+              <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                <p>Provider: {billingStatus?.provider || "stripe"}</p>
+                <p>Mode: {billingStatus?.mode || "unavailable"}</p>
+                {billingStatus?.stripe_customer_id ? <p>Customer id: {billingStatus.stripe_customer_id}</p> : null}
+                {billingStatus?.stripe_subscription_id ? <p>Subscription id: {billingStatus.stripe_subscription_id}</p> : null}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={handleStartCheckout} disabled={startingBilling} className={activeHeaderTheme.buttonClass}>
+                {startingBilling ? "Starting checkout..." : "Start checkout"}
+              </Button>
+              <Button variant="outline" onClick={handleOpenBillingPortal} disabled={openingBillingPortal || !billingStatus?.portal_available}>
+                {openingBillingPortal ? "Opening..." : "Open billing portal"}
+              </Button>
+              {billingStatus?.dev_fallback_available ? (
+                <Button variant="secondary" onClick={handleUseDevFallback} disabled={usingDevFallback}>
+                  {usingDevFallback ? "Applying fallback..." : "Use dev fallback"}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
@@ -414,11 +532,16 @@ export function Account() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm text-slate-600 dark:text-slate-300">
-                    AI settings unlock after you activate the subscription. That keeps the core workspace gated until the account is subscribed.
+                    AI settings unlock after your subscription is active. That keeps the core workspace gated until billing is live.
                   </p>
-                  <Button onClick={handleActivateSubscription} disabled={activatingSubscription} className={activeHeaderTheme.buttonClass}>
-                    {activatingSubscription ? "Activating..." : "Activate subscription"}
+                  <Button onClick={handleStartCheckout} disabled={startingBilling} className={activeHeaderTheme.buttonClass}>
+                    {startingBilling ? "Starting checkout..." : "Start checkout"}
                   </Button>
+                  {billingStatus?.dev_fallback_available ? (
+                    <Button variant="outline" onClick={handleUseDevFallback} disabled={usingDevFallback}>
+                      {usingDevFallback ? "Applying fallback..." : "Use dev fallback"}
+                    </Button>
+                  ) : null}
                 </div>
               )}
             </div>

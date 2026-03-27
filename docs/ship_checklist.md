@@ -20,8 +20,10 @@ This checklist is the current path from local project to a production-ready rele
 
 ## 3. Storage And Media
 
-- [ ] Replace local avatar/file storage with cloud object storage.
-- [ ] Add signed or stable public media URLs.
+- [x] Abstract avatar/file storage behind a provider interface.
+- [x] Add an S3/R2-compatible storage path behind environment variables.
+- [x] Keep local storage working for development.
+- [ ] Provision a real cloud bucket and public media URL for staging and production.
 - [ ] Verify uploaded media caching and invalidation behavior in production.
 
 ## 4. Security
@@ -34,14 +36,14 @@ This checklist is the current path from local project to a production-ready rele
 
 ## 5. Observability
 
-- [ ] Add structured backend request logging.
+- [x] Add structured backend request logging.
 - [ ] Add error tracking for backend and frontend.
 - [ ] Add uptime checks for frontend and backend.
 - [ ] Add latency monitoring for job match, resume tailoring, and auth flows.
 
 ## 6. Quality Gates
 
-- [ ] Make backend tests, frontend build, and API contract tests run in CI on every push.
+- [x] Make backend tests, frontend lint/test/build, and API contract tests run in CI on every push.
 - [ ] Add a staging smoke test covering signup, login, evidence, job match, and tailored resume generation.
 - [ ] Add a release gate for MLflow results using frozen eval sets and target score thresholds.
 
@@ -52,6 +54,14 @@ This checklist is the current path from local project to a production-ready rele
 - [ ] Run a small private beta and collect failure cases.
 - [ ] Use beta findings to tighten onboarding, clarity, and model output quality.
 
+## Draft Launch Artifacts
+
+- [Privacy Policy Draft](./privacy_policy_draft.md)
+- [Terms Draft](./terms_draft.md)
+- [Data Retention Policy Draft](./data_retention_policy_draft.md)
+- [Release Runbook Checklist](./release_runbook_checklist.md)
+- [Launch Plan Draft](./launch_plan.md)
+
 ## In Progress Right Now
 
 The first ship item is underway:
@@ -59,6 +69,8 @@ The first ship item is underway:
 - `APP_ENV`, `ALLOWED_ORIGINS`, `PUBLIC_APP_URL`, and `PUBLIC_API_URL` are now part of the environment contract.
 - Example env files now exist for root development use plus backend staging and production.
 - Backend startup now fails fast when staging or production still points at localhost.
+- Backend request logging is now structured and includes request IDs.
+- GitHub Actions now runs backend tests plus frontend lint, tests, and build validation.
 
 ## Recommended Next Action
 

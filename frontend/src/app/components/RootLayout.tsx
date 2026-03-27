@@ -191,7 +191,7 @@ export function RootLayout() {
                 role={user?.role}
                 compact
                 ctaHref="/app/account"
-                ctaLabel="Manage subscription"
+                ctaLabel="Manage billing"
               />
             </div>
           ) : preferences.showQuickActions ? (

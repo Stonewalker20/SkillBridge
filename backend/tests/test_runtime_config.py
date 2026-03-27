@@ -39,3 +39,33 @@ def test_runtime_validation_allows_cloud_staging_values() -> None:
     )
 
     assert settings.validate_runtime_settings() == []
+
+
+def test_runtime_validation_requires_s3_media_settings() -> None:
+    settings = Settings(
+        app_env="production",
+        allowed_origins="https://skillbridge.app",
+        mongo_uri="mongodb+srv://cluster.example.mongodb.net",
+        public_app_url="https://skillbridge.app",
+        public_api_url="https://api.skillbridge.app",
+        media_storage_mode="s3",
+    )
+
+    issues = settings.validate_runtime_settings()
+
+    assert "MEDIA_S3_ENDPOINT_URL is required when MEDIA_STORAGE_MODE=s3." in issues
+    assert "MEDIA_S3_BUCKET is required when MEDIA_STORAGE_MODE=s3." in issues
+    assert "MEDIA_S3_REGION is required when MEDIA_STORAGE_MODE=s3." in issues
+    assert "MEDIA_S3_ACCESS_KEY_ID is required when MEDIA_STORAGE_MODE=s3." in issues
+    assert "MEDIA_S3_SECRET_ACCESS_KEY is required when MEDIA_STORAGE_MODE=s3." in issues
+
+
+def test_runtime_validation_rejects_invalid_media_mode() -> None:
+    settings = Settings(
+        allowed_origins="https://skillbridge.app",
+        media_storage_mode="not-a-real-mode",
+    )
+
+    issues = settings.validate_runtime_settings()
+
+    assert "MEDIA_STORAGE_MODE must be either local or s3." in issues

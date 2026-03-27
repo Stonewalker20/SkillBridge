@@ -1,5 +1,10 @@
 """Smoke tests covering authentication flows and health endpoints."""
 
+from bson import ObjectId
+from pathlib import Path
+
+from app.core.config import settings
+
 def test_health_endpoints(test_context):
     client = test_context["client"]
     assert client.get("/health/").status_code == 200
@@ -43,6 +48,8 @@ def test_auth_register_login_profile_and_logout(test_context):
     first_avatar_url = uploaded.json()["avatar_url"]
     assert first_avatar_url.startswith("/media/avatars/")
     assert uploaded.json()["avatar_preset"] is None
+    first_avatar_name = first_avatar_url.rsplit("/", 1)[-1]
+    assert (Path(settings.user_avatar_upload_path) / first_avatar_name).exists()
 
     uploaded_again = client.post(
         "/auth/me/avatar",
@@ -50,8 +57,11 @@ def test_auth_register_login_profile_and_logout(test_context):
         files={"file": ("avatar.png", b"updated-image-content", "image/png")},
     )
     assert uploaded_again.status_code == 200
-    assert uploaded_again.json()["avatar_url"].startswith("/media/avatars/")
-    assert uploaded_again.json()["avatar_url"] != first_avatar_url
+    second_avatar_url = uploaded_again.json()["avatar_url"]
+    assert second_avatar_url.startswith("/media/avatars/")
+    assert second_avatar_url != first_avatar_url
+    assert not (Path(settings.user_avatar_upload_path) / first_avatar_name).exists()
+    assert (Path(settings.user_avatar_upload_path) / second_avatar_url.rsplit("/", 1)[-1]).exists()
 
     logout = client.post("/auth/logout", headers=auth_headers)
     assert logout.status_code == 200
@@ -136,3 +146,37 @@ def test_password_change_verifies_current_password_and_rotates_session(test_cont
 
     new_login = client.post("/auth/login", json={"email": "tester@example.com", "password": "newpassword123"})
     assert new_login.status_code == 200
+
+
+def test_auth_login_is_rate_limited_per_identity(test_context):
+    client = test_context["client"]
+    email = "tester@example.com"
+
+    for _ in range(8):
+        response = client.post("/auth/login", json={"email": email, "password": "wrong-password"})
+        assert response.status_code == 401
+
+    limited = client.post("/auth/login", json={"email": email, "password": "wrong-password"})
+    assert limited.status_code == 429
+    assert limited.json()["detail"] == "Rate limit exceeded"
+
+
+def test_sessions_with_missing_expiry_are_rejected_and_removed(test_context):
+    client = test_context["client"]
+    db = test_context["db"]
+    user_id = db["users"].docs[0]["_id"]
+    session_id = ObjectId()
+    db["sessions"].docs.append(
+        {
+            "_id": session_id,
+            "user_id": user_id,
+            "token": "missing-expiry-token",
+            "created_at": db["sessions"].docs[0]["created_at"],
+            "expires_at": None,
+        }
+    )
+
+    response = client.get("/auth/me", headers={"Authorization": "Bearer missing-expiry-token"})
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid token"
+    assert all(doc["token"] != "missing-expiry-token" for doc in db["sessions"].docs)

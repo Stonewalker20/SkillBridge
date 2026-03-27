@@ -100,9 +100,15 @@ async def require_user(authorization: Optional[str] = Header(default=None)) -> D
     if not sess:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    created_at = normalize_exp(sess.get("created_at"))
     exp = normalize_exp(sess.get("expires_at"))
-    if exp and exp < now_utc():
-        # best-effort cleanup
+    if not created_at or not exp:
+        await db["sessions"].delete_one({"_id": sess["_id"]})
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if exp < created_at or exp > created_at + timedelta(days=TOKEN_TTL_DAYS):
+        await db["sessions"].delete_one({"_id": sess["_id"]})
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if exp <= now_utc():
         await db["sessions"].delete_one({"_id": sess["_id"]})
         raise HTTPException(status_code=401, detail="Token expired")
 
