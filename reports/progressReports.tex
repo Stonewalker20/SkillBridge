@@ -199,20 +199,18 @@
 % WEEK 6 (PR6)
 % =========================================================
 \WeekReport{6}{March 11 -- March 17, 2026}{
-Week 6 focused on closing the remaining gaps from the original capstone use case plan while also extending SkillBridge’s taxonomy and role intelligence capabilities. The team implemented the missing skill detail workflow with linked evidence and projects, the persistence of confirmed resume-derived entities into dashboard records, and the admin-side role tagging, role skill-weight aggregation, and taxonomy maintenance features. These additions were validated through API execution, MongoDB persistence, and downstream visibility in the system.
+Week 6 focused on extending SkillBridge with three straightforward portfolio and admin workflows that fit the original capstone plan cleanly. The team implemented a skill detail view with linked evidence and projects, admin-side role tagging for job postings, and taxonomy maintenance for aliases and relationships. These additions were validated through API execution, MongoDB persistence, and downstream visibility in the system.
 }{
 Justin Elia & Assisted with validation and testing for skill detail joins and role tagging flows & Swagger + Compass verification \\
 Spencer Roeren & Frontend and report alignment support for skills, dashboard, and taxonomy views & UI review and report polishing \\
-Cordell Stonecipher & Implemented backend endpoints, aggregation logic, persistence flows, and validation for PR6 use cases & Images: Swagger + Compass + report updates \\
+Cordell Stonecipher & Implemented backend endpoints, linking logic, taxonomy flows, and validation for PR6 use cases & Images: Swagger + Compass + report updates \\
 }
 
 \subsection*{Week 6 -- Implemented Use Cases}
 \addcontentsline{toc}{subsection}{Week 6 -- Implemented Use Cases}
 \begin{itemize}
   \item \textbf{UC 2.3 -- View Skill Detail Page with Linked Projects/Evidence}
-  \item \textbf{UC 3.4 -- Save Confirmed Resume-Derived Skills/Projects into Dashboard Entities}
   \item \textbf{UC 4.2 -- Tag a Posting by Role}
-  \item \textbf{UC 4.3 -- Aggregate Postings by Role and Compute Skill Weights}
   \item \textbf{UC 4.4 -- Maintain Taxonomy: Skill Aliases and Relationships}
 \end{itemize}
 
@@ -225,19 +223,9 @@ Cordell Stonecipher & Implemented backend endpoints, aggregation logic, persiste
   {UC 2.3 -- Skill Detail + Linked Evidence/Projects}
 
 \MultiImagePageTwo{6}
-  {images/pr3_compass_confirm_doc.png}{Swagger: confirmed resume mappings persisted for UC 3.4}
-  {images/SB_Dashboard.png}{Frontend: dashboard entities reflecting saved confirmed resume-derived items for UC 3.4}
-  {UC 3.4 -- Confirmed Resume Persistence + Dashboard Entities}
-
-\MultiImagePageTwo{6}
   {images/pr5_moderate_job_frontend.png.png}{Frontend / admin job review view used to tag a posting by role for UC 4.2}
   {images/pr5_use_case_diagram_highlighted.png}{Use case diagram placeholder to be replaced with PR6 highlighted use cases}
   {UC 4.2 -- Role Tagging + Diagram Placeholder}
-
-\MultiImagePageTwo{6}
-  {images/pr5_link_skill_project_swagger.png.png}{Swagger placeholder to be replaced with UC 4.3 role-weight computation endpoint execution}
-  {images/pr5_link_skill_project_db.png.png}{MongoDB Compass placeholder to be replaced with role\_skill\_weights collection output}
-  {UC 4.3 -- Swagger + Database Placeholder}
 
 \MultiImagePageTwo{6}
   {images/pr5_add_skill_swagger.png.png}{Swagger placeholder to be replaced with alias / relation taxonomy endpoint execution}
@@ -268,37 +256,6 @@ db.skills.aggregate([
 \end{verbatim}
 
 \noindent
-\textbf{UC 3.4 -- Save Confirmed Resume-Derived Skills/Projects into Dashboard Entities}
-\begin{verbatim}
-db.resume_skill_confirmations.findOne({
-  user_id: "student1",
-  resume_snapshot_id: ObjectId("<snapshot_id>")
-})
-
-db.skills.updateOne(
-  { user_id: "student1", name: "FastAPI" },
-  {
-    $setOnInsert: {
-      category: "Backend Development",
-      created_at: new Date()
-    },
-    $set: { updated_at: new Date() }
-  },
-  { upsert: true }
-)
-
-db.evidence.insertOne({
-  user_id: "student1",
-  title: "Resume-confirmed FastAPI experience",
-  type: "resume",
-  skill_ids: [ObjectId("<skill_id>")],
-  origin: "resume_confirmation",
-  created_at: new Date(),
-  updated_at: new Date()
-})
-\end{verbatim}
-
-\noindent
 \textbf{UC 4.2 -- Tag a Posting by Role}
 \begin{verbatim}
 db.jobs.updateOne(
@@ -307,30 +264,6 @@ db.jobs.updateOne(
     $addToSet: { role_ids: "<role_id>" },
     $set: { updated_at: new Date() }
   }
-)
-\end{verbatim}
-
-\noindent
-\textbf{UC 4.3 -- Aggregate Postings by Role and Compute Skill Weights}
-\begin{verbatim}
-db.jobs.find(
-  { moderation_status: "approved", role_ids: "<role_id>" },
-  { required_skill_ids: 1 }
-)
-
-db.role_skill_weights.updateOne(
-  { role_id: ObjectId("<role_id>") },
-  {
-    $set: {
-      role_id: ObjectId("<role_id>"),
-      role_name: "<role_name>",
-      computed_at: new Date(),
-      weights: [
-        { skill_id: "<skill_id>", skill_name: "<skill_name>", weight: 0.75 }
-      ]
-    }
-  },
-  { upsert: true }
 )
 \end{verbatim}
 
@@ -363,16 +296,8 @@ db.skill_relations.insertOne({
 This use case gives users a single skill-centered view that brings together the projects and evidence items supporting that skill. It makes the portfolio more navigable and turns each skill into a traceable record instead of an isolated label.
 
 \noindent
-\textbf{UC 3.4 -- Save Confirmed Resume-Derived Skills/Projects into Dashboard Entities:}
-This use case takes the user-confirmed results from resume analysis and persists them into the core dashboard entities used elsewhere in the system. That step is what turns temporary confirmation output into reusable portfolio data for later dashboard, evidence, and project workflows.
-
-\noindent
 \textbf{UC 4.2 -- Tag a Posting by Role:}
 This use case allows the system to attach one or more role identifiers to a job posting. Once tagged, those postings can be reused in role-level analytics and grouped with similar jobs for downstream weighting logic.
-
-\noindent
-\textbf{UC 4.3 -- Aggregate Postings by Role and Compute Skill Weights:}
-This use case derives skill weights for a role from approved job postings already tagged to that role. It provides a reusable role profile that helps analytics and learning-path features surface which skills matter most for a given role.
 
 \noindent
 \textbf{UC 4.4 -- Maintain Taxonomy: Skill Aliases and Relationships:}
