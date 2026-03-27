@@ -23,6 +23,8 @@ const EVIDENCE_TYPES = [
   { value: "cert", label: "Certification" },
   { value: "other", label: "Other" },
 ] as const;
+const DEFAULT_EVIDENCE_TYPE = "project";
+const EVIDENCE_TYPE_VALUES = new Set(EVIDENCE_TYPES.map((option) => option.value));
 
 const FULL_TEXT_CHUNK_SIZE = 1400;
 const DRAFT_TEXT_COLLAPSED_ROWS = 8;
@@ -33,7 +35,7 @@ type AnalysisSelectionMap = Record<string, string[]>;
 const REWARD_ACTIONS: Record<string, { href: string; label: string }> = {
   evidence_saved: { href: "/app/evidence", label: "Add another" },
   profile_skills_confirmed: { href: "/app/skills", label: "Confirm skills" },
-  resume_snapshots_uploaded: { href: "/app/jobs", label: "Upload resume" },
+  resume_snapshots_uploaded: { href: "/app/evidence?add=1&type=resume", label: "Add resume evidence" },
   job_matches_run: { href: "/app/jobs", label: "Run job match" },
   tailored_resumes_generated: { href: "/app/jobs", label: "Generate resume" },
 };
@@ -70,7 +72,7 @@ export function Evidence() {
   const [draft, setDraft] = useState({
     id: "",
     title: "",
-    type: "project",
+    type: DEFAULT_EVIDENCE_TYPE,
     text: "",
     url: "",
   });
@@ -131,6 +133,10 @@ export function Evidence() {
 
   useEffect(() => {
     if (searchParams.get("add") === "1") {
+      const requestedType = String(searchParams.get("type") || "").trim().toLowerCase();
+      if (EVIDENCE_TYPE_VALUES.has(requestedType)) {
+        setDraft((current) => (current.id || current.type === requestedType ? current : { ...current, type: requestedType }));
+      }
       setIsAddOpen(true);
     }
   }, [searchParams]);
@@ -170,7 +176,7 @@ export function Evidence() {
   }, [items, filteredItems.length]);
 
   const resetDraft = () => {
-    setDraft({ id: "", title: "", type: "project", text: "", url: "" });
+    setDraft({ id: "", title: "", type: DEFAULT_EVIDENCE_TYPE, text: "", url: "" });
     setFiles([]);
     setAnalysisItems([]);
     setSelectedSkillIdsByAnalysis({});
@@ -197,7 +203,7 @@ export function Evidence() {
     setDraft({
       id: item.id,
       title: item.title || "",
-      type: item.type || "project",
+      type: item.type || DEFAULT_EVIDENCE_TYPE,
       text: item.text_excerpt || item.description || "",
       url: item.source && /^https?:\/\//i.test(item.source) ? item.source : "",
     });
@@ -206,7 +212,7 @@ export function Evidence() {
       {
         analysis_id: analysisId,
         title: item.title || "",
-        type: item.type || "project",
+        type: item.type || DEFAULT_EVIDENCE_TYPE,
         source: item.source || "manual-entry",
         text_excerpt: item.text_excerpt || item.description || "",
         filename: null,
@@ -306,10 +312,13 @@ export function Evidence() {
     if (!String(skill.skill_id || "").startsWith("candidate:")) {
       return skill.skill_id;
     }
+    const normalizedName = skill.skill_name.trim().toLowerCase();
     const existing = await api.listSkills({ q: skill.skill_name, limit: 50 });
-    const exactMatch = existing.find(
-      (entry) => entry.name?.trim().toLowerCase() === skill.skill_name.trim().toLowerCase()
-    );
+    const exactMatch = existing.find((entry) => {
+      const entryName = entry.name?.trim().toLowerCase();
+      if (entryName === normalizedName) return true;
+      return (entry.aliases || []).some((alias) => alias?.trim().toLowerCase() === normalizedName);
+    });
     if (exactMatch?.id) {
       return exactMatch.id;
     }
@@ -321,7 +330,11 @@ export function Evidence() {
       return created.id;
     } catch (error) {
       const existing = await api.listSkills({ q: skill.skill_name, limit: 50 });
-      const match = existing.find((entry) => entry.name?.trim().toLowerCase() === skill.skill_name.trim().toLowerCase());
+      const match = existing.find((entry) => {
+        const entryName = entry.name?.trim().toLowerCase();
+        if (entryName === normalizedName) return true;
+        return (entry.aliases || []).some((alias) => alias?.trim().toLowerCase() === normalizedName);
+      });
       if (match?.id) {
         return match.id;
       }
@@ -531,9 +544,10 @@ export function Evidence() {
               setIsAddOpen(open);
               if (!open) {
                 resetDraft();
-                if (searchParams.get("add") === "1") {
+                if (searchParams.get("add") === "1" || searchParams.get("type")) {
                   const next = new URLSearchParams(searchParams);
                   next.delete("add");
+                  next.delete("type");
                   setSearchParams(next, { replace: true });
                 }
               }

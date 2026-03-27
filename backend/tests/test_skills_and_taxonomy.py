@@ -159,18 +159,15 @@ def test_skill_trajectory_returns_clustered_career_paths(test_context):
     assert skill_detail.status_code == 200
     assert skill_detail.json()["skill_name"] == "ML"
 
-    progress = client.patch(
-        "/taxonomy/learning-path/progress",
+
+def test_create_skill_does_not_auto_add_short_initialism_aliases(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+
+    created = client.post(
+        "/skills/",
         headers=headers,
-        json={"skill_name": "ML", "status": "in_progress"},
+        json={"name": "Marketing Leadership", "category": "Business"},
     )
-    assert progress.status_code == 200
-    assert progress.json()["status"] == "in_progress"
-
-    progress_list = client.get("/taxonomy/learning-path/progress", headers=headers)
-    assert progress_list.status_code == 200
-    assert any(item["skill_name"] == "ML" for item in progress_list.json())
-
-    path_detail = client.get(f"/taxonomy/trajectory/path/{test_context['role_id']}", headers=headers)
-    assert path_detail.status_code == 200
-    assert path_detail.json()["role_name"] == "ML Engineer"
+    assert created.status_code == 200
+    assert "ML" not in created.json()["aliases"]

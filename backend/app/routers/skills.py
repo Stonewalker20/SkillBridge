@@ -98,6 +98,40 @@ def serialize_skill(doc: dict, current_user_oid: ObjectId | None = None) -> dict
         "merged_ids": doc.get("merged_ids", [oid_str(doc["_id"])]),
     }
 
+
+async def _find_visible_skill_match_by_exact_term(db, term: str, current_user_oid: ObjectId | None) -> dict | None:
+    normalized_term = normalize_skill_text(term)
+    if not normalized_term:
+        return None
+
+    docs = await (
+        db["skills"]
+        .find(
+            {},
+            {
+                "name": 1,
+                "category": 1,
+                "aliases": 1,
+                "tags": 1,
+                "proficiency": 1,
+                "last_used_at": 1,
+                "origin": 1,
+                "created_by_user_id": 1,
+                "hidden": 1,
+            },
+        )
+        .sort([("name", 1), ("category", 1), ("_id", 1)])
+        .to_list(length=20000)
+    )
+    visible_docs = [doc for doc in docs if not is_hidden_skill(doc)]
+    merged_docs = merge_skill_docs(visible_docs, current_user_oid)
+    for doc in merged_docs:
+        if normalize_skill_text(doc.get("name")) == normalized_term:
+            return doc
+        if any(normalize_skill_text(alias) == normalized_term for alias in (doc.get("aliases") or [])):
+            return doc
+    return None
+
 @router.get("/", response_model=list[SkillOut])
 async def list_skills(
     q: str | None = Query(default=None, description="Search skill name"),
@@ -163,6 +197,10 @@ async def create_skill(payload: SkillIn, user=Depends(require_user)):
         raise HTTPException(status_code=400, detail="Skill name is required")
     if not category:
         raise HTTPException(status_code=400, detail="Skill category is required")
+
+    existing_visible_match = await _find_visible_skill_match_by_exact_term(db, name, user.get("_id"))
+    if existing_visible_match is not None:
+        return serialize_skill(existing_visible_match, user.get("_id"))
 
     norm_aliases = expand_alias_variants(normalize_str_list(aliases), base_name=name)
     norm_tags = normalize_str_list(payload.tags)

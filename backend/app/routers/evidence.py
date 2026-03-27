@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, HTTPException, Depends, UploadFile, File, Form
+from fastapi import APIRouter, Query, HTTPException, Depends, UploadFile, File, Form, Request
 from app.core.auth import require_user
 from datetime import datetime, timezone
 from app.core.db import get_db
@@ -10,6 +10,7 @@ from app.models.evidence import EvidenceIn, EvidenceOut, EvidencePatch
 from app.utils.ai import extract_skill_candidates, embed_texts, cosine_similarity, normalize_ai_preferences
 from app.utils.rag import delete_rag_document, sync_rag_document
 from app.utils.rewards import increment_reward_counter
+from app.utils.security import AI_RATE_LIMITS, build_rate_limit_identifier, enforce_rate_limit
 from app.utils.skill_catalog import (
     build_canonical_skill_index,
     lexical_skill_similarity,
@@ -226,6 +227,8 @@ async def extract_skill_matches(db, text: str, ai_preferences: dict | None = Non
         for token, matched_on in candidates:
             if not token:
                 continue
+            if matched_on == "alias" and should_use_strict_exact_match(token) and normalize_skill_text(token) != normalize_skill_text(name):
+                continue
             pattern = rf"(?<![A-Za-z0-9]){re.escape(token.lower())}(?![A-Za-z0-9])"
             if re.search(pattern, lowered):
                 best = matched_on
@@ -297,6 +300,10 @@ async def extract_skill_matches(db, text: str, ai_preferences: dict | None = Non
                 }
             continue
 
+        if strict_exact:
+            # Do not invent short/acronym skills like "ML" unless they resolve to the live catalog.
+            continue
+
         synthetic_id = "candidate:" + sha1(candidate_name.lower().encode("utf-8")).hexdigest()[:12]
         confidence = await _compute_skill_confidence(
             lowered,
@@ -332,6 +339,7 @@ def build_analysis_item(title: str, evidence_type: str, source: str, text: str, 
 
 @router.post("/analyze")
 async def analyze_evidence(
+    request: Request,
     title: str | None = Form(default=None),
     type: str = Form(default="project"),
     text: str | None = Form(default=None),
@@ -341,6 +349,13 @@ async def analyze_evidence(
     user=Depends(require_user),
 ):
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="ai.evidence_analyze",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AI_RATE_LIMITS["evidence_analyze"][0],
+        window_seconds=AI_RATE_LIMITS["evidence_analyze"][1],
+    )
     ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
     upload_list = [upload for upload in (files or []) if upload is not None]
     if file is not None:
