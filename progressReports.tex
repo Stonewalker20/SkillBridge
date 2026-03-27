@@ -361,7 +361,206 @@ The repository does not currently contain the actual midterm screenshots. The bo
 \end{enumerate}
 
 % =========================================================
-% WEEK 4 (PR4) -- MOST RECENT
+% WEEK 6 (PR6) -- MOST RECENT
+% =========================================================
+\WeekReport{6}{March 11 -- March 17, 2026}{
+Week 6 focused on role intelligence and taxonomy maintenance. SkillBridge now supports computing role-specific skill weights from approved job postings, maintaining skill aliases as part of the shared taxonomy, and storing explicit relationships between skills so the analytics and role-matching layers can reason over a cleaner graph.
+}{
+Justin Elia & Validation support for role aggregation evidence & \\
+Spencer Roeren & Report review and taxonomy UI alignment support & \\
+Cordell Stonecipher & Implemented UC 4.3 and UC 4.4 endpoints + aggregation logic + testing + report updates & (Artifacts: roles/taxonomy routes + tests + report updates) \\
+}
+
+\subsection*{Week 6 -- Implemented Use Cases}
+\addcontentsline{toc}{subsection}{Week 6 -- Implemented Use Cases}
+\begin{itemize}
+  \item \textbf{UC 4.3 -- Aggregate Postings by Role and Compute Skill Weights}
+  \item \textbf{UC 4.4 -- Maintain Skill Aliases}
+  \item \textbf{UC 4.4 -- Maintain Skill Relationships}
+\end{itemize}
+
+\subsection*{Week 6 -- Screenshots of Implemented Features}
+\addcontentsline{toc}{subsection}{Week 6 -- Screenshots of Implemented Features}
+\noindent
+The PR6 screenshots have not been exported into the repository yet. The boxes below are compile-safe placeholders for the final report draft.
+
+\begin{figure}[H]
+  \centering
+  \begin{tabular}{cc}
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 4.3 Placeholder\\Role weight computation response\\and role\_skill\_weights collection view}} &
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 4.4 Placeholder\\Alias update request\\and updated skills document}} \\
+    \small Planned evidence: role aggregation workflow & \small Planned evidence: alias maintenance workflow \\
+    \\[0.75em]
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 4.4 Placeholder\\Create relation request\\and skill\_relations collection view}} &
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering PR6 Use Case Diagram Placeholder\\Highlight UC 4.3 and UC 4.4}} \\
+    \small Planned evidence: taxonomy relationships workflow & \small Planned evidence: highlighted use case diagram \\
+  \end{tabular}
+  \caption{PR6 implementation evidence placeholders for UC 4.3 and UC 4.4.}
+\end{figure}
+
+\subsection*{Week 6 -- Database Queries Used (MongoDB Equivalent to SQL)}
+\addcontentsline{toc}{subsection}{Week 6 -- Database Queries Used (MongoDB Equivalent to SQL)}
+
+\noindent
+\textbf{UC 4.3 -- Aggregate Postings by Role and Compute Skill Weights}
+\begin{verbatim}
+db.jobs.find(
+  { moderation_status: "approved", role_ids: "<role_id>" },
+  { required_skill_ids: 1 }
+)
+
+db.role_skill_weights.updateOne(
+  { role_id: ObjectId("<role_id>") },
+  { $set: {
+      role_id: ObjectId("<role_id>"),
+      role_name: "<role_name>",
+      computed_at: new Date(),
+      weights: [
+        { skill_id: "<skill_id>", skill_name: "<skill_name>", weight: 0.75 }
+      ]
+  }},
+  { upsert: true }
+)
+\end{verbatim}
+
+\noindent
+\textbf{UC 4.4 -- Maintain Skill Aliases}
+\begin{verbatim}
+db.skills.updateOne(
+  { _id: ObjectId("<skill_id>") },
+  { $set: {
+      aliases: ["Prompt Engineering", "Prompt Design"],
+      updated_at: new Date()
+  }}
+)
+\end{verbatim}
+
+\noindent
+\textbf{UC 4.4 -- Maintain Skill Relationships}
+\begin{verbatim}
+db.skill_relations.insertOne({
+  from_skill_id: ObjectId("<from_skill_id>"),
+  to_skill_id: ObjectId("<to_skill_id>"),
+  relation_type: "related_to",
+  created_at: new Date()
+})
+\end{verbatim}
+
+\subsection*{Week 6 -- Video Demonstration}
+\addcontentsline{toc}{subsection}{Week 6 -- Video Demonstration}
+\noindent
+Video link: To be added for PR6 delivery.
+
+% =========================================================
+% WEEK 5 (PR5)
+% =========================================================
+\WeekReport{5}{March 4 -- March 10, 2026}{
+Week 5 focused on persistence workflows that connect extracted artifacts back into the user's long-term profile. SkillBridge now supports saving evidence directly against skills and projects, promoting confirmed resume-derived skills into reusable dashboard entities, and tagging job postings with target roles so downstream role analytics can group them correctly.
+}{
+Justin Elia & Validation support for evidence and promotion flows & \\
+Spencer Roeren & Report review and UI alignment support & \\
+Cordell Stonecipher & Implemented UC 1.3, UC 3.4, and UC 4.2 endpoints + persistence logic + testing + report updates & (Artifacts: evidence/resume/jobs routes + tests + report updates) \\
+}
+
+\subsection*{Week 5 -- Implemented Use Cases}
+\addcontentsline{toc}{subsection}{Week 5 -- Implemented Use Cases}
+\begin{itemize}
+  \item \textbf{UC 1.3 -- Add Evidence Artifact and Associate It with a Skill/Project}
+  \item \textbf{UC 3.4 -- Save Confirmed Resume-Derived Skills/Projects into Dashboard Entities}
+  \item \textbf{UC 4.2 -- Tag a Posting by Role}
+\end{itemize}
+
+\subsection*{Week 5 -- Screenshots of Implemented Features}
+\addcontentsline{toc}{subsection}{Week 5 -- Screenshots of Implemented Features}
+\noindent
+The PR5 screenshots have not been exported into the repository yet. The boxes below are compile-safe placeholders for the final report draft.
+
+\begin{figure}[H]
+  \centering
+  \begin{tabular}{cc}
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 1.3 Placeholder\\Saved evidence API response\\and evidence collection view}} &
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 3.4 Placeholder\\Resume promotion response\\and linked project/evidence records}} \\
+    \small Planned evidence: evidence persistence workflow & \small Planned evidence: resume promotion workflow \\
+    \\[0.75em]
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 4.2 Placeholder\\Tagged job response\\and updated job role\_ids field}} &
+    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering PR5 Use Case Diagram Placeholder\\Highlight UC 1.3, UC 3.4, and UC 4.2}} \\
+    \small Planned evidence: job role-tagging workflow & \small Planned evidence: highlighted use case diagram \\
+  \end{tabular}
+  \caption{PR5 implementation evidence placeholders for UC 1.3, UC 3.4, and UC 4.2.}
+\end{figure}
+
+\subsection*{Week 5 -- Database Queries Used (MongoDB Equivalent to SQL)}
+\addcontentsline{toc}{subsection}{Week 5 -- Database Queries Used (MongoDB Equivalent to SQL)}
+
+\noindent
+\textbf{UC 1.3 -- Add Evidence Artifact and Associate It with a Skill/Project}
+\begin{verbatim}
+db.evidence.insertOne({
+  user_id: ObjectId("<user_id>"),
+  type: "project",
+  title: "<evidence_title>",
+  source: "<source_url_or_label>",
+  text_excerpt: "<excerpt>",
+  skill_ids: [ObjectId("<skill_id>")],
+  project_id: ObjectId("<project_id>"),
+  tags: ["portfolio"],
+  origin: "user",
+  created_at: new Date(),
+  updated_at: new Date()
+})
+\end{verbatim}
+
+\noindent
+\textbf{UC 3.4 -- Save Confirmed Resume-Derived Skills/Projects into Dashboard Entities}
+\begin{verbatim}
+db.projects.insertOne({
+  user_id: ObjectId("<user_id>"),
+  title: "Resume Snapshot <snapshot_id_prefix>",
+  description: "Auto-created from resume promotion.",
+  tags: ["resume"],
+  created_at: new Date(),
+  updated_at: new Date()
+})
+
+db.project_skill_links.updateOne(
+  { project_id: ObjectId("<project_id>"), skill_id: ObjectId("<skill_id>") },
+  { $setOnInsert: {
+      project_id: ObjectId("<project_id>"),
+      skill_id: ObjectId("<skill_id>"),
+      created_at: new Date()
+  }},
+  { upsert: true }
+)
+
+db.evidence.insertOne({
+  user_id: ObjectId("<user_id>"),
+  type: "resume",
+  title: "<skill_name>",
+  source: "resume_snapshot:<snapshot_id>",
+  project_id: ObjectId("<project_id>"),
+  skill_ids: [ObjectId("<skill_id>")],
+  created_at: new Date(),
+  updated_at: new Date()
+})
+\end{verbatim}
+
+\noindent
+\textbf{UC 4.2 -- Tag a Posting by Role}
+\begin{verbatim}
+db.jobs.updateOne(
+  { _id: ObjectId("<job_id>") },
+  { $addToSet: { role_ids: "<role_id>" },
+    $set: { updated_at: new Date() } }
+)
+\end{verbatim}
+
+\subsection*{Week 5 -- Video Demonstration}
+\addcontentsline{toc}{subsection}{Week 5 -- Video Demonstration}
+\noindent
+Video link: To be added for PR5 delivery.
+
+% =========================================================
+% WEEK 4 (PR4)
 % =========================================================
 \WeekReport{4}{February 26 -- March 3, 2026}{
 Week 4 focused on extending SkillBridge beyond ingestion and extraction into user-facing project organization, personalized dashboard aggregation, and admin moderation workflows. The backend now supports linking confirmed skills to specific portfolio projects, computing dashboard summaries from multiple user collections, and moderating community-submitted job postings through an approval or rejection flow.
