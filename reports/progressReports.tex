@@ -199,16 +199,18 @@
 % WEEK 6 (PR6)
 % =========================================================
 \WeekReport{6}{March 11 -- March 17, 2026}{
-Week 6 focused on extending SkillBridge’s taxonomy and role intelligence capabilities. The team implemented role-based job tagging, role skill-weight aggregation, and taxonomy maintenance for aliases and relationships so job analysis and analytics can use a cleaner, more structured skill graph. These additions were validated through API execution, MongoDB persistence, and downstream visibility in the system.
+Week 6 focused on closing the remaining gaps from the original capstone use case plan while also extending SkillBridge’s taxonomy and role intelligence capabilities. The team implemented the missing skill detail workflow with linked evidence and projects, the persistence of confirmed resume-derived entities into dashboard records, and the admin-side role tagging, role skill-weight aggregation, and taxonomy maintenance features. These additions were validated through API execution, MongoDB persistence, and downstream visibility in the system.
 }{
-Justin Elia & Assisted with validation and testing for role tagging and role-weight aggregation flows & Swagger + Compass verification \\
-Spencer Roeren & Frontend and report alignment support for taxonomy and analytics views & UI review and report polishing \\
-Cordell Stonecipher & Implemented backend endpoints, aggregation logic, and validation for PR6 use cases & Images: Swagger + Compass + report updates \\
+Justin Elia & Assisted with validation and testing for skill detail joins and role tagging flows & Swagger + Compass verification \\
+Spencer Roeren & Frontend and report alignment support for skills, dashboard, and taxonomy views & UI review and report polishing \\
+Cordell Stonecipher & Implemented backend endpoints, aggregation logic, persistence flows, and validation for PR6 use cases & Images: Swagger + Compass + report updates \\
 }
 
 \subsection*{Week 6 -- Implemented Use Cases}
 \addcontentsline{toc}{subsection}{Week 6 -- Implemented Use Cases}
 \begin{itemize}
+  \item \textbf{UC 2.3 -- View Skill Detail Page with Linked Projects/Evidence}
+  \item \textbf{UC 3.4 -- Save Confirmed Resume-Derived Skills/Projects into Dashboard Entities}
   \item \textbf{UC 4.2 -- Tag a Posting by Role}
   \item \textbf{UC 4.3 -- Aggregate Postings by Role and Compute Skill Weights}
   \item \textbf{UC 4.4 -- Maintain Taxonomy: Skill Aliases and Relationships}
@@ -216,6 +218,16 @@ Cordell Stonecipher & Implemented backend endpoints, aggregation logic, and vali
 
 \subsection*{Week 6 -- Screenshots of Implemented Features}
 \addcontentsline{toc}{subsection}{Week 6 -- Screenshots of Implemented Features}
+
+\MultiImagePageTwo{6}
+  {images/Skills.png}{Frontend: skill detail and linked evidence/project context for UC 2.3}
+  {images/pr5_link_skill_project_frontend.png}{Frontend: linked project evidence shown alongside skill context for UC 2.3}
+  {UC 2.3 -- Skill Detail + Linked Evidence/Projects}
+
+\MultiImagePageTwo{6}
+  {images/pr3_compass_confirm_doc.png}{Swagger: confirmed resume mappings persisted for UC 3.4}
+  {images/SB_Dashboard.png}{Frontend: dashboard entities reflecting saved confirmed resume-derived items for UC 3.4}
+  {UC 3.4 -- Confirmed Resume Persistence + Dashboard Entities}
 
 \MultiImagePageTwo{6}
   {images/pr5_moderate_job_frontend.png.png}{Frontend / admin job review view used to tag a posting by role for UC 4.2}
@@ -234,6 +246,57 @@ Cordell Stonecipher & Implemented backend endpoints, aggregation logic, and vali
 
 \subsection*{Week 6 -- Database Queries Used (MongoDB)}
 \addcontentsline{toc}{subsection}{Week 6 -- Database Queries Used (MongoDB)}
+
+\noindent
+\textbf{UC 2.3 -- View Skill Detail Page with Linked Projects/Evidence}
+\begin{verbatim}
+db.skills.aggregate([
+  { $match: { _id: ObjectId("<skill_id>") } },
+  { $lookup: {
+      from: "projects",
+      localField: "_id",
+      foreignField: "skill_ids",
+      as: "linked_projects"
+  }},
+  { $lookup: {
+      from: "evidence",
+      localField: "_id",
+      foreignField: "skill_ids",
+      as: "linked_evidence"
+  }}
+])
+\end{verbatim}
+
+\noindent
+\textbf{UC 3.4 -- Save Confirmed Resume-Derived Skills/Projects into Dashboard Entities}
+\begin{verbatim}
+db.resume_skill_confirmations.findOne({
+  user_id: "student1",
+  resume_snapshot_id: ObjectId("<snapshot_id>")
+})
+
+db.skills.updateOne(
+  { user_id: "student1", name: "FastAPI" },
+  {
+    $setOnInsert: {
+      category: "Backend Development",
+      created_at: new Date()
+    },
+    $set: { updated_at: new Date() }
+  },
+  { upsert: true }
+)
+
+db.evidence.insertOne({
+  user_id: "student1",
+  title: "Resume-confirmed FastAPI experience",
+  type: "resume",
+  skill_ids: [ObjectId("<skill_id>")],
+  origin: "resume_confirmation",
+  created_at: new Date(),
+  updated_at: new Date()
+})
+\end{verbatim}
 
 \noindent
 \textbf{UC 4.2 -- Tag a Posting by Role}
@@ -294,6 +357,14 @@ db.skill_relations.insertOne({
 
 \subsection*{Week 6 -- Short Technical Explanation}
 \addcontentsline{toc}{subsection}{Week 6 -- Short Technical Explanation}
+
+\noindent
+\textbf{UC 2.3 -- View Skill Detail Page with Linked Projects/Evidence:}
+This use case gives users a single skill-centered view that brings together the projects and evidence items supporting that skill. It makes the portfolio more navigable and turns each skill into a traceable record instead of an isolated label.
+
+\noindent
+\textbf{UC 3.4 -- Save Confirmed Resume-Derived Skills/Projects into Dashboard Entities:}
+This use case takes the user-confirmed results from resume analysis and persists them into the core dashboard entities used elsewhere in the system. That step is what turns temporary confirmation output into reusable portfolio data for later dashboard, evidence, and project workflows.
 
 \noindent
 \textbf{UC 4.2 -- Tag a Posting by Role:}
@@ -453,9 +524,9 @@ Video link: \href{PASTE_PR5_VIDEO_LINK_HERE}{Video Link}
 % WEEK 4 (PR4)
 % =========================================================
 \WeekReport{4}{February 26 -- March 3, 2026}{
-Week 4 focused on extending SkillBridge from skill validation into portfolio intelligence and personalized output generation. The backend now supports a user-specific dashboard summary, project record creation for persistent portfolio building, and tailored resume generation based on confirmed skills and a selected job description. These additions move the platform closer to its core value proposition: transforming stored evidence and validated skills into actionable job-seeking artifacts.
+Week 4 focused on extending SkillBridge from skill validation into portfolio intelligence and personalized output generation. The backend now supports a user-specific dashboard summary, project record creation for persistent portfolio building, and tailored resume generation based on confirmed skills and a selected job description. The tailored resume work was implemented as an additional feature beyond the original capstone use case numbering, while the dashboard and project workflows map directly to the original use case plan.
 }{
-Cordell Stonecipher & Implemented dashboard summary, project creation flow, and tailored resume generation & Images: Swagger + Compass + generated output \\
+Cordell Stonecipher & Implemented dashboard summary, project creation flow, and tailored resume generation as an additional feature & Images: Swagger + Compass + generated output \\
 }
 
 
@@ -465,7 +536,7 @@ Cordell Stonecipher & Implemented dashboard summary, project creation flow, and 
 \begin{itemize}
   \item \textbf{UC 1.4 -- Dashboard Summary}
   \item \textbf{UC 1.1 -- Create / Manage Project Entry}
-  \item \textbf{UC 3.4 -- Generate Tailored Resume from Confirmed Skills + Job Description}
+  \item \textbf{Additional Feature -- Generate Tailored Resume from Confirmed Skills + Job Description}
 \end{itemize}
 
 \subsection*{Week 4 -- Screenshots of Implemented Features}
@@ -481,13 +552,13 @@ Cordell Stonecipher & Implemented dashboard summary, project creation flow, and 
 \ImagePage{4}{images/ui_evidence.png}{Frontend: Portfolio / Projects page displaying the saved project entry for UC 1.1}
 
 \MultiImagePageTwo{4}
-  {images/api_tailor.png}{Swagger: UC 3.4 tailored resume generation endpoint executed}
+  {images/api_tailor.png}{Swagger: tailored resume generation endpoint executed}
   {images/db_tailor.png}{MongoDB Compass: tailored\_resumes document persisted after generation}
-  {UC 3.4 -- Swagger + Database}
+  {Additional Feature -- Swagger + Database}
 
-\ImagePage{4}{images/ui_tailor.png}{Frontend: Tailored resume interface displaying generated resume content for UC 3.4}
+\ImagePage{4}{images/ui_tailor.png}{Frontend: Tailored resume interface displaying generated resume content for the additional tailored resume feature}
 
-\ImagePage{4}{images/pr4_use_case_diagram.png}{Use Case Diagram Highlighting Implemented Use Cases (UC 1.4, UC 1.1, UC 3.4)}
+\ImagePage{4}{images/pr4_use_case_diagram.png}{Use Case Diagram Highlighting Implemented Original Use Cases (UC 1.4, UC 1.1) plus the additional tailored resume feature}
 
 \subsection*{Week 4 -- Database Queries Used (MongoDB)}
 \addcontentsline{toc}{subsection}{Week 4 -- Database Queries Used (MongoDB)}
@@ -530,7 +601,7 @@ db.projects.insertOne({
 \end{verbatim}
 
 \noindent
-\textbf{UC 3.4 -- Generate Tailored Resume from Confirmed Skills + Job Description}
+\textbf{Additional Feature -- Generate Tailored Resume from Confirmed Skills + Job Description}
 \begin{verbatim}
 db.job_ingests.findOne({ _id: ObjectId("<job_id>"), user_id: "student1" })
 
@@ -565,7 +636,7 @@ This feature aggregates user-specific portfolio information into a single respon
 This feature allows a user to persist a project artifact as part of their portfolio history. Each project record stores metadata such as title, description, dates, and related skills, making it possible to connect user work history to evidence-backed skill development.
 
 \noindent
-\textbf{UC 3.4 -- Generate Tailored Resume from Confirmed Skills + Job Description:}
+\textbf{Additional Feature -- Generate Tailored Resume from Confirmed Skills + Job Description:}
 This feature uses the selected job posting together with the user’s validated skills and evidence to construct a more job-relevant resume draft. The result is saved so it can be revisited later, compared against other job targets, or exported in future iterations.
 
 \subsection*{Week 4 -- Video Demonstration}
