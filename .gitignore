@@ -50,3 +50,4 @@ progressReports.log
 progressReports.out
 progressReports.pdf
 progressReports.toc
+reports/.latex-build/
