@@ -16,6 +16,7 @@
 \usepackage{lastpage}
 \usepackage{tikz}
 \usepackage{subcaption}
+\usepackage{xparse}
 
 % ---------------------------
 % Header / Footer (Fancy)
@@ -33,6 +34,7 @@
 
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0.4pt}
+\setlength{\headheight}{14pt}
 
 % ---------------------------
 % Table formatting helpers
@@ -73,7 +75,7 @@
 % Single Image Page Macro
 % Use for one full-width screenshot/figure per page.
 % ---------------------------
-\newcommand{\ImagePage}[3]{
+\NewDocumentCommand{\ImagePage}{m m m g}{
   \clearpage
   \section*{Week #1 -- Images}
   \addcontentsline{toc}{section}{Week #1 -- Images}
@@ -92,7 +94,7 @@
 % Layout: 2-up or 4-up image grid on a single page.
 % Usage:
 %   \MultiImagePageTwo{week}{imgA}{capA}{imgB}{capB}{page title}
-%   \MultiImagePageFour{week}{imgA}{capA}{imgB}{capB}{imgC}{capC}{imgD}{capD}{page title}
+%   \MultiImagePageFour{page title}{imgA}{capA}{imgB}{capB}{imgC}{capC}{imgD}{capD}
 % ---------------------------
 
 \newcommand{\MultiImagePageTwo}[6]{
@@ -103,37 +105,59 @@
   \vspace{0.5em}
   \begin{figure}[H]
     \centering
-    \begin{tabularx}{\linewidth}{@{}X X@{}}
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#2}} &
+      \fbox{\includegraphics[width=0.95\linewidth]{#2}}
+
+      \small #3
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#4}} \\
-      \small #3 & \small #5 \\
-    \end{tabularx}
+      \fbox{\includegraphics[width=0.95\linewidth]{#4}}
+
+      \small #5
+    \end{minipage}
   \end{figure}
 }
 
-\newcommand{\MultiImagePageFour}[10]{
+\NewDocumentCommand{\MultiImagePageFour}{m m m m m m m m m}{
   \clearpage
-  \section*{Week #1 -- #10}
-  \addcontentsline{toc}{section}{Week #1 -- #10}
+  \section*{#1}
+  \addcontentsline{toc}{section}{#1}
 
   \vspace{0.5em}
   \begin{figure}[H]
     \centering
-    \begin{tabularx}{\linewidth}{@{}X X@{}}
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#2}} &
+      \fbox{\includegraphics[width=0.95\linewidth]{#2}}
+
+      \small #3
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#4}} \\
-      \small #3 & \small #5 \\
-      \\
+      \fbox{\includegraphics[width=0.95\linewidth]{#4}}
+
+      \small #5
+    \end{minipage}
+
+    \vspace{1em}
+
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#6}} &
+      \fbox{\includegraphics[width=0.95\linewidth]{#6}}
+
+      \small #7
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \fbox{\includegraphics[width=0.95\linewidth]{#8}} \\
-      \small #7 & \small #9 \\
-    \end{tabularx}
+      \fbox{\includegraphics[width=0.95\linewidth]{#8}}
+
+      \small #9
+    \end{minipage}
   \end{figure}
 }
 
@@ -164,6 +188,12 @@
 
 \tableofcontents
 \clearpage
+
+% =========================================================
+% POST-MIDTERM WEEKLY REPORTS
+% =========================================================
+\section*{Post-Midterm Weekly Reports}
+\addcontentsline{toc}{section}{Post-Midterm Weekly Reports}
 
 % =========================================================
 % WEEK 6 (PR6)
@@ -280,7 +310,7 @@ This use case keeps the skill taxonomy clean and more expressive by allowing ali
 \subsection*{Week 6 -- Video Demonstration}
 \addcontentsline{toc}{subsection}{Week 6 -- Video Demonstration}
 \noindent
-Video link: \href{PASTE_PR6_VIDEO_LINK_HERE}{PASTE\_PR6\_VIDEO\_LINK\_HERE}
+Video link: \href{PASTE_PR6_VIDEO_LINK_HERE}{Video Link}
 
 % =========================================================
 % WEEK 5 (PR5)
@@ -417,7 +447,7 @@ This use case supports administrative moderation of submitted jobs before those 
 \subsection*{Week 5 -- Video Demonstration}
 \addcontentsline{toc}{subsection}{Week 5 -- Video Demonstration}
 \noindent
-Video link: \href{PASTE_PR5_VIDEO_LINK_HERE}{PASTE\_PR5\_VIDEO\_LINK\_HERE}
+Video link: \href{PASTE_PR5_VIDEO_LINK_HERE}{Video Link}
 
 % =========================================================
 % WEEK 4 (PR4)
@@ -541,7 +571,7 @@ This feature uses the selected job posting together with the user’s validated 
 \subsection*{Week 4 -- Video Demonstration}
 \addcontentsline{toc}{subsection}{Week 4 -- Video Demonstration}
 \noindent
-Video link: \href{https://www.loom.com/share/5e02115145c841f9a0e833ab8cc311f8}{VIDEO LINK}
+Video link: \href{https://www.loom.com/share/5e02115145c841f9a0e833ab8cc311f8}{Video Link}
 
 % =========================================================
 % MIDTERM PRESENTATION
@@ -686,19 +716,17 @@ At the midpoint of the project, SkillBridge has evolved from a backend proof of 
 \subsection*{Midterm -- Presentation Screenshot Placeholders}
 \addcontentsline{toc}{subsection}{Midterm -- Presentation Screenshot Placeholders}
 
-\MultiImagePageFour{M}
+\MultiImagePageFour{Midterm Website Screens}
   {images/Dashboard.png}{Website view: Dashboard}
   {images/Skills.png}{Website view: Skills}
   {images/Evidence.png}{Website view: Evidence}
   {images/Job Browser.png}{Website view: Job Browser}
-  {Midterm Website Screens}
 
-\MultiImagePageFour{M}
+\MultiImagePageFour{Midterm Database Screens}
   {images/pr2_db_resume_snapshots.png}{Database view: resume snapshots}
   {images/pr2_db_skill_extractions.png}{Database view: skill extractions}
   {images/pr2_db_evidence.png}{Database view: evidence}
   {images/db_tailor.png}{Database view: tailored resumes}
-  {Midterm Database Screens}
 
 \subsection*{Midterm -- Recommended Live Demo Sequence}
 \addcontentsline{toc}{subsection}{Midterm -- Recommended Live Demo Sequence}
@@ -712,6 +740,13 @@ At the midpoint of the project, SkillBridge has evolved from a backend proof of 
   \item Show role/taxonomy administration and the effect of role tagging.
   \item Close by showing the MongoDB collections that store the corresponding data.
 \end{enumerate}
+
+% =========================================================
+% PRE-MIDTERM WEEKLY REPORTS
+% =========================================================
+\clearpage
+\section*{Pre-Midterm Weekly Reports}
+\addcontentsline{toc}{section}{Pre-Midterm Weekly Reports}
 
 % =========================================================
 % WEEK 3 (PR3) -- MOST RECENT
@@ -780,7 +815,7 @@ db.resume_skill_confirmations.aggregate([
 \subsection*{Week 3 -- Video Demonstration}
 \addcontentsline{toc}{subsection}{Week 3 -- Video Demonstration}
 \noindent
-Video link: \href{https://www.loom.com/share/3b685219180343ff8ff40dd97bf698a3}{https://www.loom.com/share/3b685219180343ff8ff40dd97bf698a3}
+Video link: \href{https://www.loom.com/share/3b685219180343ff8ff40dd97bf698a3}{Video Link}
 
 % =========================================================
 % WEEK 2
@@ -871,7 +906,7 @@ db.skills.aggregate([
 \subsection*{Week 2 -- Video Demonstration}
 \addcontentsline{toc}{subsection}{Week 2 -- Video Demonstration}
 \noindent
-Video link: \href{https://drive.google.com/file/d/1VNMVQtzIe4HL9UoQhuhnphgiitfG7b9m/view?usp=drive_link}{https://drive.google.com/file/d/1VNMVQtzIe4HL9UoQhuhnphgiitfG7b9m/view?usp=drive_link}
+Video link: \href{https://drive.google.com/file/d/1VNMVQtzIe4HL9UoQhuhnphgiitfG7b9m/view?usp=drive_link}{Video Link}
 
 \WeekReport{1}{(Feb 8th)}{
 Week 1 established the project foundation by initializing the GitHub repository, setting up a local MongoDB database using Docker, and implementing a FastAPI backend skeleton. Realistic sample datasets were collected and inserted into core collections to support early UI development and validate planned display scenarios. The team aligned on primary use cases and defined how resumes, papers, and job listings will be represented as evidence-backed skills within the system.
@@ -992,10 +1027,9 @@ The UI will display data using the backend API endpoints:
 %                     {Database + API Screenshots}
 
 % UI mockups (example: 4-up page)
-% \MultiImagePageFour{1}{images/week1_ui_skill_catalog.png}{UI Mockup: Skill Catalog}
+% \MultiImagePageFour{UI Mockups (Planned Use Cases)}{images/week1_ui_skill_catalog.png}{UI Mockup: Skill Catalog}
 %                      {images/week1_ui_evidence.png}{UI Mockup: Evidence Management}
 %                      {images/week1_ui_jobs.png}{UI Mockup: Job Browser}
 %                      {images/week1_ui_match.png}{UI Mockup: Match Results}
-%                      {UI Mockups (Planned Use Cases)}
 
 \end{document}
