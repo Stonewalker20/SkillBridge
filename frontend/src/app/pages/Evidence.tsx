@@ -855,12 +855,13 @@ export function Evidence() {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredItems.map((item) => {
             const externalUrl = item.source && /^https?:\/\//i.test(item.source) ? item.source : "";
+            const summary = summarizeEvidenceText(item.text_excerpt || item.description || "");
             return (
               <Card key={item.id} className="group overflow-hidden border-slate-200 p-0 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950">
-                <div className={`border-b px-5 py-4 dark:border-slate-800 ${activeHeaderTheme.softPanelClass}`}>
+                <div className={`border-b px-4 py-3.5 dark:border-slate-800 ${activeHeaderTheme.softPanelClass}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -885,18 +886,22 @@ export function Evidence() {
                   </div>
                 </div>
 
-                <div className="px-5 py-4">
+                <div className="px-4 py-3.5">
                   <div className="min-w-0">
-                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Summary</div>
-                    <div className="mt-2 text-sm leading-6 text-gray-600 dark:text-slate-300">
-                      {summarizeEvidenceText(item.text_excerpt || item.description || "")}
+                    <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50/90 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:bg-slate-900/80 dark:text-slate-400">
+                      <span className="truncate">Source: {item.source || "manual-entry"}</span>
+                      {summary ? <span className="hidden shrink-0 md:inline">Hover to preview</span> : null}
                     </div>
-                    <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-900/80 dark:text-slate-400">
-                      Source: {item.source || "manual-entry"}
-                    </div>
+                    {summary ? (
+                      <div className="max-h-28 overflow-hidden opacity-100 transition-all duration-200 ease-out md:max-h-0 md:opacity-0 md:group-focus-within:mt-3 md:group-focus-within:max-h-28 md:group-focus-within:opacity-100 md:group-hover:mt-3 md:group-hover:max-h-28 md:group-hover:opacity-100">
+                        <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5 text-sm leading-5 text-gray-600 shadow-sm dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-300">
+                          {summary}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
 
-                  <div className="mt-4 flex justify-end gap-2">
+                  <div className="mt-3 flex justify-end gap-2">
                     <Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit
