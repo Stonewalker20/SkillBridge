@@ -105,9 +105,16 @@ export function AccountPersonalization() {
     START_PAGE_OPTIONS.find((option) => option.value === preferences.startPage)?.label ?? "Dashboard";
   const densityLabel =
     SIDEBAR_DENSITY_OPTIONS.find((option) => option.value === preferences.sidebarDensity)?.label ?? "Comfortable";
-  const unlockedBadgeCount = rewards?.unlockedBadgeCount ?? rewards?.unlockedCount ?? 0;
-  const badgeCount = rewards?.badgeCount ?? rewards?.totalCount ?? rewards?.badges?.length ?? rewards?.achievements.length ?? 0;
-  const availableThemeCount = Math.min(themes.length, 3 + unlockedBadgeCount);
+  const hasRewardsData = Boolean(
+    rewards &&
+      ((rewards.badges?.length ?? 0) > 0 ||
+        rewards.achievements.length > 0 ||
+        (rewards.badgeCount ?? 0) > 0 ||
+        (rewards.totalCount ?? 0) > 0)
+  );
+  const unlockedBadgeCount = hasRewardsData ? rewards?.unlockedBadgeCount ?? rewards?.unlockedCount ?? 0 : 0;
+  const badgeCount = hasRewardsData ? rewards?.badgeCount ?? rewards?.totalCount ?? rewards?.badges?.length ?? rewards?.achievements.length ?? 0 : 0;
+  const availableThemeCount = hasRewardsData ? Math.min(themes.length, 3 + unlockedBadgeCount) : themes.length;
 
   const handleSelectAvatarPreset = async (preset: AvatarPresetValue) => {
     try {
@@ -271,13 +278,15 @@ export function AccountPersonalization() {
             </div>
 
             <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
-              {availableThemeCount}/{themes.length} header themes are available with {unlockedBadgeCount}/{badgeCount || rewards?.achievements.length || 0} badges unlocked.
+              {hasRewardsData
+                ? `${availableThemeCount}/${themes.length} header themes are available with ${unlockedBadgeCount}/${badgeCount || rewards?.achievements.length || 0} badges unlocked.`
+                : "Achievement sync is unavailable right now, so all header themes remain selectable until badge progress reloads."}
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {themes.map((themeOption, index) => {
                 const isSelected = headerTheme === themeOption.value;
-                const isLocked = index >= availableThemeCount && !isSelected;
+                const isLocked = hasRewardsData && index >= availableThemeCount && !isSelected;
                 return (
                   <button
                     key={themeOption.value}
@@ -294,8 +303,8 @@ export function AccountPersonalization() {
                     aria-pressed={isSelected}
                     aria-label={`Use ${themeOption.label}`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         {themeOption.swatchColors.map((color) => (
                           <span
                             key={color}
@@ -314,9 +323,9 @@ export function AccountPersonalization() {
                         <Check className="h-3 w-3" />
                       </span>
                     </div>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{themeOption.label}</p>
-                      <div className="flex items-center gap-2">
+                    <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="min-w-0 text-sm font-semibold text-slate-900 dark:text-slate-100">{themeOption.label}</p>
+                      <div className="flex flex-wrap items-center gap-2">
                         {isLocked ? (
                           <span className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
                             <Lock className="h-3 w-3" />
@@ -453,7 +462,7 @@ export function AccountPersonalization() {
                 }}
               />
 
-              <div className="mt-4 grid grid-cols-3 gap-3">
+              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
                 {AVATAR_PRESETS.map((preset) => {
                   const selected = !avatarUrl && avatarPreset === preset.value;
                   return (

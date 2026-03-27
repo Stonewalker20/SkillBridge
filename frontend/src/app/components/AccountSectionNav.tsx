@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import { SlidersHorizontal, User } from "lucide-react";
+import { Award, SlidersHorizontal, User } from "lucide-react";
 import { cn } from "./ui/utils";
 import { useHeaderTheme } from "../lib/headerTheme";
 
@@ -15,6 +15,12 @@ const LINKS = [
     label: "Personalization",
     icon: SlidersHorizontal,
     match: (pathname: string) => pathname.startsWith("/app/account/personalization"),
+  },
+  {
+    href: "/app/account/achievements",
+    label: "Achievements",
+    icon: Award,
+    match: (pathname: string) => pathname.startsWith("/app/account/achievements"),
   },
 ];
 

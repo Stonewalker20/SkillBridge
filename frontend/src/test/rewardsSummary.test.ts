@@ -44,4 +44,23 @@ describe("normalizeRewardsSummary", () => {
     expect(summary.unlockedBadgeCount).toBe(1);
     expect(summary.badges?.[0].key).toBe("first_evidence_saved");
   });
+
+  it("builds the default achievement ladder from counters when the backend response is partial", () => {
+    const summary = normalizeRewardsSummary({
+      counters: {
+        evidence_saved: 3,
+        profile_skills_confirmed: 5,
+        resume_snapshots_uploaded: 1,
+        job_matches_run: 3,
+        tailored_resumes_generated: 1,
+      },
+    });
+
+    expect(summary.achievements).toHaveLength(8);
+    expect(summary.totalCount).toBe(8);
+    expect(summary.unlockedCount).toBe(8);
+    expect(summary.badgeCount).toBe(8);
+    expect(summary.unlockedBadgeCount).toBe(8);
+    expect(summary.nextAchievement).toBeNull();
+  });
 });

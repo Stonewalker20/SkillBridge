@@ -57,21 +57,6 @@ const EMPTY_SUMMARY: DashboardSummary = {
   recentMatchTrend: [],
 };
 
-const EMPTY_REWARDS: RewardsSummary = {
-  counters: {
-    evidence_saved: 0,
-    profile_skills_confirmed: 0,
-    resume_snapshots_uploaded: 0,
-    job_matches_run: 0,
-    tailored_resumes_generated: 0,
-  },
-  unlockedCount: 0,
-  totalCount: 0,
-  achievements: [],
-  nextAchievement: null,
-  recentUnlocks: [],
-};
-
 const REWARD_ACTIONS: Record<string, { href: string; label: string }> = {
   evidence_saved: { href: "/app/evidence", label: "Add evidence" },
   profile_skills_confirmed: { href: "/app/skills", label: "Confirm skills" },
@@ -221,7 +206,7 @@ export function Dashboard() {
   const { activeHeaderTheme } = useHeaderTheme();
   const { preferences } = useAccountPreferences();
   const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
-  const [rewards, setRewards] = useState<RewardsSummary>(EMPTY_REWARDS);
+  const [rewards, setRewards] = useState<RewardsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [hiddenRecentActivityKeys, setHiddenRecentActivityKeys] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
@@ -316,7 +301,7 @@ export function Dashboard() {
           loadAllSkills(),
           api.getProfileConfirmation().catch(() => null as ConfirmationOut | null),
           api.listTailoredResumes(TAILORED_RESUME_FETCH_LIMIT).catch(() => []),
-          api.getRewardsSummary().catch(() => EMPTY_REWARDS),
+          api.getRewardsSummary().catch(() => null),
         ]);
         const confirmed = Array.isArray(profileConf?.confirmed) ? profileConf!.confirmed : [];
         const confirmedIds = new Set(confirmed.map((c) => (c?.skill_id ?? "").trim()).filter(Boolean));
@@ -361,11 +346,11 @@ export function Dashboard() {
           recentActivity: mergedRecentActivity,
           topSkillCategories,
         });
-        setRewards(rewardSummary ?? EMPTY_REWARDS);
+        setRewards(rewardSummary ?? null);
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
         setSummary(EMPTY_SUMMARY);
-        setRewards(EMPTY_REWARDS);
+        setRewards(null);
       } finally {
         setLoading(false);
       }
@@ -407,6 +392,13 @@ export function Dashboard() {
       },
     ],
     [summary]
+  );
+  const hasRewardsData = Boolean(
+    rewards &&
+      ((rewards.badges?.length ?? 0) > 0 ||
+        rewards.achievements.length > 0 ||
+        (rewards.badgeCount ?? 0) > 0 ||
+        (rewards.totalCount ?? 0) > 0)
   );
 
   const visibleRecentActivity = useMemo(
@@ -505,13 +497,15 @@ export function Dashboard() {
             </p>
           </div>
           <Badge variant="outline" className="w-fit dark:border-slate-700 dark:text-slate-200">
-            {rewards.unlockedCount}/{Math.max(rewards.totalCount, rewards.achievements.length)} unlocked
+            {hasRewardsData
+              ? `${rewards?.unlockedCount ?? 0}/${Math.max(rewards?.totalCount ?? 0, rewards?.achievements.length ?? 0)} unlocked`
+              : "Sync unavailable"}
           </Badge>
         </div>
 
         <div className="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
-            {rewards.nextAchievement ? (
+            {hasRewardsData && rewards?.nextAchievement ? (
               <>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -536,6 +530,16 @@ export function Dashboard() {
                 </div>
                 <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.reward}</p>
               </>
+            ) : !hasRewardsData ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                  <Award className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+                  <span className="text-lg font-semibold">Achievement progress is unavailable right now</span>
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Reward data did not load, so milestone counts are hidden until the next successful sync.
+                </p>
+              </div>
             ) : (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
@@ -551,7 +555,9 @@ export function Dashboard() {
 
           <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/30">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recent Unlocks</div>
-            {rewards.recentUnlocks.length === 0 ? (
+            {!hasRewardsData ? (
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Recent unlocks will appear here once reward sync returns.</p>
+            ) : rewards.recentUnlocks.length === 0 ? (
               <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">No milestones unlocked yet. Your first reward appears as soon as you save evidence or confirm a skill.</p>
             ) : (
               <div className="mt-3 space-y-3">
@@ -573,19 +579,19 @@ export function Dashboard() {
           </div>
         </div>
 
-        {(rewards.badges?.length ?? rewards.achievements.length) > 0 ? (
+        {hasRewardsData && (rewards?.badges?.length ?? rewards?.achievements.length ?? 0) > 0 ? (
           <div className="mt-5">
             <RewardBadgeCollection
-              badges={rewards.badges ?? rewards.achievements}
-              unlockedCount={rewards.unlockedBadgeCount ?? rewards.unlockedCount}
-              totalCount={rewards.badgeCount ?? rewards.totalCount ?? rewards.achievements.length}
+              badges={rewards?.badges ?? rewards?.achievements ?? []}
+              unlockedCount={rewards?.unlockedBadgeCount ?? rewards?.unlockedCount ?? 0}
+              totalCount={rewards?.badgeCount ?? rewards?.totalCount ?? rewards?.achievements.length ?? 0}
             />
           </div>
         ) : null}
 
-        {rewards.achievements.length > 0 ? (
+        {hasRewardsData && (rewards?.achievements.length ?? 0) > 0 ? (
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {rewards.achievements.map((achievement) => (
+            {rewards?.achievements.map((achievement) => (
               <div key={achievement.key} className="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-950/40">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

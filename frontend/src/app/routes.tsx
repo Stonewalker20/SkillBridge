@@ -13,6 +13,9 @@ const Account = lazy(() => import("./pages/Account").then((module) => ({ default
 const AccountPersonalization = lazy(() =>
   import("./pages/AccountPersonalization").then((module) => ({ default: module.AccountPersonalization }))
 );
+const AccountAchievements = lazy(() =>
+  import("./pages/AccountAchievements").then((module) => ({ default: module.AccountAchievements }))
+);
 const NotFound = lazy(() => import("./pages/NotFound").then((module) => ({ default: module.NotFound })));
 const TailoredResumes = lazy(() => import("./pages/TailoredResumes").then((module) => ({ default: module.TailoredResumes })));
 const Admin = lazy(() => import("./pages/Admin").then((module) => ({ default: module.Admin })));
@@ -64,6 +67,7 @@ export const router = createBrowserRouter([
       { path: "analytics/career-paths/:roleId", element: suspense(<CareerPathDetail />) },
       { path: "account", element: suspense(<Account />) },
       { path: "account/personalization", element: suspense(<AccountPersonalization />) },
+      { path: "account/achievements", element: suspense(<AccountAchievements />) },
       {
         path: "admin",
         element: (

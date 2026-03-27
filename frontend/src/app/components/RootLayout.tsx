@@ -52,7 +52,9 @@ export function RootLayout() {
   const isAdminUser = ["owner", "admin", "team"].includes(String(user?.role ?? "").toLowerCase());
   const hasPlatformAccess = isAdminUser || String(user?.subscription_status ?? "").toLowerCase() === "active";
   const isAccountPage =
-    location.pathname === "/app/account" || location.pathname.startsWith("/app/account/personalization");
+    location.pathname === "/app/account" ||
+    location.pathname.startsWith("/app/account/personalization") ||
+    location.pathname.startsWith("/app/account/achievements");
   const isSubscriptionLocked = !hasPlatformAccess;
   const navigation = hasPlatformAccess
     ? [...baseNavigation, { name: "Admin", href: "/app/admin", icon: Shield }]
@@ -87,6 +89,8 @@ export function RootLayout() {
     currentPageTitle = "Account";
   } else if (location.pathname.startsWith("/app/account/personalization")) {
     currentPageTitle = "Personalization";
+  } else if (location.pathname.startsWith("/app/account/achievements")) {
+    currentPageTitle = "Achievements";
   } else if (location.pathname.startsWith("/app/admin/mlflow")) {
     currentPageTitle = "Admin MLflow";
   } else if (location.pathname === "/app/admin") {

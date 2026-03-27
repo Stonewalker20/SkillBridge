@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Lock, Mail, Settings2, Sparkles, Trash2, User, Wand2 } from "lucide-react";
+import { Award, Lock, Mail, Settings2, Sparkles, Trash2, User, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -595,12 +595,20 @@ export function Account() {
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
                 Use the dedicated page to adjust appearance, upload a profile photo, and tune how the app behaves day to day.
               </p>
-              <Button asChild className={`mt-4 ${activeHeaderTheme.buttonClass}`}>
-                <Link to="/app/account/personalization">
-                  <Settings2 className="h-4 w-4" />
-                  Manage Personalization
-                </Link>
-              </Button>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button asChild className={activeHeaderTheme.buttonClass}>
+                  <Link to="/app/account/personalization">
+                    <Settings2 className="h-4 w-4" />
+                    Manage Personalization
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/app/account/achievements">
+                    <Award className="h-4 w-4" />
+                    View Achievements
+                  </Link>
+                </Button>
+              </div>
             </div>
           </Card>
 

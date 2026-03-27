@@ -256,6 +256,80 @@ export type RewardsSummary = {
   recentUnlocks: RewardAchievement[];
 };
 
+const REWARD_MILESTONES: Array<{
+  key: string;
+  title: string;
+  description: string;
+  reward: string;
+  counterKey: keyof RewardCounters;
+  targetValue: number;
+}> = [
+  {
+    key: "first_evidence_saved",
+    counterKey: "evidence_saved",
+    targetValue: 1,
+    title: "First Proof Added",
+    description: "Save your first evidence item to start building a verifiable portfolio.",
+    reward: "Unlocked: Evidence Starter badge",
+  },
+  {
+    key: "evidence_starter",
+    counterKey: "evidence_saved",
+    targetValue: 3,
+    title: "Proof Stack",
+    description: "Save three evidence items so your profile starts showing repeatable proof of work.",
+    reward: "Unlocked: Proof Stack badge",
+  },
+  {
+    key: "first_skill_confirmed",
+    counterKey: "profile_skills_confirmed",
+    targetValue: 1,
+    title: "First Skill Locked In",
+    description: "Confirm your first profile skill to turn extracted signals into trusted profile data.",
+    reward: "Unlocked: Skill Claim badge",
+  },
+  {
+    key: "skill_stack",
+    counterKey: "profile_skills_confirmed",
+    targetValue: 5,
+    title: "Skill Stack",
+    description: "Build a profile with five confirmed skills to strengthen job-match reasoning.",
+    reward: "Unlocked: Skill Stack badge",
+  },
+  {
+    key: "first_resume_uploaded",
+    counterKey: "resume_snapshots_uploaded",
+    targetValue: 1,
+    title: "Template Ready",
+    description: "Upload or paste a resume so tailoring starts from your actual baseline materials.",
+    reward: "Unlocked: Resume Template badge",
+  },
+  {
+    key: "first_job_match",
+    counterKey: "job_matches_run",
+    targetValue: 1,
+    title: "First Match Run",
+    description: "Run your first grounded job analysis to unlock targeted fit feedback.",
+    reward: "Unlocked: Match Runner badge",
+  },
+  {
+    key: "match_momentum",
+    counterKey: "job_matches_run",
+    targetValue: 3,
+    title: "Match Momentum",
+    description: "Run three job matches to build a stronger signal about what roles align with your profile.",
+    reward: "Unlocked: Momentum badge",
+  },
+  {
+    key: "first_tailored_resume",
+    counterKey: "tailored_resumes_generated",
+    targetValue: 1,
+    title: "Resume Tailored",
+    description: "Generate your first tailored resume to turn analysis into a submission-ready artifact.",
+    reward: "Unlocked: Tailor Ready badge",
+  },
+];
+
 function normalizeAuthUser(raw: any): AuthUser {
   return {
     id: String(raw?.id ?? raw?._id ?? "").trim(),
@@ -290,26 +364,56 @@ function normalizeRewardAchievement(raw: any): RewardAchievement {
   };
 }
 
+function buildRewardAchievementsFromCounters(counters: RewardCounters, unlockedLookup: Record<string, string | null> = {}): RewardAchievement[] {
+  return REWARD_MILESTONES.map((milestone) => {
+    const currentValue = Number(counters[milestone.counterKey] ?? 0) || 0;
+    const unlocked = currentValue >= milestone.targetValue;
+    return {
+      key: milestone.key,
+      title: milestone.title,
+      description: milestone.description,
+      reward: milestone.reward,
+      counter_key: milestone.counterKey,
+      current_value: currentValue,
+      target_value: milestone.targetValue,
+      progress_pct: milestone.targetValue > 0 ? Math.min(100, Number(((currentValue / milestone.targetValue) * 100).toFixed(2))) : 100,
+      unlocked,
+      unlocked_at: unlocked ? unlockedLookup[milestone.key] ?? null : null,
+    };
+  });
+}
+
 export function normalizeRewardsSummary(raw: any): RewardsSummary {
-  const achievements = asArray(raw?.achievements).map(normalizeRewardAchievement);
+  const counters: RewardCounters = {
+    evidence_saved: Number(raw?.counters?.evidence_saved ?? 0) || 0,
+    profile_skills_confirmed: Number(raw?.counters?.profile_skills_confirmed ?? 0) || 0,
+    resume_snapshots_uploaded: Number(raw?.counters?.resume_snapshots_uploaded ?? 0) || 0,
+    job_matches_run: Number(raw?.counters?.job_matches_run ?? 0) || 0,
+    tailored_resumes_generated: Number(raw?.counters?.tailored_resumes_generated ?? 0) || 0,
+  };
+  const unlockedLookup = Object.fromEntries(
+    asArray(raw?.achievements)
+      .map((achievement) => normalizeRewardAchievement(achievement))
+      .filter((achievement) => achievement.unlocked)
+      .map((achievement) => [achievement.key, achievement.unlocked_at ?? null])
+  ) as Record<string, string | null>;
+  const achievements = asArray(raw?.achievements).length
+    ? asArray(raw?.achievements).map(normalizeRewardAchievement)
+    : buildRewardAchievementsFromCounters(counters, unlockedLookup);
   const badges = asArray(raw?.badges).length ? asArray(raw?.badges).map(normalizeRewardAchievement) : achievements;
+  const unlockedCount = achievements.filter((achievement) => achievement.unlocked).length;
+  const nextAchievement = achievements.find((achievement) => !achievement.unlocked) ?? null;
   return {
-    counters: {
-      evidence_saved: Number(raw?.counters?.evidence_saved ?? 0) || 0,
-      profile_skills_confirmed: Number(raw?.counters?.profile_skills_confirmed ?? 0) || 0,
-      resume_snapshots_uploaded: Number(raw?.counters?.resume_snapshots_uploaded ?? 0) || 0,
-      job_matches_run: Number(raw?.counters?.job_matches_run ?? 0) || 0,
-      tailored_resumes_generated: Number(raw?.counters?.tailored_resumes_generated ?? 0) || 0,
-    },
-    unlockedCount: Number(raw?.unlocked_count ?? 0) || 0,
-    totalCount: Number(raw?.total_count ?? 0) || 0,
+    counters,
+    unlockedCount: Number(raw?.unlocked_count ?? unlockedCount) || unlockedCount,
+    totalCount: Number(raw?.total_count ?? achievements.length) || achievements.length,
     achievements,
     badges,
     badgeCount: Number(raw?.badge_count ?? raw?.badgeCount ?? badges.length) || badges.length,
     unlockedBadgeCount:
       Number(raw?.unlocked_badge_count ?? raw?.unlockedBadgeCount ?? badges.filter((badge) => badge.unlocked).length) ||
       badges.filter((badge) => badge.unlocked).length,
-    nextAchievement: raw?.next_achievement ? normalizeRewardAchievement(raw.next_achievement) : null,
+    nextAchievement: raw?.next_achievement ? normalizeRewardAchievement(raw.next_achievement) : nextAchievement,
     recentUnlocks: asArray(raw?.recent_unlocks).map(normalizeRewardAchievement),
   };
 }
