@@ -234,6 +234,7 @@ export type RewardCounters = {
 export type RewardAchievement = {
   key: string;
   icon_key?: string;
+  tier?: "bronze" | "silver" | "gold" | "plat" | "emerald" | "diamond" | "master";
   title: string;
   description: string;
   reward: string;
@@ -260,6 +261,7 @@ export type RewardsSummary = {
 const REWARD_MILESTONES: Array<{
   key: string;
   iconKey: string;
+  tier: "bronze" | "silver" | "gold" | "plat" | "emerald" | "diamond" | "master";
   title: string;
   description: string;
   reward: string;
@@ -269,6 +271,7 @@ const REWARD_MILESTONES: Array<{
   {
     key: "first_evidence_saved",
     iconKey: "spark",
+    tier: "bronze",
     counterKey: "evidence_saved",
     targetValue: 1,
     title: "First Proof Added",
@@ -278,6 +281,7 @@ const REWARD_MILESTONES: Array<{
   {
     key: "evidence_starter",
     iconKey: "stack",
+    tier: "gold",
     counterKey: "evidence_saved",
     targetValue: 3,
     title: "Proof Stack",
@@ -287,6 +291,7 @@ const REWARD_MILESTONES: Array<{
   {
     key: "first_skill_confirmed",
     iconKey: "shield",
+    tier: "bronze",
     counterKey: "profile_skills_confirmed",
     targetValue: 1,
     title: "First Skill Locked In",
@@ -296,6 +301,7 @@ const REWARD_MILESTONES: Array<{
   {
     key: "skill_stack",
     iconKey: "layers",
+    tier: "emerald",
     counterKey: "profile_skills_confirmed",
     targetValue: 5,
     title: "Skill Stack",
@@ -305,6 +311,7 @@ const REWARD_MILESTONES: Array<{
   {
     key: "first_resume_uploaded",
     iconKey: "scroll",
+    tier: "silver",
     counterKey: "resume_snapshots_uploaded",
     targetValue: 1,
     title: "Template Ready",
@@ -314,6 +321,7 @@ const REWARD_MILESTONES: Array<{
   {
     key: "first_job_match",
     iconKey: "compass",
+    tier: "plat",
     counterKey: "job_matches_run",
     targetValue: 1,
     title: "First Match Run",
@@ -323,6 +331,7 @@ const REWARD_MILESTONES: Array<{
   {
     key: "match_momentum",
     iconKey: "rocket",
+    tier: "diamond",
     counterKey: "job_matches_run",
     targetValue: 3,
     title: "Match Momentum",
@@ -332,6 +341,7 @@ const REWARD_MILESTONES: Array<{
   {
     key: "first_tailored_resume",
     iconKey: "badge",
+    tier: "master",
     counterKey: "tailored_resumes_generated",
     targetValue: 1,
     title: "Resume Tailored",
@@ -363,6 +373,7 @@ function normalizeRewardAchievement(raw: any): RewardAchievement {
   return {
     key: String(raw?.key ?? "").trim(),
     icon_key: String(raw?.icon_key ?? raw?.iconKey ?? "award").trim() || "award",
+    tier: String(raw?.tier ?? "bronze").trim() as RewardAchievement["tier"],
     title: String(raw?.title ?? "").trim(),
     description: String(raw?.description ?? "").trim(),
     reward: String(raw?.reward ?? "").trim(),
@@ -382,6 +393,7 @@ function buildRewardAchievementsFromCounters(counters: RewardCounters, unlockedL
     return {
       key: milestone.key,
       icon_key: milestone.iconKey,
+      tier: milestone.tier,
       title: milestone.title,
       description: milestone.description,
       reward: milestone.reward,

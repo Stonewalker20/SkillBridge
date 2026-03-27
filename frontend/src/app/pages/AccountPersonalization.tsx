@@ -23,6 +23,7 @@ import { AVATAR_PRESETS, avatarPresetClass, type AvatarPresetValue } from "../li
 import { api, type RewardsSummary } from "../services/api";
 import { AccountSectionNav } from "../components/AccountSectionNav";
 import { RewardBadgeCollection } from "../components/RewardBadgeCollection";
+import { highestUnlockedRewardTier, rewardTierAtLeast, rewardTierClasses, rewardTierLabel } from "../lib/rewardTiers";
 
 function PreferenceRow({
   title,
@@ -112,9 +113,11 @@ export function AccountPersonalization() {
         (rewards.badgeCount ?? 0) > 0 ||
         (rewards.totalCount ?? 0) > 0)
   );
-  const unlockedBadgeCount = hasRewardsData ? rewards?.unlockedBadgeCount ?? rewards?.unlockedCount ?? 0 : 0;
-  const badgeCount = hasRewardsData ? rewards?.badgeCount ?? rewards?.totalCount ?? rewards?.badges?.length ?? rewards?.achievements.length ?? 0 : 0;
-  const availableThemeCount = hasRewardsData ? Math.min(themes.length, 3 + unlockedBadgeCount) : themes.length;
+  const highestTier = hasRewardsData
+    ? highestUnlockedRewardTier((rewards?.badges ?? rewards?.achievements ?? []).filter((badge) => badge.unlocked).map((badge) => badge.tier))
+    : null;
+  const unlockedThemeCount = themes.filter((themeOption) => rewardTierAtLeast(highestTier, themeOption.unlockTier)).length;
+  const unlockedAvatarPresetCount = AVATAR_PRESETS.filter((preset) => rewardTierAtLeast(highestTier, preset.unlockTier)).length;
 
   const handleSelectAvatarPreset = async (preset: AvatarPresetValue) => {
     try {
@@ -158,7 +161,7 @@ export function AccountPersonalization() {
 
   const handleSelectTheme = (themeValue: (typeof themes)[number]["value"], isLocked: boolean) => {
     if (isLocked) {
-      toast("Unlock more badges to use this theme.");
+      toast("Unlock a higher badge tier to use this colorway.");
       return;
     }
     setHeaderTheme(themeValue);
@@ -279,14 +282,15 @@ export function AccountPersonalization() {
 
             <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
               {hasRewardsData
-                ? `${availableThemeCount}/${themes.length} header themes are available with ${unlockedBadgeCount}/${badgeCount || rewards?.achievements.length || 0} badges unlocked.`
+                ? `${unlockedThemeCount}/${themes.length} header themes and ${unlockedAvatarPresetCount}/${AVATAR_PRESETS.length} avatar colorways are available. Highest unlocked tier: ${rewardTierLabel(highestTier)}.`
                 : "Achievement sync is unavailable right now, so all header themes remain selectable until badge progress reloads."}
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {themes.map((themeOption, index) => {
+              {themes.map((themeOption) => {
                 const isSelected = headerTheme === themeOption.value;
-                const isLocked = hasRewardsData && index >= availableThemeCount && !isSelected;
+                const isLocked = hasRewardsData && !rewardTierAtLeast(highestTier, themeOption.unlockTier) && !isSelected;
+                const tierClass = rewardTierClasses(themeOption.unlockTier);
                 return (
                   <button
                     key={themeOption.value}
@@ -326,6 +330,15 @@ export function AccountPersonalization() {
                     <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <p className="min-w-0 text-sm font-semibold text-slate-900 dark:text-slate-100">{themeOption.label}</p>
                       <div className="flex flex-wrap items-center gap-2">
+                        {themeOption.unlockTier ? (
+                          <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${isLocked ? tierClass.muted : tierClass.chip}`}>
+                            {rewardTierLabel(themeOption.unlockTier)}
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                            Starter
+                          </span>
+                        )}
                         {isLocked ? (
                           <span className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
                             <Lock className="h-3 w-3" />
@@ -465,19 +478,44 @@ export function AccountPersonalization() {
               <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
                 {AVATAR_PRESETS.map((preset) => {
                   const selected = !avatarUrl && avatarPreset === preset.value;
+                  const isLocked = hasRewardsData && !rewardTierAtLeast(highestTier, preset.unlockTier) && !selected;
+                  const tierClass = rewardTierClasses(preset.unlockTier);
                   return (
                     <button
                       type="button"
                       key={preset.value}
-                      onClick={() => handleSelectAvatarPreset(preset.value)}
+                      onClick={() => {
+                        if (isLocked) {
+                          toast("Unlock a higher badge tier to use this colorway.");
+                          return;
+                        }
+                        handleSelectAvatarPreset(preset.value);
+                      }}
+                      disabled={isLocked}
                       className={`rounded-2xl border p-3 text-left transition ${
-                        selected ? "border-slate-900 bg-white shadow-sm dark:border-slate-100 dark:bg-slate-900" : "border-slate-200 dark:border-slate-700"
+                        selected
+                          ? "border-slate-900 bg-white shadow-sm dark:border-slate-100 dark:bg-slate-900"
+                          : isLocked
+                            ? "border-slate-200 bg-white/70 opacity-70 dark:border-slate-700 dark:bg-slate-950/50"
+                            : "border-slate-200 dark:border-slate-700"
                       }`}
                     >
                       <div className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold ${preset.className}`}>
                         {initials}
                       </div>
-                      <div className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</div>
+                        {preset.unlockTier ? (
+                          <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${isLocked ? tierClass.muted : tierClass.chip}`}>
+                            {rewardTierLabel(preset.unlockTier)}
+                          </span>
+                        ) : null}
+                        {isLocked ? (
+                          <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                            Locked
+                          </span>
+                        ) : null}
+                      </div>
                     </button>
                   );
                 })}

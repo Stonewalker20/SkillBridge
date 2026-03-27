@@ -18,6 +18,8 @@ describe("avatarPresetClass", () => {
   });
 
   it("keeps the preset catalog populated", () => {
-    expect(AVATAR_PRESETS.length).toBeGreaterThan(0);
+    expect(AVATAR_PRESETS.length).toBe(18);
+    expect(AVATAR_PRESETS.find((preset) => preset.value === "glacier")?.unlockTier).toBe("diamond");
+    expect(AVATAR_PRESETS.find((preset) => preset.value === "supernova")?.unlockTier).toBe("master");
   });
 });

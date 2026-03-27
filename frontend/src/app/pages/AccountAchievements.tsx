@@ -4,10 +4,54 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { RewardBadgeCollection } from "../components/RewardBadgeCollection";
 import { AccountSectionNav } from "../components/AccountSectionNav";
 import { api, type RewardsSummary } from "../services/api";
 import { useHeaderTheme } from "../lib/headerTheme";
+import { AVATAR_PRESETS } from "../lib/avatarPresets";
+import { RewardBadgeIcon } from "../lib/rewardBadgeIcons";
+import {
+  REWARD_TIERS,
+  highestUnlockedRewardTier,
+  rewardTierAtLeast,
+  rewardTierClasses,
+  rewardTierLabel,
+  type RewardTier,
+} from "../lib/rewardTiers";
+
+function milestoneCounterLabel(counterKey: string): string {
+  switch (counterKey) {
+    case "evidence_saved":
+      return "evidence items";
+    case "profile_skills_confirmed":
+      return "confirmed skills";
+    case "resume_snapshots_uploaded":
+      return "resume sources";
+    case "job_matches_run":
+      return "job matches";
+    case "tailored_resumes_generated":
+      return "tailored resumes";
+    default:
+      return "actions";
+  }
+}
+
+function milestoneNextStep(counterKey: string, remaining: number): string {
+  if (remaining <= 0) return "Unlocked";
+  switch (counterKey) {
+    case "evidence_saved":
+      return `Add ${remaining} more evidence ${remaining === 1 ? "item" : "items"}.`;
+    case "profile_skills_confirmed":
+      return `Confirm ${remaining} more profile ${remaining === 1 ? "skill" : "skills"}.`;
+    case "resume_snapshots_uploaded":
+      return `Upload ${remaining} more ${remaining === 1 ? "resume source" : "resume sources"}.`;
+    case "job_matches_run":
+      return `Run ${remaining} more ${remaining === 1 ? "job match" : "job matches"}.`;
+    case "tailored_resumes_generated":
+      return `Generate ${remaining} more tailored ${remaining === 1 ? "resume" : "resumes"}.`;
+    default:
+      return `Complete ${remaining} more ${remaining === 1 ? "step" : "steps"}.`;
+  }
+}
 
 export function AccountAchievements() {
   const { activeHeaderTheme, themes } = useHeaderTheme();
@@ -36,7 +80,33 @@ export function AccountAchievements() {
   const hasRewardData = Boolean(rewards && (badgeTotal > 0 || rewards.achievements.length > 0 || (rewards.badges?.length ?? 0) > 0));
   const nextAchievement = rewards?.nextAchievement ?? null;
   const recentUnlocks = rewards?.recentUnlocks ?? [];
-  const badges = rewards?.badges ?? rewards?.achievements ?? [];
+  const badges = useMemo(() => rewards?.badges ?? rewards?.achievements ?? [], [rewards]);
+  const highestTier = useMemo(
+    () => highestUnlockedRewardTier(badges.filter((badge) => badge.unlocked).map((badge) => badge.tier)),
+    [badges]
+  );
+  const unlockedThemeCount = useMemo(
+    () => themes.filter((theme) => rewardTierAtLeast(highestTier, theme.unlockTier)).length,
+    [highestTier, themes]
+  );
+  const unlockedAvatarPresetCount = useMemo(
+    () => AVATAR_PRESETS.filter((preset) => rewardTierAtLeast(highestTier, preset.unlockTier)).length,
+    [highestTier]
+  );
+  const tierProgression = useMemo(
+    () =>
+      REWARD_TIERS.map((tier) => {
+        const tierBadges = badges.filter((badge) => badge.tier === tier);
+        const unlockedTierBadges = tierBadges.filter((badge) => badge.unlocked).length;
+        return {
+          tier,
+          total: tierBadges.length,
+          unlocked: unlockedTierBadges,
+          status: tierBadges.length > 0 && unlockedTierBadges === tierBadges.length ? "Completed" : tierBadges.length > 0 && unlockedTierBadges > 0 ? "In progress" : "Locked",
+        };
+      }).filter((entry) => entry.total > 0),
+    [badges]
+  );
   const unlockRate = useMemo(() => {
     if (!hasRewardData || badgeTotal <= 0) return 0;
     return Math.round((badgeUnlocked / badgeTotal) * 100);
@@ -71,8 +141,17 @@ export function AccountAchievements() {
               <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70 sm:col-span-1 col-span-2">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Themes</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {hasRewardData ? `${Math.min(themes.length, 3 + badgeUnlocked)} unlocked` : "All available while sync recovers"}
+                  {hasRewardData ? `${unlockedThemeCount}/${themes.length} unlocked` : "All available while sync recovers"}
                 </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70 sm:col-span-1 col-span-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Highest Tier</p>
+                <div className="mt-2">
+                  <span className={`rounded-full border px-2.5 py-1 text-sm font-semibold ${rewardTierClasses(highestTier).chip}`}>
+                    {rewardTierLabel(highestTier)}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{unlockedAvatarPresetCount}/{AVATAR_PRESETS.length} avatar colorways available</p>
               </div>
             </div>
           </div>
@@ -156,7 +235,162 @@ export function AccountAchievements() {
             </Card>
           </div>
 
-          <RewardBadgeCollection badges={badges} unlockedCount={badgeUnlocked} totalCount={badgeTotal || badges.length} />
+          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Badge Vault</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Hover or focus a badge icon to inspect the unlock details. Locked badges stay shadowed until earned.
+                </p>
+              </div>
+              <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                {badgeUnlocked}/{badgeTotal || badges.length}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
+              {badges.map((badge) => {
+                const tierClass = rewardTierClasses(badge.tier);
+                const unlocked = Boolean(badge.unlocked);
+                return (
+                  <div key={badge.key} className="group relative flex flex-col items-center">
+                    <div
+                      tabIndex={0}
+                      className={`relative flex h-24 w-24 items-center justify-center rounded-3xl border bg-white/90 transition focus:outline-none focus:ring-2 ${unlocked ? `${tierClass.ring} border-slate-200 shadow-sm dark:border-slate-700 dark:bg-slate-950/70` : "border-slate-300 bg-slate-200/70 shadow-[inset_0_0_30px_rgba(15,23,42,0.55)] grayscale dark:border-slate-800 dark:bg-slate-950/60"}`}
+                    >
+                      <RewardBadgeIcon
+                        iconKey={badge.icon_key}
+                        className={unlocked ? "" : "opacity-45 saturate-0"}
+                      />
+                      <span className={`absolute bottom-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${unlocked ? tierClass.chip : tierClass.muted}`}>
+                        {rewardTierLabel(badge.tier)}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-center text-xs font-medium text-slate-700 dark:text-slate-300">
+                      {badge.title}
+                    </div>
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-3 w-56 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white/95 p-3 opacity-0 shadow-xl transition group-hover:opacity-100 group-focus-within:opacity-100 dark:border-slate-700 dark:bg-slate-950/95">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{badge.current_value}/{badge.target_value} {milestoneCounterLabel(badge.counter_key)}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{badge.title}</p>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${unlocked ? tierClass.chip : tierClass.muted}`}>
+                          {rewardTierLabel(badge.tier)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">{badge.description}</p>
+                      <p className="mt-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+                        {milestoneNextStep(badge.counter_key, Math.max(0, badge.target_value - badge.current_value))}
+                      </p>
+                      <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{badge.reward}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.12fr_0.88fr]">
+            <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Milestone tracker</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
+                    Every milestone shows the badge tier, your current progress, and the exact action needed to move it forward.
+                  </p>
+                </div>
+                <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                  {badgeUnlocked}/{badgeTotal}
+                </Badge>
+              </div>
+
+              <div className="space-y-4">
+                {badges.map((badge) => {
+                  const remaining = Math.max(0, badge.target_value - badge.current_value);
+                  const tierClass = rewardTierClasses(badge.tier);
+                  return (
+                    <div
+                      key={`${badge.key}:milestone`}
+                      className={`rounded-2xl border px-4 py-4 ${badge.unlocked ? "border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-950/60" : "border-slate-200 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-950/40"}`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{badge.title}</p>
+                            <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${badge.unlocked ? tierClass.chip : tierClass.muted}`}>
+                              {rewardTierLabel(badge.tier)}
+                            </span>
+                            <Badge variant={badge.unlocked ? "default" : "secondary"} className="gap-1.5 rounded-full">
+                              {badge.unlocked ? "Unlocked" : "In Progress"}
+                            </Badge>
+                          </div>
+                          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{badge.description}</p>
+                        </div>
+                        <div className="text-right text-sm">
+                          <p className="font-semibold text-slate-900 dark:text-slate-100">
+                            {badge.current_value}/{badge.target_value}
+                          </p>
+                          <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                            {milestoneCounterLabel(badge.counter_key)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 h-2.5 rounded-full bg-slate-200 dark:bg-slate-800">
+                        <div
+                          className={`h-2.5 rounded-full ${badge.unlocked ? activeHeaderTheme.barClass : "bg-slate-400 dark:bg-slate-600"}`}
+                          style={{ width: `${Math.max(6, Math.min(100, badge.progress_pct))}%` }}
+                        />
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{milestoneNextStep(badge.counter_key, remaining)}</p>
+                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{badge.reward}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+              <div className="mb-5">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Tier ladder</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Higher badge tiers unlock sharper workspace colorways and stronger avatar presets.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {tierProgression.map((entry) => {
+                  const tier = entry.tier as RewardTier;
+                  const tierClass = rewardTierClasses(tier);
+                  return (
+                    <div
+                      key={tier}
+                      className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/50"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${rewardTierAtLeast(highestTier, tier) ? tierClass.chip : tierClass.muted}`}>
+                          {rewardTierLabel(tier)}
+                        </span>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {entry.unlocked}/{entry.total}
+                        </p>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{entry.status}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Customization unlocks</p>
+                <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
+                  {unlockedThemeCount}/{themes.length} header themes and {unlockedAvatarPresetCount}/{AVATAR_PRESETS.length} avatar colorways are currently available from your unlocked badge tiers.
+                </p>
+              </div>
+            </Card>
+          </div>
         </>
       )}
     </div>

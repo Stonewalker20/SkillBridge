@@ -18,6 +18,7 @@ class RewardCountersOut(BaseModel):
 class RewardAchievementOut(BaseModel):
     key: str
     icon_key: str = "award"
+    tier: str = "bronze"
     title: str
     description: str
     reward: str

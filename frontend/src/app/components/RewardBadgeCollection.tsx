@@ -2,7 +2,7 @@ import { Award, CheckCircle2, Lock } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
 import { type RewardBadge } from "../services/api";
-import { RewardBadgeIcon } from "../lib/rewardBadgeIcons";
+import { rewardTierClasses, rewardTierLabel } from "../lib/rewardTiers";
 
 export function RewardBadgeCollection({
   badges,
@@ -45,18 +45,18 @@ export function RewardBadgeCollection({
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <RewardBadgeIcon iconKey={badge.icon_key} className="shrink-0" />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{badge.title}</p>
-                        <Badge variant={isUnlocked ? "default" : "secondary"} className="gap-1.5 rounded-full">
-                          {isUnlocked ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                          {isUnlocked ? "Unlocked" : "Locked"}
-                        </Badge>
-                      </div>
-                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{badge.description}</p>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{badge.title}</p>
+                      <Badge variant={isUnlocked ? "default" : "secondary"} className="gap-1.5 rounded-full">
+                        {isUnlocked ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                        {isUnlocked ? "Unlocked" : "Locked"}
+                      </Badge>
+                      <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${rewardTierClasses(badge.tier).chip}`}>
+                        {rewardTierLabel(badge.tier)}
+                      </span>
                     </div>
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{badge.description}</p>
                   </div>
                 </div>
 
@@ -82,7 +82,7 @@ export function RewardBadgeCollection({
       )}
 
       <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
-        Unlocked badges also expand your available header color options.
+        Higher badge tiers expand your available header colorways and avatar presets.
       </p>
     </Card>
   );

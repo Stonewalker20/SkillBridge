@@ -44,6 +44,7 @@ describe("normalizeRewardsSummary", () => {
     expect(summary.unlockedBadgeCount).toBe(1);
     expect(summary.badges?.[0].key).toBe("first_evidence_saved");
     expect(summary.badges?.[0].icon_key).toBe("award");
+    expect(summary.badges?.[0].tier).toBe("bronze");
   });
 
   it("builds the default achievement ladder from counters when the backend response is partial", () => {
@@ -64,5 +65,7 @@ describe("normalizeRewardsSummary", () => {
     expect(summary.unlockedBadgeCount).toBe(8);
     expect(summary.nextAchievement).toBeNull();
     expect(summary.achievements[0]?.icon_key).toBe("spark");
+    expect(summary.achievements[0]?.tier).toBe("bronze");
+    expect(summary.achievements.at(-1)?.tier).toBe("master");
   });
 });

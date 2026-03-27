@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { RewardTier } from "./rewardTiers";
 
 export const ACCOUNT_HEADER_THEME_STORAGE_KEY = "account:headerTheme";
 export const ACCOUNT_HEADER_THEME_EVENT = "skillbridge:header-theme-change";
@@ -7,6 +8,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "ocean",
     label: "Ocean Blue",
+    unlockTier: null as RewardTier | null,
     swatchColors: ["#1E3A8A", "#0F766E", "#DBEAFE"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(30,58,138,0.26),_transparent_40%),linear-gradient(135deg,_#eef4ff,_#f8fbff_55%,_#eef6ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.10),_transparent_34%),linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(2,6,23,0.98))]",
@@ -22,6 +24,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "sunrise",
     label: "Sunrise Gold",
+    unlockTier: null as RewardTier | null,
     swatchColors: ["#B45309", "#F59E0B", "#FEF3C7"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.30),_transparent_42%),linear-gradient(135deg,_#fff8e7,_#fde68a_58%,_#fff7ed)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.20),_transparent_34%),linear-gradient(135deg,_#2a1e06,_#120d03)]",
@@ -37,6 +40,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "forest",
     label: "Forest Teal",
+    unlockTier: null as RewardTier | null,
     swatchColors: ["#0F766E", "#14B8A6", "#CCFBF1"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.24),_transparent_40%),linear-gradient(135deg,_#ecfdf5,_#ccfbf1_56%,_#f0fdfa)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.18),_transparent_34%),linear-gradient(135deg,_#07231f,_#041310)]",
@@ -52,6 +56,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "plum",
     label: "Plum Slate",
+    unlockTier: "gold" as RewardTier,
     swatchColors: ["#7C3AED", "#4338CA", "#EDE9FE"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.24),_transparent_40%),linear-gradient(135deg,_#faf5ff,_#ede9fe_56%,_#f8fafc)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.14),_transparent_34%),linear-gradient(135deg,_#1b1028,_#0f172a)]",
@@ -67,6 +72,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "rose",
     label: "Rose Ember",
+    unlockTier: "silver" as RewardTier,
     swatchColors: ["#E11D48", "#F97316", "#FFE4E6"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(244,63,94,0.20),_transparent_40%),linear-gradient(135deg,_#fff1f2,_#ffe4e6_56%,_#fff7ed)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,113,133,0.16),_transparent_34%),linear-gradient(135deg,_#2c0f16,_#17060b)]",
@@ -82,6 +88,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "slate",
     label: "Slate Steel",
+    unlockTier: "bronze" as RewardTier,
     swatchColors: ["#334155", "#64748B", "#E2E8F0"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(71,85,105,0.20),_transparent_40%),linear-gradient(135deg,_#f8fafc,_#e2e8f0_58%,_#f1f5f9)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(148,163,184,0.14),_transparent_34%),linear-gradient(135deg,_#111827,_#020617)]",
@@ -97,6 +104,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "cobalt",
     label: "Cobalt Mint",
+    unlockTier: "plat" as RewardTier,
     swatchColors: ["#2563EB", "#14B8A6", "#DBEAFE"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.22),_transparent_40%),linear-gradient(135deg,_#eff6ff,_#dbeafe_56%,_#ecfeff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(96,165,250,0.16),_transparent_34%),linear-gradient(135deg,_#0a1630,_#03141a)]",
@@ -112,6 +120,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "aurora",
     label: "Aurora Sky",
+    unlockTier: "emerald" as RewardTier,
     swatchColors: ["#0EA5E9", "#22C55E", "#DCFCE7"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.22),_transparent_38%),linear-gradient(135deg,_#ecfeff,_#dcfce7_56%,_#eff6ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.15),_transparent_34%),linear-gradient(135deg,_#04161f,_#05150d)]",
@@ -127,6 +136,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "sandstone",
     label: "Sandstone Clay",
+    unlockTier: "bronze" as RewardTier,
     swatchColors: ["#78716C", "#A8A29E", "#F5F5F4"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(120,113,108,0.20),_transparent_40%),linear-gradient(135deg,_#fafaf9,_#f5f5f4_56%,_#e7e5e4)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(168,162,158,0.14),_transparent_34%),linear-gradient(135deg,_#1c1917,_#0c0a09)]",
@@ -142,6 +152,7 @@ export const ACCOUNT_HEADER_THEMES = [
   {
     value: "orchid",
     label: "Orchid Pulse",
+    unlockTier: "gold" as RewardTier,
     swatchColors: ["#9333EA", "#EC4899", "#F5D0FE"],
     heroClass:
       "bg-[radial-gradient(circle_at_top_left,_rgba(147,51,234,0.22),_transparent_40%),linear-gradient(135deg,_#fdf4ff,_#f5d0fe_56%,_#fce7f3)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.14),_transparent_34%),linear-gradient(135deg,_#250925,_#180611)]",
@@ -153,6 +164,70 @@ export const ACCOUNT_HEADER_THEMES = [
     sidebarClass:
       "bg-[linear-gradient(180deg,_rgba(253,244,255,0.98),_rgba(245,208,254,0.90)_52%,_rgba(252,231,243,0.96))] dark:bg-[linear-gradient(180deg,_rgba(37,9,37,0.98),_rgba(24,6,17,0.96))]",
     sidebarActiveClass: "bg-[linear-gradient(135deg,_#9333EA,_#EC4899)] text-white shadow-sm",
+  },
+  {
+    value: "glacier",
+    label: "Glacier Glass",
+    unlockTier: "diamond" as RewardTier,
+    swatchColors: ["#38BDF8", "#E0F2FE", "#ECFEFF"],
+    heroClass:
+      "bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.22),_transparent_38%),linear-gradient(135deg,_#f0f9ff,_#e0f2fe_52%,_#ecfeff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.18),_transparent_34%),linear-gradient(135deg,_#061a24,_#03131b)]",
+    avatarClass: "bg-[linear-gradient(135deg,_#0EA5E9,_#67E8F9)]",
+    buttonClass: "bg-[#0284C7] text-white hover:bg-[#0369a1]",
+    barClass: "bg-[linear-gradient(90deg,_#0EA5E9,_#67E8F9)]",
+    accentTextClass: "text-sky-600 dark:text-sky-300",
+    softPanelClass: "bg-[linear-gradient(135deg,_rgba(56,189,248,0.10),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(103,232,249,0.12),_rgba(3,19,27,0.94))]",
+    sidebarClass:
+      "bg-[linear-gradient(180deg,_rgba(240,249,255,0.98),_rgba(224,242,254,0.90)_52%,_rgba(236,254,255,0.96))] dark:bg-[linear-gradient(180deg,_rgba(6,26,36,0.98),_rgba(3,19,27,0.96))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#0EA5E9,_#67E8F9)] text-white shadow-sm",
+  },
+  {
+    value: "abyss",
+    label: "Abyss Current",
+    unlockTier: "diamond" as RewardTier,
+    swatchColors: ["#0F172A", "#1D4ED8", "#67E8F9"],
+    heroClass:
+      "bg-[radial-gradient(circle_at_top_left,_rgba(29,78,216,0.22),_transparent_38%),linear-gradient(135deg,_#e0f2fe,_#dbeafe_48%,_#eff6ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(6,182,212,0.16),_transparent_34%),linear-gradient(135deg,_#020617,_#081325)]",
+    avatarClass: "bg-[linear-gradient(135deg,_#0F172A,_#1D4ED8)]",
+    buttonClass: "bg-[#1D4ED8] text-white hover:bg-[#1e40af]",
+    barClass: "bg-[linear-gradient(90deg,_#1D4ED8,_#22D3EE)]",
+    accentTextClass: "text-blue-700 dark:text-cyan-300",
+    softPanelClass: "bg-[linear-gradient(135deg,_rgba(29,78,216,0.10),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(34,211,238,0.10),_rgba(2,6,23,0.94))]",
+    sidebarClass:
+      "bg-[linear-gradient(180deg,_rgba(224,242,254,0.98),_rgba(219,234,254,0.90)_52%,_rgba(239,246,255,0.96))] dark:bg-[linear-gradient(180deg,_rgba(2,6,23,0.98),_rgba(8,19,37,0.96))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#0F172A,_#1D4ED8)] text-white shadow-sm",
+  },
+  {
+    value: "neptune",
+    label: "Neptune Flux",
+    unlockTier: "master" as RewardTier,
+    swatchColors: ["#22D3EE", "#2563EB", "#7C3AED"],
+    heroClass:
+      "bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.26),_transparent_38%),linear-gradient(135deg,_#eef8ff,_#dbeafe_48%,_#eef2ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.18),_transparent_34%),linear-gradient(135deg,_#040817,_#0f1027)]",
+    avatarClass: "bg-[linear-gradient(135deg,_#22D3EE,_#2563EB)]",
+    buttonClass: "bg-[#2563EB] text-white hover:bg-[#1d4ed8]",
+    barClass: "bg-[linear-gradient(90deg,_#22D3EE,_#2563EB,_#7C3AED)]",
+    accentTextClass: "text-cyan-600 dark:text-violet-300",
+    softPanelClass: "bg-[linear-gradient(135deg,_rgba(34,211,238,0.12),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(124,58,237,0.12),_rgba(15,16,39,0.94))]",
+    sidebarClass:
+      "bg-[linear-gradient(180deg,_rgba(238,248,255,0.98),_rgba(219,234,254,0.90)_52%,_rgba(238,242,255,0.96))] dark:bg-[linear-gradient(180deg,_rgba(4,8,23,0.98),_rgba(15,16,39,0.96))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#22D3EE,_#2563EB)] text-white shadow-sm",
+  },
+  {
+    value: "supernova",
+    label: "Supernova Ice",
+    unlockTier: "master" as RewardTier,
+    swatchColors: ["#93C5FD", "#C4B5FD", "#E0E7FF"],
+    heroClass:
+      "bg-[radial-gradient(circle_at_top_left,_rgba(147,197,253,0.24),_transparent_38%),linear-gradient(135deg,_#f5f7ff,_#e0e7ff_48%,_#eef2ff)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(196,181,253,0.18),_transparent_34%),linear-gradient(135deg,_#0b1021,_#140a23)]",
+    avatarClass: "bg-[linear-gradient(135deg,_#60A5FA,_#A78BFA)]",
+    buttonClass: "bg-[#6366F1] text-white hover:bg-[#4f46e5]",
+    barClass: "bg-[linear-gradient(90deg,_#93C5FD,_#A78BFA,_#E0E7FF)]",
+    accentTextClass: "text-indigo-600 dark:text-indigo-300",
+    softPanelClass: "bg-[linear-gradient(135deg,_rgba(147,197,253,0.12),_rgba(255,255,255,0.92))] dark:bg-[linear-gradient(135deg,_rgba(167,139,250,0.12),_rgba(20,10,35,0.94))]",
+    sidebarClass:
+      "bg-[linear-gradient(180deg,_rgba(245,247,255,0.98),_rgba(224,231,255,0.92)_52%,_rgba(238,242,255,0.96))] dark:bg-[linear-gradient(180deg,_rgba(11,16,33,0.98),_rgba(20,10,35,0.96))]",
+    sidebarActiveClass: "bg-[linear-gradient(135deg,_#60A5FA,_#A78BFA)] text-white shadow-sm",
   },
 ] as const;
 
