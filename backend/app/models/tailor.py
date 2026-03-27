@@ -68,6 +68,7 @@ class JobMatchOut(BaseModel):
     match_confidence_label: str = "Low"
     analysis_summary: str = ""
     resume_snapshot_id: str | None = None
+    resume_evidence_id: str | None = None
     template_source: str | None = None
     ignored_skill_names: list[str] = Field(default_factory=list)
     added_from_missing_skills: list[AddedFromMissingSkill] = Field(default_factory=list)
@@ -123,6 +124,7 @@ class TailorPreviewIn(BaseModel):
     job_id: str | None = Field(default=None, description="Job ingest id")
     job_text: str | None = Field(default=None, description="Optional job text if job_id not provided")
     resume_snapshot_id: str | None = Field(default=None, description="Optional resume snapshot to use as the tailoring template")
+    resume_evidence_id: str | None = Field(default=None, description="Optional resume evidence item to use as the tailoring template")
     ignored_skill_names: list[str] = Field(default_factory=list, description="Optional extracted job skills to ignore during tailoring")
     template: str = Field(default="ats_v1", description="Template name")
     max_items: int = Field(default=4, ge=1, le=10)
@@ -139,6 +141,7 @@ class TailoredResumeOut(BaseModel):
     user_id: str
     job_id: str | None = None
     resume_snapshot_id: str | None = None
+    resume_evidence_id: str | None = None
     template_source: str | None = None
     template: str
     selected_skill_ids: list[str]

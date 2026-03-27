@@ -551,6 +551,58 @@ def test_job_match_required_coverage_and_missing_skills_are_populated(test_conte
     assert "ML" in payload["missing_skills"]
 
 
+def test_saved_job_history_does_not_persist_missing_skills(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    user_id = test_context["user_id"]
+    skill_python = test_context["skill_python"]
+
+    client.post(
+        "/skills/confirmations/",
+        headers=headers,
+        json={
+            "resume_snapshot_id": None,
+            "confirmed": [{"skill_id": skill_python, "proficiency": 4}],
+            "rejected": [],
+            "edited": [],
+        },
+    )
+
+    ingest = client.post(
+        "/tailor/job/ingest",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "title": "ML Engineer",
+            "company": "Acme",
+            "location": "Remote",
+            "text": "Required skills: Python and Machine Learning. Responsibilities include analytics dashboards and API delivery.",
+        },
+    )
+    assert ingest.status_code == 200
+
+    match = client.post("/tailor/match", headers=headers, json={"user_id": user_id, "job_id": ingest.json()["id"]})
+    assert match.status_code == 200
+    live_payload = match.json()
+    history_id = live_payload["history_id"]
+
+    assert live_payload["missing_skill_count"] == 1
+    assert "ML" in live_payload["missing_skills"]
+    assert live_payload["gap_insights"]
+
+    history = client.get("/tailor/history", headers=headers)
+    assert history.status_code == 200
+    history_entry = next(item for item in history.json() if item["id"] == history_id)
+    assert history_entry["missing_skills"] == []
+
+    detail = client.get(f"/tailor/history/{history_id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["analysis"]["missing_skills"] == []
+    assert detail.json()["analysis"]["missing_skill_count"] == 0
+    assert detail.json()["analysis"]["gap_reasoning_summary"] == ""
+    assert detail.json()["analysis"]["gap_insights"] == []
+
+
 def test_job_match_falls_back_to_extracted_skills_when_required_section_is_not_detected(test_context):
     client = test_context["client"]
     headers = test_context["headers"]
@@ -695,3 +747,258 @@ def test_reanalyze_dedupes_alias_equivalent_job_skills(test_context):
     assert payload["matched_skill_count"] == 1
     assert payload["missing_skill_count"] == 0
     assert payload["required_skill_count"] == 1
+
+
+def test_reanalyze_history_endpoint_returns_fresh_analysis(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    user_id = test_context["user_id"]
+    skill_python = test_context["skill_python"]
+    skill_ml = test_context["skill_ml"]
+
+    client.post(
+        "/skills/confirmations/",
+        headers=headers,
+        json={
+            "resume_snapshot_id": None,
+            "confirmed": [
+                {"skill_id": skill_python, "proficiency": 4},
+                {"skill_id": skill_ml, "proficiency": 3},
+            ],
+            "rejected": [],
+            "edited": [],
+        },
+    )
+
+    ingest = client.post(
+        "/tailor/job/ingest",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "title": "ML Engineer",
+            "company": "Acme",
+            "location": "Remote",
+            "text": "Required skills: Python and Machine Learning. Responsibilities include analytics dashboards and API delivery.",
+        },
+    )
+    assert ingest.status_code == 200
+
+    match = client.post("/tailor/match", headers=headers, json={"user_id": user_id, "job_id": ingest.json()["id"]})
+    assert match.status_code == 200
+    history_id = match.json()["history_id"]
+
+    reanalyzed = client.post(f"/tailor/history/{history_id}/reanalyze", headers=headers, params={"user_id": user_id})
+    assert reanalyzed.status_code == 200
+    payload = reanalyzed.json()
+
+    assert payload["history_id"]
+    assert payload["history_id"] != history_id
+    assert payload["matched_skill_count"] >= 1
+
+
+def test_history_payload_drops_deleted_skill_names(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    db = test_context["db"]
+
+    db["skills"].docs = [doc for doc in db["skills"].docs if doc.get("name") != "ML"]
+    deleted_skill_id = ObjectId()
+    db["job_match_runs"].docs.append(
+        {
+            "_id": ObjectId(),
+            "user_id": ObjectId(test_context["user_id"]),
+            "job_id": ObjectId(),
+            "title": "Old Match",
+            "company": "Acme",
+            "location": "Remote",
+            "text_preview": "Old saved analysis",
+            "job_text_snapshot": "Machine learning and analytics work.",
+            "analysis": {
+                "job_id": "stale-job-id",
+                "match_score": 62.0,
+                "match_confidence_label": "Developing",
+                "analysis_summary": "Saved summary",
+                "resume_snapshot_id": None,
+                "template_source": "default_template",
+                "ignored_skill_names": [],
+                "added_from_missing_skills": [],
+                "matched_skill_ids": [str(deleted_skill_id)],
+                "matched_skills": ["ML"],
+                "missing_skill_ids": [str(deleted_skill_id)],
+                "missing_skills": ["ML"],
+                "strength_areas": [],
+                "related_skills": ["ML"],
+                "gap_insights": [
+                    {
+                        "skill_id": str(deleted_skill_id),
+                        "skill_name": "ML",
+                        "gap_type": "required",
+                        "severity": "high",
+                        "reason": "Old deleted skill",
+                        "recommended_action": "Ignore this deleted skill",
+                    }
+                ],
+                "score_breakdown": [],
+                "recommended_next_steps": [],
+                "extracted_skill_count": 1,
+                "confirmed_skill_count": 0,
+                "required_skill_count": 1,
+                "required_matched_count": 0,
+                "preferred_skill_count": 0,
+                "preferred_matched_count": 0,
+                "evidence_aligned_count": 0,
+                "evidence_gap_count": 1,
+                "keyword_overlap_count": 0,
+                "keyword_overlap_terms": [],
+                "semantic_alignment_score": 0,
+                "semantic_alignment_explanation": "",
+                "personal_skill_vector_score": 0,
+                "personal_skill_vector_explanation": "",
+                "retrieved_context": [],
+            },
+            "created_at": db["skills"].docs[0]["created_at"],
+            "updated_at": db["skills"].docs[0]["updated_at"],
+        }
+    )
+
+    history = client.get("/tailor/history", headers=headers)
+    assert history.status_code == 200
+    entry = next(item for item in history.json() if item["title"] == "Old Match")
+    assert entry["matched_skills"] == []
+    assert entry["missing_skills"] == []
+    assert entry["related_skills"] == []
+
+    detail = client.get(f"/tailor/history/{entry['id']}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["analysis"]["matched_skills"] == []
+    assert detail.json()["analysis"]["missing_skills"] == []
+    assert detail.json()["analysis"]["related_skills"] == []
+    assert detail.json()["analysis"]["gap_insights"] == []
+
+
+def test_tailored_resume_can_use_resume_evidence_as_template_source(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    user_id = test_context["user_id"]
+    db = test_context["db"]
+
+    client.post(
+        "/skills/confirmations/",
+        headers=headers,
+        json={
+            "resume_snapshot_id": None,
+            "confirmed": [
+                {"skill_id": test_context["skill_python"], "proficiency": 4},
+                {"skill_id": test_context["skill_ml"], "proficiency": 3},
+            ],
+            "rejected": [],
+            "edited": [],
+        },
+    )
+
+    resume_evidence = client.post(
+        "/evidence/",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "type": "resume",
+            "title": "resume_final_v7.docx",
+            "source": "manual-entry",
+            "text_excerpt": "\n".join(
+                [
+                    "Jane Student",
+                    "SUMMARY",
+                    "Python and ML builder focused on analytics systems.",
+                    "EXPERIENCE",
+                    "Capstone Research Assistant",
+                    "- Built analytics dashboards in Python.",
+                    "- Delivered model evaluation workflows.",
+                    "EDUCATION",
+                    "BS Computer Science",
+                ]
+            ),
+            "skill_ids": [test_context["skill_python"], test_context["skill_ml"]],
+            "origin": "user",
+        },
+    )
+    assert resume_evidence.status_code == 200
+    evidence_id = resume_evidence.json()["id"]
+
+    ingest = client.post(
+        "/tailor/job/ingest",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "title": "ML Engineer",
+            "company": "Acme",
+            "location": "Remote",
+            "text": "Looking for Python and Machine Learning experience to build analytics dashboards and model delivery pipelines.",
+        },
+    )
+    assert ingest.status_code == 200
+
+    preview = client.post(
+        "/tailor/preview",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "job_id": ingest.json()["id"],
+            "resume_evidence_id": evidence_id,
+            "template": "uploaded_resume_reword_v1",
+        },
+    )
+    assert preview.status_code == 200
+    payload = preview.json()
+
+    assert payload["resume_evidence_id"] == evidence_id
+    assert payload["resume_snapshot_id"] is None
+    assert payload["template_source"] == "evidence_resume"
+    assert payload["plain_text"]
+    assert "resume_final_v7.docx" not in payload["plain_text"]
+
+    stored_resume = next(doc for doc in db["tailored_resumes"].docs if str(doc["_id"]) == payload["id"])
+    assert str(stored_resume["resume_evidence_id"]) == evidence_id
+    assert stored_resume["template_source"] == "evidence_resume"
+    assert stored_resume["template"] == "ats_v1"
+
+
+def test_job_match_ignores_short_aliases_for_long_skills(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    user_id = test_context["user_id"]
+    db = test_context["db"]
+
+    db["skills"].docs.append(
+        {
+            "_id": ObjectId(),
+            "name": "Marketing Leadership",
+            "category": "Business",
+            "aliases": ["ML"],
+            "tags": [],
+            "origin": "user",
+            "created_by_user_id": ObjectId(user_id),
+            "hidden": False,
+            "created_at": db["skills"].docs[0]["created_at"],
+            "updated_at": db["skills"].docs[0]["updated_at"],
+        }
+    )
+
+    ingest = client.post(
+        "/tailor/job/ingest",
+        headers=headers,
+        json={
+            "user_id": user_id,
+            "title": "ML Engineer",
+            "company": "Acme",
+            "location": "Remote",
+            "text": "Looking for ML engineers to build analytics systems and model delivery workflows.",
+        },
+    )
+    assert ingest.status_code == 200
+
+    match = client.post("/tailor/match", headers=headers, json={"user_id": user_id, "job_id": ingest.json()["id"]})
+    assert match.status_code == 200
+    payload = match.json()
+
+    assert "Marketing Leadership" not in payload["missing_skills"]
+    assert "Marketing Leadership" not in payload["matched_skills"]

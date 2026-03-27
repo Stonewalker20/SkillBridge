@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, type RewardsSummary } from "../services/api";
+import { api, type Evidence, type RewardsSummary } from "../services/api";
 import { useActivity } from "../context/ActivityContext";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -38,6 +38,7 @@ type MatchResult = {
   match_confidence_label?: string;
   analysis_summary?: string;
   resume_snapshot_id?: string | null;
+  resume_evidence_id?: string | null;
   template_source?: string | null;
   ignored_skill_names?: string[];
   added_from_missing_skills?: Array<{ skill_id: string; skill_name: string }>;
@@ -75,11 +76,27 @@ type MatchResult = {
 };
 
 const asArray = <T,>(v: any): T[] => (Array.isArray(v) ? v : []);
+const DEFAULT_RESUME_SOURCE = "default";
+const snapshotResumeSourceValue = (snapshotId: string) => `snapshot:${snapshotId}`;
+const evidenceResumeSourceValue = (evidenceId: string) => `evidence:${evidenceId}`;
+
+function parseResumeSourceValue(value: string): { kind: "default" | "snapshot" | "evidence"; id: string | null } {
+  if (!value || value === DEFAULT_RESUME_SOURCE) {
+    return { kind: "default", id: null };
+  }
+  if (value.startsWith("snapshot:")) {
+    return { kind: "snapshot", id: value.slice("snapshot:".length) || null };
+  }
+  if (value.startsWith("evidence:")) {
+    return { kind: "evidence", id: value.slice("evidence:".length) || null };
+  }
+  return { kind: "default", id: null };
+}
 
 const REWARD_ACTIONS: Record<string, { href: string; label: string }> = {
   evidence_saved: { href: "/app/evidence", label: "Add evidence" },
   profile_skills_confirmed: { href: "/app/skills", label: "Confirm skills" },
-  resume_snapshots_uploaded: { href: "/app/jobs", label: "Upload resume" },
+  resume_snapshots_uploaded: { href: "/app/evidence?add=1&type=resume", label: "Add resume evidence" },
   job_matches_run: { href: "/app/jobs", label: "Run match" },
   tailored_resumes_generated: { href: "/app/jobs", label: "Generate resume" },
 };
@@ -112,6 +129,13 @@ function formatResumeTemplateLabel(snapshot: ResumeSnapshotListEntry) {
   if (!snapshot.created_at) return `Updated Resume from Evidence • ${sourceLabel}`;
 
   return `Updated Resume from Evidence • ${sourceLabel} • ${new Date(snapshot.created_at).toLocaleDateString()}`;
+}
+
+function formatResumeEvidenceLabel(evidence: Evidence) {
+  const title = String(evidence.title ?? "").trim();
+  if (title) return `Resume Evidence • ${title}`;
+  if (!evidence.created_at) return "Resume Evidence";
+  return `Resume Evidence • ${new Date(evidence.created_at).toLocaleDateString()}`;
 }
 
 const tailoredResumeTemplates = [
@@ -149,7 +173,8 @@ export function Jobs() {
   const [history, setHistory] = useState<JobMatchHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [resumeSnapshots, setResumeSnapshots] = useState<ResumeSnapshotListEntry[]>([]);
-  const [selectedResumeTemplate, setSelectedResumeTemplate] = useState<string>("default");
+  const [resumeEvidence, setResumeEvidence] = useState<Evidence[]>([]);
+  const [selectedResumeTemplate, setSelectedResumeTemplate] = useState<string>(DEFAULT_RESUME_SOURCE);
   const [selectedResumeLayout, setSelectedResumeLayout] = useState<string>("ats_v1");
   const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
@@ -169,6 +194,7 @@ export function Jobs() {
       confidenceLabel: String(a.match_confidence_label ?? a.matchConfidenceLabel ?? "Early"),
       analysisSummary: String(a.analysis_summary ?? a.analysisSummary ?? ""),
       resumeSnapshotId: String(a.resume_snapshot_id ?? a.resumeSnapshotId ?? "").trim() || null,
+      resumeEvidenceId: String(a.resume_evidence_id ?? a.resumeEvidenceId ?? "").trim() || null,
       templateSource: String(a.template_source ?? a.templateSource ?? "").trim() || null,
       ignoredSkills: asArray<string>(a.ignored_skill_names ?? a.ignoredSkills),
       addedFromMissingSkills: asArray<{ skill_id: string; skill_name: string }>(a.added_from_missing_skills ?? a.addedFromMissingSkills),
@@ -214,14 +240,22 @@ export function Jobs() {
 
   const availableResumeLayouts = useMemo(
     () =>
-      selectedResumeTemplate === "default"
+      parseResumeSourceValue(selectedResumeTemplate).kind !== "snapshot"
         ? tailoredResumeTemplates
         : [...tailoredResumeTemplates, uploadedResumeRewordTemplate],
     [selectedResumeTemplate]
   );
+  const selectedResumeSource = useMemo(() => parseResumeSourceValue(selectedResumeTemplate), [selectedResumeTemplate]);
   const selectedResumeSnapshot = useMemo(
-    () => resumeSnapshots.find((snapshot) => snapshot.snapshot_id === selectedResumeTemplate) ?? null,
-    [resumeSnapshots, selectedResumeTemplate]
+    () => (selectedResumeSource.kind === "snapshot" ? resumeSnapshots.find((snapshot) => snapshot.snapshot_id === selectedResumeSource.id) ?? null : null),
+    [resumeSnapshots, selectedResumeSource]
+  );
+  const selectedResumePayload = useMemo(
+    () => ({
+      resume_snapshot_id: selectedResumeSource.kind === "snapshot" ? selectedResumeSource.id : null,
+      resume_evidence_id: selectedResumeSource.kind === "evidence" ? selectedResumeSource.id : null,
+    }),
+    [selectedResumeSource]
   );
   const downloadsEditableDocx =
     selectedResumeLayout === uploadedResumeRewordTemplate.value &&
@@ -236,21 +270,22 @@ export function Jobs() {
     setAnalysis(null);
     setLastTailoredId(null);
     setJobId(null);
-    setSelectedResumeTemplate("default");
+    setSelectedResumeTemplate(DEFAULT_RESUME_SOURCE);
     setSelectedResumeLayout("ats_v1");
   };
 
   useEffect(() => {
-    if (selectedResumeTemplate === "default") return;
-    if (resumeSnapshots.some((snapshot) => snapshot.snapshot_id === selectedResumeTemplate)) return;
-    setSelectedResumeTemplate("default");
-  }, [resumeSnapshots, selectedResumeTemplate]);
+    if (selectedResumeSource.kind === "default") return;
+    if (selectedResumeSource.kind === "snapshot" && resumeSnapshots.some((snapshot) => snapshot.snapshot_id === selectedResumeSource.id)) return;
+    if (selectedResumeSource.kind === "evidence" && resumeEvidence.some((item) => item.id === selectedResumeSource.id)) return;
+    setSelectedResumeTemplate(DEFAULT_RESUME_SOURCE);
+  }, [resumeEvidence, resumeSnapshots, selectedResumeSource]);
 
   useEffect(() => {
-    if (selectedResumeTemplate !== "default") return;
+    if (selectedResumeSource.kind === "snapshot") return;
     if (selectedResumeLayout !== uploadedResumeRewordTemplate.value) return;
     setSelectedResumeLayout("ats_v1");
-  }, [selectedResumeLayout, selectedResumeTemplate]);
+  }, [selectedResumeLayout, selectedResumeSource]);
 
   useEffect(() => {
     const resetToken = searchParams.get("new") ?? searchParams.get("_nav");
@@ -290,8 +325,14 @@ export function Jobs() {
       }
 
       try {
-        const snapshots = await api.listResumeSnapshots();
-        if (active) setResumeSnapshots(snapshots);
+        const [snapshots, evidence] = await Promise.all([
+          api.listResumeSnapshots(),
+          api.listEvidence({ origin: "user" }),
+        ]);
+        if (active) {
+          setResumeSnapshots(snapshots);
+          setResumeEvidence(evidence.filter((item) => String(item.type ?? "").trim().toLowerCase() === "resume"));
+        }
       } catch (error) {
         console.error("Failed to load resume snapshots:", error);
       }
@@ -330,7 +371,10 @@ export function Jobs() {
       setJobId(String(jid));
 
       // 2) Match job
-      const match = await api.matchJob({ job_id: String(jid) });
+      const match = await api.matchJob({
+        job_id: String(jid),
+        ...selectedResumePayload,
+      });
       setAnalysis(match as any);
       setLastTailoredId(String((match as any)?.tailored_resume_id ?? (match as any)?.tailoredResumeId ?? "").trim() || null);
       try {
@@ -360,7 +404,7 @@ export function Jobs() {
     try {
       const preview = await api.previewTailoredResume({
         job_id: jobId,
-        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
+        ...selectedResumePayload,
         ignored_skill_names: normalized.ignoredSkills,
         template: selectedResumeLayout,
       });
@@ -417,11 +461,11 @@ export function Jobs() {
     try {
       const match = await api.matchJob({
         job_id: jobId,
-        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
+        ...selectedResumePayload,
         history_id: currentHistoryId,
         ignored_skill_names: nextIgnored,
         added_from_missing_skills: normalized.addedFromMissingSkills,
-        persist_history: Boolean(currentHistoryId),
+        persist_history: false,
       });
       setAnalysis((current) => ({
         ...(current ?? {}),
@@ -430,13 +474,6 @@ export function Jobs() {
         tailored_resume_id: null,
       }));
       setLastTailoredId(null);
-      if (currentHistoryId) {
-        try {
-          await refreshHistory();
-        } catch (historyError) {
-          console.error("Failed to refresh job match history:", historyError);
-        }
-      }
       toast.success(shouldIgnore ? `Removed ${normalizedName} from this analysis` : `Added ${normalizedName} back to this analysis`);
     } catch (error: any) {
       console.error("Failed to update ignored job skills:", error);
@@ -462,7 +499,15 @@ export function Jobs() {
       setLocation(String(detail.location ?? "").trim());
       setJobDescription(String(detail.job_text ?? detail.text_preview ?? "").trim());
       setLastTailoredId(String(detail.tailored_resume_id ?? "").trim() || null);
-      setSelectedResumeTemplate(String((detail.analysis as any)?.resume_snapshot_id ?? "").trim() || "default");
+      const restoredResumeEvidenceId = String((detail.analysis as any)?.resume_evidence_id ?? "").trim();
+      const restoredResumeSnapshotId = String((detail.analysis as any)?.resume_snapshot_id ?? "").trim();
+      setSelectedResumeTemplate(
+        restoredResumeEvidenceId
+          ? evidenceResumeSourceValue(restoredResumeEvidenceId)
+          : restoredResumeSnapshotId
+            ? snapshotResumeSourceValue(restoredResumeSnapshotId)
+            : DEFAULT_RESUME_SOURCE
+      );
       toast.success("Restored previous job analysis");
     } catch (error: any) {
       console.error("Failed to restore job match history:", error);
@@ -588,11 +633,11 @@ export function Jobs() {
       ];
       const match = await api.matchJob({
         job_id: String(jobId ?? "").trim(),
-        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
+        ...selectedResumePayload,
         history_id: currentHistoryId,
         ignored_skill_names: normalized.ignoredSkills.filter((value) => value !== normalizedName),
         added_from_missing_skills: nextAdded,
-        persist_history: Boolean(currentHistoryId),
+        persist_history: false,
       });
       setAnalysis((current) => ({
         ...(current ?? {}),
@@ -601,14 +646,6 @@ export function Jobs() {
         tailored_resume_id: null,
       }));
       setLastTailoredId(null);
-      if (currentHistoryId) {
-        try {
-          await refreshHistory();
-        } catch (historyError) {
-          console.error("Failed to refresh job match history:", historyError);
-        }
-      }
-
       recordActivity({
         id: `jobs:missing-skill:add:${normalizedName}`,
         type: "skills",
@@ -645,11 +682,11 @@ export function Jobs() {
       });
       const match = await api.matchJob({
         job_id: String(jobId ?? "").trim(),
-        resume_snapshot_id: selectedResumeTemplate === "default" ? null : selectedResumeTemplate,
+        ...selectedResumePayload,
         history_id: currentHistoryId,
         ignored_skill_names: normalized.ignoredSkills.filter((value) => value !== normalizedName),
         added_from_missing_skills: nextAdded,
-        persist_history: Boolean(currentHistoryId),
+        persist_history: false,
       });
       setAnalysis((current) => ({
         ...(current ?? {}),
@@ -658,13 +695,6 @@ export function Jobs() {
         tailored_resume_id: null,
       }));
       setLastTailoredId(null);
-      if (currentHistoryId) {
-        try {
-          await refreshHistory();
-        } catch (historyError) {
-          console.error("Failed to refresh job match history:", historyError);
-        }
-      }
       recordActivity({
         id: `jobs:missing-skill:remove:${normalizedSkillId}`,
         type: "skills",
@@ -716,7 +746,7 @@ export function Jobs() {
                   <p className="text-[10px] font-semibold uppercase leading-tight tracking-[0.12em] text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">
                     Templates
                   </p>
-                  <p className="mt-2 break-words text-2xl font-semibold text-slate-900 dark:text-slate-100">{resumeSnapshots.length + 1}</p>
+                  <p className="mt-2 break-words text-2xl font-semibold text-slate-900 dark:text-slate-100">{resumeSnapshots.length + resumeEvidence.length + 1}</p>
                 </div>
               </div>
             </div>
@@ -1333,10 +1363,15 @@ export function Jobs() {
                   <SelectValue placeholder="Choose resume source" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="default">Default Template</SelectItem>
+                  <SelectItem value={DEFAULT_RESUME_SOURCE}>Default Template</SelectItem>
                   {resumeSnapshots.map((snapshot) => (
-                    <SelectItem key={snapshot.snapshot_id} value={snapshot.snapshot_id}>
+                    <SelectItem key={snapshot.snapshot_id} value={snapshotResumeSourceValue(snapshot.snapshot_id)}>
                       {formatResumeTemplateLabel(snapshot)}
+                    </SelectItem>
+                  ))}
+                  {resumeEvidence.map((evidence) => (
+                    <SelectItem key={evidence.id} value={evidenceResumeSourceValue(evidence.id)}>
+                      {formatResumeEvidenceLabel(evidence)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1382,8 +1417,8 @@ export function Jobs() {
           </div>
         ) : (
           <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">
-            {resumeSnapshots.length > 0
-              ? "Pick a resume source and layout. Uploaded resumes can also be reworded without changing their section layout, and Word resumes will download as editable DOCX."
+            {resumeSnapshots.length > 0 || resumeEvidence.length > 0
+              ? "Pick a resume source and layout. Uploaded Word resumes can be reworded without changing their section layout, and resume evidence can be used as a clean tailoring source."
               : "Pick a layout, then generate the PDF from the default resume structure."}
           </div>
         )}

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Iterable
 
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import FileResponse
 
 from app.core.auth import require_user
@@ -42,7 +42,7 @@ from app.models.tailor import (
     UserSkillVectorHistoryPoint,
 )
 from app.utils.rag import retrieve_rag_context
-from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text
+from app.utils.skill_catalog import merge_skill_docs, normalize_skill_text, should_use_strict_exact_match
 from app.utils.ai import (
     AVAILABLE_INFERENCE_MODES,
     cosine_similarity,
@@ -53,6 +53,7 @@ from app.utils.ai import (
 )
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
 from app.utils.rewards import increment_reward_counter
+from app.utils.security import AI_RATE_LIMITS, build_rate_limit_identifier, enforce_rate_limit
 
 router = APIRouter()
 DEFAULT_RESUME_TEMPLATE_TEX = Path(__file__).resolve().parents[2] / "data" / "raw" / "default_resume_template.tex"
@@ -159,7 +160,7 @@ def _normalize_resume_bullet(line: str) -> str:
 
 
 def _format_resume_item_header(item: dict) -> str:
-    title = _clean_resume_line(str(item.get("title") or "")) or "Relevant experience"
+    title = _clean_resume_line(str(item.get("resume_display_title") or item.get("title") or "")) or "Relevant experience"
     org = _clean_resume_line(str(item.get("org") or ""))
     item_type = str(item.get("type") or "work").replace("evidence:", "").replace("_", " ").strip().title()
     header_parts = [title]
@@ -168,6 +169,15 @@ def _format_resume_item_header(item: dict) -> str:
     elif item_type and item_type.lower() != "work":
         header_parts.append(item_type)
     return " | ".join(header_parts)
+
+
+def _resume_display_title_for_item(item: dict) -> str:
+    raw_title = _clean_resume_line(str(item.get("title") or ""))
+    org = _clean_resume_line(str(item.get("org") or ""))
+    item_type = str(item.get("type") or "").strip().lower()
+    if item_type == "evidence:resume":
+        return org or "Resume Highlights"
+    return raw_title or "Relevant experience"
 
 
 def _scoped_user_id(user: dict, requested_user_id: str | None = None) -> str:
@@ -473,6 +483,8 @@ def _match_skills(job_text: str, skills: Iterable[dict]) -> list[ExtractedSkill]
             a = (a or "").strip()
             if not a:
                 continue
+            if should_use_strict_exact_match(a) and normalize_skill_text(a) != n:
+                continue
             al = normalize_skill_text(a)
             if re.search(rf"(?<![A-Za-z0-9]){re.escape(al)}(?![A-Za-z0-9])", text):
                 bump(sid, name, "alias")
@@ -485,22 +497,22 @@ async def _load_user_items(db, user_id: str) -> list[dict]:
     items: list[dict] = []
     evidence_docs = await db["evidence"].find(user_filter).sort("updated_at", -1).to_list(length=1000)
     for evidence in evidence_docs:
-        items.append(
-            {
-                "_id": evidence["_id"],
-                "type": f"evidence:{evidence.get('type', 'other')}",
-                "title": evidence.get("title", "") or "Evidence",
-                "org": evidence.get("org"),
-                "summary": evidence.get("summary") or evidence.get("text_excerpt") or "",
-                "bullets": evidence.get("bullets", []) or [],
-                "links": evidence.get("links", []) or ([evidence.get("source")] if evidence.get("source") else []),
-                "skill_ids": evidence.get("skill_ids", []) or [],
-                "priority": evidence.get("priority", 1),
-                "updated_at": evidence.get("updated_at"),
-                "created_at": evidence.get("created_at"),
-                "_source_collection": "evidence",
-            }
-        )
+        item = {
+            "_id": evidence["_id"],
+            "type": f"evidence:{evidence.get('type', 'other')}",
+            "title": evidence.get("title", "") or "Evidence",
+            "org": evidence.get("org"),
+            "summary": evidence.get("summary") or evidence.get("text_excerpt") or "",
+            "bullets": evidence.get("bullets", []) or [],
+            "links": evidence.get("links", []) or ([evidence.get("source")] if evidence.get("source") else []),
+            "skill_ids": evidence.get("skill_ids", []) or [],
+            "priority": evidence.get("priority", 1),
+            "updated_at": evidence.get("updated_at"),
+            "created_at": evidence.get("created_at"),
+            "_source_collection": "evidence",
+        }
+        item["resume_display_title"] = _resume_display_title_for_item(item)
+        items.append(item)
     return items
 
 def _score_item(item: dict, job_skill_ids: set[str], keywords: set[str]) -> float:
@@ -880,6 +892,107 @@ def _display_skill_name(doc: dict | None, fallback: str = "") -> str:
         return fallback
     return str(doc.get("name") or fallback or "").strip()
 
+
+def _build_skill_display_maps(skill_docs: Iterable[dict]) -> tuple[dict[str, dict], dict[str, str]]:
+    skill_docs_by_id: dict[str, dict] = {}
+    display_name_by_term: dict[str, str] = {}
+    for doc in skill_docs:
+        merged_ids = list(doc.get("merged_ids") or [])
+        if not merged_ids and doc.get("_id") is not None:
+            merged_ids = [oid_str(doc.get("_id"))]
+        for merged_id in merged_ids:
+            text = str(merged_id or "").strip()
+            if text:
+                skill_docs_by_id[text] = doc
+        display_name = _display_skill_name(doc, "")
+        if not display_name:
+            continue
+        for term in _skill_terms(doc):
+            display_name_by_term.setdefault(term, display_name)
+    return skill_docs_by_id, display_name_by_term
+
+
+def _normalize_skill_name_list(
+    raw_names: Iterable[str] | None,
+    raw_ids: Iterable[str] | None,
+    skill_docs_by_id: dict[str, dict],
+    display_name_by_term: dict[str, str],
+) -> list[str]:
+    normalized: list[str] = []
+    for skill_id in raw_ids or []:
+        text = str(skill_id or "").strip()
+        if not text:
+            continue
+        doc = skill_docs_by_id.get(text)
+        if doc:
+            normalized.append(_display_skill_name(doc, text))
+    for raw_name in raw_names or []:
+        key = normalize_skill_text(str(raw_name or "").strip())
+        if not key:
+            continue
+        display_name = display_name_by_term.get(key)
+        if display_name:
+            normalized.append(display_name)
+    return _dedupe_preserve_order(normalized)
+
+
+def _normalize_gap_insights(
+    raw_insights: Iterable[dict] | None,
+    skill_docs_by_id: dict[str, dict],
+    display_name_by_term: dict[str, str],
+) -> list[dict]:
+    normalized: list[dict] = []
+    for raw in raw_insights or []:
+        if not isinstance(raw, dict):
+            continue
+        skill_id = str(raw.get("skill_id") or "").strip()
+        skill_name = ""
+        if skill_id and skill_id in skill_docs_by_id:
+            skill_name = _display_skill_name(skill_docs_by_id.get(skill_id), skill_id)
+        else:
+            skill_name = display_name_by_term.get(normalize_skill_text(str(raw.get("skill_name") or "").strip()), "")
+        if not skill_name:
+            continue
+        normalized.append({**raw, "skill_name": skill_name})
+    return normalized
+
+
+def _strip_transient_history_analysis_fields(analysis: dict) -> dict:
+    persisted = dict(analysis or {})
+    persisted["missing_skill_ids"] = []
+    persisted["missing_skills"] = []
+    persisted["missing_skill_count"] = 0
+    persisted["gap_reasoning_summary"] = ""
+    persisted["gap_insights"] = []
+    return persisted
+
+
+def _normalize_history_analysis_payload(
+    analysis: dict,
+    skill_docs_by_id: dict[str, dict],
+    display_name_by_term: dict[str, str],
+) -> dict:
+    normalized = dict(analysis or {})
+    normalized["matched_skills"] = _normalize_skill_name_list(
+        normalized.get("matched_skills") or [],
+        normalized.get("matched_skill_ids") or [],
+        skill_docs_by_id,
+        display_name_by_term,
+    )
+    normalized["missing_skill_ids"] = []
+    normalized["missing_skills"] = []
+    normalized["related_skills"] = _normalize_skill_name_list(
+        normalized.get("related_skills") or [],
+        [],
+        skill_docs_by_id,
+        display_name_by_term,
+    )
+    normalized["gap_insights"] = []
+    normalized["gap_reasoning_summary"] = ""
+    normalized["matched_skill_count"] = len(normalized["matched_skills"])
+    normalized["missing_skill_count"] = 0
+    return normalized
+
 _RESUME_SECTION_ALIASES: dict[str, tuple[str, ...]] = {
     "Header": (),
     "Summary": ("summary", "professional summary", "profile", "objective", "about"),
@@ -935,6 +1048,16 @@ async def _load_resume_template_snapshot(db, user_id: str, resume_snapshot_id: s
         ref_query("user_id", user_id),
         sort=[("created_at", -1)],
     )
+
+
+async def _load_resume_template_evidence(db, user_id: str, resume_evidence_id: str | None) -> dict | None:
+    if not resume_evidence_id:
+        return None
+    query = ref_query("_id", resume_evidence_id)
+    query.update(ref_query("user_id", user_id))
+    query["type"] = "resume"
+    query["origin"] = "user"
+    return await db["evidence"].find_one(query)
 
 
 def _parse_resume_sections(raw_text: str) -> list[ResumeSection]:
@@ -1177,7 +1300,7 @@ def _summarize_item_for_resume(item: dict, selected_skill_names: list[str], max_
         *[str(snippet or "") for snippet in (item.get("rag_snippets") or [])],
         *[str(bullet or "") for bullet in (item.get("bullets") or [])],
         str(item.get("summary") or ""),
-        str(item.get("title") or ""),
+        str(item.get("resume_display_title") or item.get("title") or ""),
     ]
     candidates: list[tuple[float, str]] = []
     normalized_skills = [normalize_skill_text(name) for name in selected_skill_names if normalize_skill_text(name)]
@@ -1206,10 +1329,10 @@ def _summarize_item_for_resume(item: dict, selected_skill_names: list[str], max_
     if ordered:
         return ordered
 
-    fallback = _clean_resume_line(str(item.get("summary") or item.get("title") or ""))
+    fallback = _clean_resume_line(str(item.get("summary") or item.get("resume_display_title") or item.get("title") or ""))
     if fallback:
         if _looks_like_formula_noise(fallback):
-            fallback = _clean_resume_line(str(item.get("title") or "Relevant work"))
+            fallback = _clean_resume_line(str(item.get("resume_display_title") or item.get("title") or "Relevant work"))
         if fallback:
             return [fallback.rstrip(".") + "."]
     return []
@@ -1580,8 +1703,10 @@ def _dedupe_skill_ids_by_terms(skill_ids: Iterable[str], skill_docs: dict[str, d
         ordered.append(skill_id)
     return ordered
 
-def _serialize_history(doc: dict) -> JobMatchHistoryEntryOut:
+def _serialize_history(doc: dict, skill_docs_by_id: dict[str, dict] | None = None, display_name_by_term: dict[str, str] | None = None) -> JobMatchHistoryEntryOut:
     analysis = doc.get("analysis") or {}
+    if skill_docs_by_id is not None and display_name_by_term is not None:
+        analysis = _normalize_history_analysis_payload(analysis, skill_docs_by_id, display_name_by_term)
     return JobMatchHistoryEntryOut(
         id=oid_str(doc.get("_id")),
         job_id=oid_str(doc.get("job_id")),
@@ -1606,6 +1731,7 @@ def _serialize_tailored_resume(doc: dict) -> TailoredResumeOut:
         user_id=oid_str(doc.get("user_id")),
         job_id=str(doc.get("job_id")) if doc.get("job_id") is not None else None,
         resume_snapshot_id=str(doc.get("resume_snapshot_id")) if doc.get("resume_snapshot_id") is not None else None,
+        resume_evidence_id=str(doc.get("resume_evidence_id")) if doc.get("resume_evidence_id") is not None else None,
         template_source=str(doc.get("template_source") or "") or None,
         template=str(doc.get("template") or "ats_v1"),
         selected_skill_ids=[oid_str(value) for value in (doc.get("selected_skill_ids") or [])],
@@ -1685,8 +1811,15 @@ async def _persist_job_ingest_snapshot(
     return doc
 
 @router.post("/job/ingest", response_model=JobIngestOut)
-async def ingest_job(payload: JobIngestIn, user=Depends(require_user)):
+async def ingest_job(payload: JobIngestIn, request: Request, user=Depends(require_user)):
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="ai.job_ingest",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AI_RATE_LIMITS["job_ingest"][0],
+        window_seconds=AI_RATE_LIMITS["job_ingest"][1],
+    )
     user_id = _scoped_user_id(user, payload.user_id)
     doc = await _persist_job_ingest_snapshot(
         db,
@@ -1716,7 +1849,7 @@ async def ingest_job(payload: JobIngestIn, user=Depends(require_user)):
     )
 
 @router.post("/match", response_model=JobMatchOut)
-async def match_job(payload: dict, user=Depends(require_user)):
+async def match_job(payload: dict, request: Request, user=Depends(require_user)):
     """
     Expects:
     {
@@ -1725,6 +1858,13 @@ async def match_job(payload: dict, user=Depends(require_user)):
     }
     """
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="ai.job_match",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AI_RATE_LIMITS["job_match"][0],
+        window_seconds=AI_RATE_LIMITS["job_match"][1],
+    )
     user_id = _scoped_user_id(user, payload.get("user_id"))
     user_doc = await db["users"].find_one(ref_query("_id", user_id), {"ai_preferences": 1})
     ai_preferences = normalize_ai_preferences((user_doc or {}).get("ai_preferences"))
@@ -1768,6 +1908,7 @@ async def match_job(payload: dict, user=Depends(require_user)):
     persist_history = bool(payload.get("persist_history", True))
     history_id = str(payload.get("history_id") or "").strip()
     requested_resume_snapshot_id = str(payload.get("resume_snapshot_id") or "").strip() or None
+    requested_resume_evidence_id = str(payload.get("resume_evidence_id") or "").strip() or None
     raw_extracted_skill_ids = _dedupe_preserve_order(str(e.get("skill_id")) for e in extracted if e.get("skill_id"))
 
     conf = await _load_profile_confirmation(db, user_id)
@@ -2084,7 +2225,14 @@ async def match_job(payload: dict, user=Depends(require_user)):
         match_confidence_label=confidence_label,
         analysis_summary=analysis_summary,
         resume_snapshot_id=requested_resume_snapshot_id,
-        template_source="user_resume" if requested_resume_snapshot_id else "default_template",
+        resume_evidence_id=requested_resume_evidence_id,
+        template_source=(
+            "user_resume"
+            if requested_resume_snapshot_id
+            else "evidence_resume"
+            if requested_resume_evidence_id
+            else "default_template"
+        ),
         ignored_skill_names=ignored_skill_names,
         added_from_missing_skills=added_from_missing_skills,
         matched_skill_ids=matched_ids,
@@ -2142,7 +2290,7 @@ async def match_job(payload: dict, user=Depends(require_user)):
                     "company": job_doc.get("company"),
                     "location": job_doc.get("location"),
                     "text_preview": job_doc.get("text", "")[:220],
-                    "analysis": result.model_dump(),
+                    "analysis": _strip_transient_history_analysis_fields(result.model_dump()),
                     "updated_at": now,
                 },
                 "$unset": {"tailored_resume_id": ""},
@@ -2158,7 +2306,7 @@ async def match_job(payload: dict, user=Depends(require_user)):
         "location": job_doc.get("location"),
         "text_preview": job_doc.get("text", "")[:220],
         "job_text_snapshot": job_doc.get("text", ""),
-        "analysis": result.model_dump(),
+        "analysis": _strip_transient_history_analysis_fields(result.model_dump()),
         "created_at": now,
         "updated_at": now,
     }
@@ -2169,12 +2317,21 @@ async def match_job(payload: dict, user=Depends(require_user)):
     return result
 
 @router.post("/preview", response_model=TailoredResumeOut)
-async def preview_tailored_resume(payload: TailorPreviewIn, user=Depends(require_user)):
+async def preview_tailored_resume(payload: TailorPreviewIn, request: Request, user=Depends(require_user)):
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="ai.tailor_preview",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AI_RATE_LIMITS["tailor_preview"][0],
+        window_seconds=AI_RATE_LIMITS["tailor_preview"][1],
+    )
     user_id = _scoped_user_id(user, payload.user_id)
     user_doc = await db["users"].find_one(ref_query("_id", user_id), {"username": 1, "email": 1, "ai_preferences": 1})
     ai_preferences = normalize_ai_preferences((user_doc or {}).get("ai_preferences"))
     template_name = _normalize_tailored_resume_template(payload.template)
+    if payload.resume_snapshot_id and payload.resume_evidence_id:
+        raise HTTPException(status_code=400, detail="Choose either resume_snapshot_id or resume_evidence_id, not both")
 
     job_text = payload.job_text
     job_id = payload.job_id
@@ -2269,12 +2426,21 @@ async def preview_tailored_resume(payload: TailorPreviewIn, user=Depends(require
     target_label = " ".join(part for part in [job_title, f"at {company}" if company else ""] if part).strip() or "this role"
 
     resume_snapshot = await _load_resume_template_snapshot(db, user_id, payload.resume_snapshot_id)
+    resume_evidence = None if resume_snapshot else await _load_resume_template_evidence(db, user_id, payload.resume_evidence_id)
     if resume_snapshot:
         resume_raw_text = str(resume_snapshot.get("raw_text") or "")
         template_sections = _parse_resume_sections(resume_raw_text)
         template_source = "user_resume"
         preserve_template_content = True
         header_lines = _extract_resume_header_lines(resume_raw_text, user_doc)
+    elif resume_evidence:
+        resume_raw_text = str(resume_evidence.get("text_excerpt") or "")
+        template_sections = _parse_resume_sections(resume_raw_text)
+        template_source = "evidence_resume"
+        preserve_template_content = True
+        header_lines = _extract_resume_header_lines(resume_raw_text, user_doc)
+        if _uses_uploaded_resume_reword_template(template_name):
+            template_name = "ats_v1"
     else:
         template_sections = _load_default_resume_template_sections(user_doc, include_content=False)
         template_source = "default_template" if template_sections else "generated_fallback"
@@ -2343,6 +2509,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn, user=Depends(require
         "user_id": to_object_id(user_id),
         "job_id": job_id,
         "resume_snapshot_id": resume_snapshot.get("_id") if resume_snapshot else None,
+        "resume_evidence_id": resume_evidence.get("_id") if resume_evidence else None,
         "template_source": template_source,
         "job_text": job_text,
         "template": template_name,
@@ -2369,6 +2536,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn, user=Depends(require
                     "$set": {
                         "tailored_resume_id": res.inserted_id,
                         "analysis.resume_snapshot_id": oid_str(resume_snapshot.get("_id")) if resume_snapshot else None,
+                        "analysis.resume_evidence_id": oid_str(resume_evidence.get("_id")) if resume_evidence else None,
                         "analysis.template_source": template_source,
                         "updated_at": now,
                     }
@@ -2460,7 +2628,9 @@ async def list_job_match_history(user_id: str | None = None, limit: int = 12, us
     scoped_user_id = _scoped_user_id(user, user_id)
     cursor = db["job_match_runs"].find(ref_query("user_id", scoped_user_id)).sort("created_at", -1).limit(max(1, min(limit, 30)))
     docs = await cursor.to_list(length=max(1, min(limit, 30)))
-    return [_serialize_history(doc) for doc in docs]
+    skill_catalog = await _load_skill_catalog(db)
+    skill_docs_by_id, display_name_by_term = _build_skill_display_maps(skill_catalog)
+    return [_serialize_history(doc, skill_docs_by_id, display_name_by_term) for doc in docs]
 
 @router.get("/history/{history_id}", response_model=JobMatchHistoryDetailOut | JobMatchCompareOut)
 async def get_job_match_history_detail(history_id: str, user_id: str | None = None, left_id: str | None = None, right_id: str | None = None, user=Depends(require_user)):
@@ -2479,7 +2649,9 @@ async def get_job_match_history_detail(history_id: str, user_id: str | None = No
     if not doc:
         raise HTTPException(status_code=404, detail="History entry not found")
 
-    base = _serialize_history(doc)
+    skill_catalog = await _load_skill_catalog(db)
+    skill_docs_by_id, display_name_by_term = _build_skill_display_maps(skill_catalog)
+    base = _serialize_history(doc, skill_docs_by_id, display_name_by_term)
     job_text = str(doc.get("job_text_snapshot") or "").strip() or None
     job_id = doc.get("job_id")
     if not job_text and job_id is not None and ObjectId.is_valid(str(job_id)):
@@ -2487,7 +2659,8 @@ async def get_job_match_history_detail(history_id: str, user_id: str | None = No
         if job_doc:
             job_text = job_doc.get("text")
 
-    analysis = JobMatchOut(**(doc.get("analysis") or {}))
+    normalized_analysis = _normalize_history_analysis_payload(doc.get("analysis") or {}, skill_docs_by_id, display_name_by_term)
+    analysis = JobMatchOut(**normalized_analysis)
     return JobMatchHistoryDetailOut(
         **base.model_dump(),
         text_preview=doc.get("text_preview"),
@@ -2497,8 +2670,15 @@ async def get_job_match_history_detail(history_id: str, user_id: str | None = No
 
 
 @router.post("/history/{history_id}/reanalyze", response_model=JobMatchOut)
-async def reanalyze_job_match_history(history_id: str, user_id: str | None = None, user=Depends(require_user)):
+async def reanalyze_job_match_history(history_id: str, request: Request, user_id: str | None = None, user=Depends(require_user)):
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="ai.job_reanalyze",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AI_RATE_LIMITS["job_reanalyze"][0],
+        window_seconds=AI_RATE_LIMITS["job_reanalyze"][1],
+    )
     scoped_user_id = _scoped_user_id(user, user_id)
     try:
         history_oid = ObjectId(history_id)
@@ -2530,9 +2710,11 @@ async def reanalyze_job_match_history(history_id: str, user_id: str | None = Non
     fresh_result = await match_job(
         {
             "job_id": oid_str(fresh_job_doc.get("_id")),
-            "resume_snapshot_id": None,
+            "resume_snapshot_id": str((history_doc.get("analysis") or {}).get("resume_snapshot_id") or "").strip() or None,
+            "resume_evidence_id": str((history_doc.get("analysis") or {}).get("resume_evidence_id") or "").strip() or None,
             "persist_history": True,
         },
+        request=request,
         user=user,
     )
     if fresh_result.history_id:
@@ -2584,8 +2766,10 @@ async def compare_job_match_history(user_id: str | None = None, left_id: str = "
     if left_id not in by_id or right_id not in by_id:
         raise HTTPException(status_code=404, detail="History entry not found")
 
-    left = _serialize_history(by_id[left_id])
-    right = _serialize_history(by_id[right_id])
+    skill_catalog = await _load_skill_catalog(db)
+    skill_docs_by_id, display_name_by_term = _build_skill_display_maps(skill_catalog)
+    left = _serialize_history(by_id[left_id], skill_docs_by_id, display_name_by_term)
+    right = _serialize_history(by_id[right_id], skill_docs_by_id, display_name_by_term)
     left_matched = set(left.matched_skills)
     right_matched = set(right.matched_skills)
     left_missing = set(left.missing_skills)
@@ -2625,14 +2809,21 @@ async def patch_ai_settings_preferences(payload: AIPreferencesPatchIn, user=Depe
     return _build_ai_settings_detail(updated)
 
 @router.post("/{tailored_id}/rewrite", response_model=RewriteBulletsOut)
-async def rewrite_tailored_resume_bullets(tailored_id: str, payload: RewriteBulletsIn):
+async def rewrite_tailored_resume_bullets(tailored_id: str, payload: RewriteBulletsIn, request: Request, user=Depends(require_user)):
     db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="ai.tailor_rewrite",
+        identifier=build_rate_limit_identifier(request, user["_id"]),
+        limit=AI_RATE_LIMITS["tailor_rewrite"][0],
+        window_seconds=AI_RATE_LIMITS["tailor_rewrite"][1],
+    )
     try:
         oid = ObjectId(tailored_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid tailored_id")
 
-    doc = await db["tailored_resumes"].find_one({"_id": oid})
+    doc = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", oid_str(user["_id"]))})
     if not doc:
         raise HTTPException(status_code=404, detail="Tailored resume not found")
 
@@ -3002,14 +3193,14 @@ def _pdf_from_plain_text(text: str, out_path: str):
     c.save()
 
 @router.get("/{tailored_id}/export/docx")
-async def export_docx(tailored_id: str):
+async def export_docx(tailored_id: str, user=Depends(require_user)):
     db = get_db()
     try:
         oid = ObjectId(tailored_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid tailored_id")
 
-    d = await db["tailored_resumes"].find_one({"_id": oid})
+    d = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", oid_str(user["_id"]))})
     if not d:
         raise HTTPException(status_code=404, detail="Tailored resume not found")
 
@@ -3037,14 +3228,14 @@ async def export_docx(tailored_id: str):
     return FileResponse(tmp.name, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", filename=filename)
 
 @router.get("/{tailored_id}/export/pdf")
-async def export_pdf(tailored_id: str):
+async def export_pdf(tailored_id: str, user=Depends(require_user)):
     db = get_db()
     try:
         oid = ObjectId(tailored_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid tailored_id")
 
-    d = await db["tailored_resumes"].find_one({"_id": oid})
+    d = await db["tailored_resumes"].find_one({"_id": oid, **ref_query("user_id", oid_str(user["_id"]))})
     if not d:
         raise HTTPException(status_code=404, detail="Tailored resume not found")
 

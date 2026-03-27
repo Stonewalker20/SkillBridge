@@ -110,21 +110,14 @@ async def _build_personal_vector_score(
 async def _load_recent_job_history_missing_counts(db, user_oid: ObjectId) -> tuple[dict[str, int], list[str]]:
     rows = await db["job_match_runs"].find(
         {"user_id": user_oid},
-        {"title": 1, "analysis.missing_skills": 1},
+        {"title": 1},
     ).sort("updated_at", -1).limit(12).to_list(length=12)
-    missing_counts: dict[str, int] = {}
     titles: list[str] = []
     for row in rows:
         title = str(row.get("title") or "").strip()
         if title:
             titles.append(title)
-        analysis = row.get("analysis") or {}
-        for skill in analysis.get("missing_skills") or []:
-            skill_name = str(skill or "").strip()
-            if not skill_name:
-                continue
-            missing_counts[skill_name] = missing_counts.get(skill_name, 0) + 1
-    return missing_counts, _normalize_phrase_list(titles)
+    return {}, _normalize_phrase_list(titles)
 
 
 async def _load_learning_progress_lookup(db, user_oid: ObjectId) -> dict[str, str]:
