@@ -27,6 +27,7 @@ SkillBridge is a full-stack career intelligence platform for collecting evidence
 - ML sandbox notebooks under `backend/ml_sandbox/`
 - Docker assets under `infra/`
 - Draft launch and legal docs under `docs/`
+- Deployment guide and env matrix under `docs/deployment_guide.md` and `docs/env_matrix.md`
 
 ## What the App Does
 
@@ -128,6 +129,7 @@ MEDIA_S3_ACCESS_KEY_ID=
 MEDIA_S3_SECRET_ACCESS_KEY=
 MEDIA_S3_PUBLIC_BASE_URL=
 MEDIA_S3_KEY_PREFIX=avatars
+PASSWORD_RESET_TOKEN_TTL_MINUTES=60
 ```
 
 Notes:
@@ -137,6 +139,8 @@ Notes:
 - `ADMIN_OWNER_EMAILS` and `ADMIN_TEAM_EMAILS` bootstrap admin access on registration.
 - Keep `MEDIA_STORAGE_MODE=local` for development. Switch to `s3` only when the backend has real S3/R2-compatible bucket credentials and a public media URL.
 - Use `backend/.env.staging.example` and `backend/.env.production.example` as the starting point for deployed environments.
+- Use `frontend/.env.staging.example` and `frontend/.env.production.example` for deployed frontend builds.
+- See `docs/env_matrix.md` for the full runtime variable matrix.
 
 ### 3. Start MongoDB
 
@@ -185,6 +189,12 @@ Frontend URL:
 
 The Vite dev server proxies `/api/*` requests to the backend at `http://localhost:8000`.
 For deployed frontend environments, start from `frontend/.env.staging.example` or `frontend/.env.production.example` and set `VITE_API_BASE` to the deployed backend URL.
+
+## Deployment
+
+- Deployment runbook: `docs/deployment_guide.md`
+- Environment matrix: `docs/env_matrix.md`
+- Release checklist: `docs/release_runbook_checklist.md`
 
 Frontend quality commands:
 
