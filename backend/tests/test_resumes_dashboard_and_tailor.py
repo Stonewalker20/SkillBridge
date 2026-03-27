@@ -988,6 +988,7 @@ def test_tailored_resume_rewords_file_like_evidence_titles_into_resume_headers(t
             "title": "capstone_final_v4.pdf",
             "source": "manual-entry",
             "text_excerpt": "Built analytics dashboards in Python and delivered API reporting workflows for stakeholders.",
+            "links": ["https://github.com/example/analytics-dashboard"],
             "skill_ids": [test_context["skill_python"]],
             "origin": "user",
         },
@@ -1020,10 +1021,16 @@ def test_tailored_resume_rewords_file_like_evidence_titles_into_resume_headers(t
     payload = preview.json()
 
     assert "capstone_final_v4.pdf" not in payload["plain_text"]
-    assert "Selected Project" in payload["plain_text"] or "Relevant Experience" in payload["plain_text"]
+    assert "Analytics Dashboard Project" in payload["plain_text"]
+    assert "Hands-on experience in" in payload["plain_text"]
+    assert "Targeted for" not in payload["plain_text"]
+    assert "Selected experience and projects" not in payload["plain_text"]
+    assert "Portfolio:" not in payload["plain_text"]
+    assert "Project links:" in payload["plain_text"]
 
     stored_resume = next(doc for doc in db["tailored_resumes"].docs if str(doc["_id"]) == payload["id"])
     assert "capstone_final_v4.pdf" not in stored_resume["plain_text"]
+    assert "Targeted for" not in stored_resume["plain_text"]
 
 
 def test_job_match_ignores_short_aliases_for_long_skills(test_context):

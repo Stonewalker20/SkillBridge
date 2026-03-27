@@ -171,26 +171,111 @@ def _looks_like_uploaded_file_title(value: str) -> bool:
     )
 
 
+def _resume_submission_text(value: str) -> str:
+    text = _clean_resume_line(_clean_evidence_text_for_resume(value))
+    if not text:
+        return ""
+    replacements = (
+        (r"\bportfolio item\b", "project"),
+        (r"\bportfolio\b", "project"),
+        (r"\bevidence-backed\b", ""),
+        (r"\bretrieved context\b", ""),
+        (r"\bmanual[- ]entry\b", ""),
+        (r"\bresume evidence\b", "professional experience"),
+    )
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text).strip(" ,;:-")
+    return text
+
+
+def _looks_like_objective_or_meta_resume_line(value: str) -> bool:
+    text = normalize_skill_text(value)
+    if not text:
+        return False
+    return any(
+        phrase in text
+        for phrase in (
+            "targeted for",
+            "selected experience and projects",
+            "selected experience",
+            "evidence backed",
+            "retrieved context",
+            "resume evidence",
+            "portfolio",
+            "to obtain",
+            "seeking ",
+            "looking for",
+            "objective",
+        )
+    )
+
+
+def _derived_resume_item_title(item: dict) -> str:
+    item_type = normalize_skill_text(str(item.get("type") or ""))
+    text = normalize_skill_text(
+        " ".join(
+            [
+                str(item.get("summary") or ""),
+                str(item.get("title") or ""),
+                str(item.get("org") or ""),
+                str(item.get("resume_display_title") or ""),
+            ]
+        )
+    )
+    patterns: list[tuple[tuple[str, ...], str]] = [
+        (("dashboard", "analytics", "reporting"), "Analytics Dashboard"),
+        (("machine learning", "model", "ml"), "Machine Learning"),
+        (("data pipeline", "etl", "pipeline"), "Data Pipeline"),
+        (("api", "backend", "service", "integration"), "API Delivery"),
+        (("automation", "workflow"), "Automation"),
+        (("research", "experiment", "study"), "Research"),
+        (("web app", "frontend", "ui", "react"), "Web Application"),
+    ]
+    stem = ""
+    for tokens, label in patterns:
+        if any(token in text for token in tokens):
+            stem = label
+            break
+    if not stem:
+        if "project" in item_type or any(token in text for token in ("project", "prototype", "capstone")):
+            stem = "Project"
+        elif any(token in text for token in ("research", "assistant", "intern", "engineer", "developer", "analyst")):
+            stem = "Professional"
+        else:
+            stem = "Professional"
+
+    if "project" in item_type or any(token in text for token in ("project", "prototype", "capstone")):
+        return stem if stem.endswith("Project") else f"{stem} Project"
+    if stem.endswith("Experience"):
+        return stem
+    if stem == "Research":
+        return "Research Experience"
+    if stem == "Professional":
+        return "Professional Experience"
+    return f"{stem} Experience"
+
+
 def _resume_friendly_title(item: dict) -> str:
-    raw_title = _clean_resume_line(str(item.get("title") or ""))
-    display_title = _clean_resume_line(str(item.get("resume_display_title") or ""))
+    raw_title = _resume_submission_text(str(item.get("title") or ""))
+    display_title = _resume_submission_text(str(item.get("resume_display_title") or ""))
     org = _clean_resume_line(str(item.get("org") or ""))
     item_type = str(item.get("type") or "").strip().lower()
-    summary = _clean_resume_line(str(item.get("summary") or ""))
+    summary = _resume_submission_text(str(item.get("summary") or ""))
 
     for candidate in (display_title, raw_title):
         if candidate and not _looks_like_uploaded_file_title(candidate):
             return candidate
 
     if item_type == "evidence:resume":
-        return org or "Resume Highlights"
+        return org or _derived_resume_item_title(item)
     if "project" in item_type or any(token in normalize_skill_text(summary) for token in ("project", "prototype", "capstone", "research")):
-        return org or "Selected Project"
+        return org or _derived_resume_item_title(item)
     if "work" in item_type or "experience" in item_type:
-        return org or "Relevant Experience"
+        return org or _derived_resume_item_title(item)
     if org:
         return org
-    return "Relevant Experience"
+    return _derived_resume_item_title(item)
 
 
 def _format_resume_item_header(item: dict) -> str:
@@ -206,16 +291,14 @@ def _format_resume_item_header(item: dict) -> str:
 
 
 def _resume_display_title_for_item(item: dict) -> str:
-    raw_title = _clean_resume_line(str(item.get("title") or ""))
+    raw_title = _resume_submission_text(str(item.get("title") or ""))
     org = _clean_resume_line(str(item.get("org") or ""))
     item_type = str(item.get("type") or "").strip().lower()
     if item_type == "evidence:resume":
-        return org or "Resume Highlights"
+        return org or _derived_resume_item_title(item)
     if _looks_like_uploaded_file_title(raw_title):
-        if "project" in item_type:
-            return org or "Selected Project"
-        return org or "Relevant Experience"
-    return raw_title or "Relevant experience"
+        return org or _derived_resume_item_title(item)
+    return raw_title or _derived_resume_item_title(item)
 
 
 def _cleanup_temp_export(path: str) -> None:
@@ -1438,21 +1521,26 @@ def _build_targeted_summary_lines(
     lines: list[str] = []
     primary_skills = ", ".join(skill_names[:5]) if skill_names else "role-relevant strengths"
     evidence_count = len(selected_items)
+    role_focus = _resume_submission_text(target_label or "the target role")
 
-    lines.append(f"Targeted for {target_label}, emphasizing confirmed strengths in {primary_skills}.")
+    lines.append(f"Hands-on experience in {primary_skills}, with relevant work aligned to {role_focus}.")
     if evidence_count:
         lines.append(
-            f"Selected experience and projects are ordered to foreground evidence-backed impact, role-relevant tools, and measurable outcomes across {evidence_count} chosen items."
+            f"Background includes {evidence_count} relevant projects and experience entries focused on delivery, technical execution, and measurable outcomes."
         )
     else:
         lines.append(
-            "Selected experience and projects are ordered to foreground evidence-backed impact, role-relevant tools, and measurable outcomes."
+            "Background emphasizes practical delivery, technical execution, and measurable outcomes across relevant work."
         )
 
     if base_section and base_section.lines:
-        base_line = _clean_resume_line(base_section.lines[0])
-        if base_line and normalize_skill_text(base_line) not in {normalize_skill_text(line) for line in lines}:
-            lines.append(base_line)
+        for candidate in base_section.lines:
+            base_line = _resume_submission_text(candidate)
+            if not base_line or _looks_like_objective_or_meta_resume_line(base_line):
+                continue
+            if normalize_skill_text(base_line) not in {normalize_skill_text(line) for line in lines}:
+                lines.append(base_line.rstrip(".") + ".")
+                break
 
     return lines[:3]
 
@@ -1488,18 +1576,18 @@ async def _selected_item_lines(
                 ai_preferences,
             )
             normalized_bullets = [
-                _normalize_resume_bullet(bullet)
+                _normalize_resume_bullet(_resume_submission_text(bullet))
                 for bullet in (rewritten_bullets or deduped_bullets)[:max_bullets_per_item]
             ]
             lines.extend([bullet for bullet in normalized_bullets if bullet])
         else:
-            summary = _clean_resume_line(_clean_evidence_text_for_resume(item.get("summary", "")))
+            summary = _resume_submission_text(str(item.get("summary", "")))
             if summary:
                 lines.append(_normalize_resume_bullet(summary))
         if item.get("links") and _is_project_like_item(item):
             links = [str(link).strip() for link in item.get("links", []) if str(link).strip()]
             if links:
-                lines.append(_normalize_resume_bullet(f"Portfolio: {', '.join(links[:3])}"))
+                lines.append(_normalize_resume_bullet(f"Project links: {', '.join(links[:3])}"))
         lines.append("")
     return [line for line in lines if line != ""]
 
@@ -2518,9 +2606,9 @@ async def preview_tailored_resume(payload: TailorPreviewIn, request: Request, us
             header_lines=header_lines,
         )
     else:
-        fallback_lines = [f"Tailored for {target_label}."]
+        fallback_lines = [f"Relevant experience aligned to {_resume_submission_text(target_label or 'the target role')}."]
         if skill_line:
-            fallback_lines.append(f"Prioritized skills: {skill_line}.")
+            fallback_lines.append(f"Core strengths include {_resume_submission_text(skill_line)}.")
         sections = [
             ResumeSection(title="Summary", lines=fallback_lines),
         ]
@@ -2540,8 +2628,8 @@ async def preview_tailored_resume(payload: TailorPreviewIn, request: Request, us
             ResumeSection(
                 title="Targeted Alignment",
                 lines=[
-                    f"Role focus: {target_label}",
-                    f"Selected evidence items: {len(selected_items)}",
+                    f"Role focus: {_resume_submission_text(target_label or 'the target role')}",
+                    f"Relevant experience entries: {len(selected_items)}",
                 ],
             )
         )
