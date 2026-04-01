@@ -10,6 +10,14 @@ export const REWARD_TIER_TARGETS = {
 } as const;
 
 export type RewardTier = (typeof REWARD_TIERS)[number];
+export type TierProgressSource = {
+  current_tier?: RewardTier | null;
+  tier?: RewardTier | null;
+};
+export type TierUnlockable = {
+  unlockTier: RewardTier | null;
+  unlockCount?: number;
+};
 
 const REWARD_TIER_ORDER = new Map<RewardTier, number>(REWARD_TIERS.map((tier, index) => [tier, index]));
 
@@ -123,4 +131,24 @@ export function rewardTierClasses(tier: RewardTier | null | undefined): { chip: 
         muted: "border-slate-200/70 bg-slate-100/50 text-slate-500 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-400",
       };
   }
+}
+
+export function unlockedBadgeCountAtTier(items: TierProgressSource[], tier: RewardTier): number {
+  return items.filter((item) => rewardTierAtLeast(item.current_tier ?? item.tier ?? null, tier)).length;
+}
+
+export function unlockableCountForTier(items: TierProgressSource[], tier: RewardTier | null | undefined, adminOverride = false): number {
+  if (adminOverride) return Number.MAX_SAFE_INTEGER;
+  if (!tier) return Number.MAX_SAFE_INTEGER;
+  return unlockedBadgeCountAtTier(items, tier);
+}
+
+export function isTierUnlockableUnlocked(
+  unlockable: TierUnlockable,
+  items: TierProgressSource[],
+  adminOverride = false
+): boolean {
+  if (adminOverride) return true;
+  if (!unlockable.unlockTier) return true;
+  return unlockableCountForTier(items, unlockable.unlockTier) >= Math.max(1, unlockable.unlockCount ?? 1);
 }

@@ -11,6 +11,8 @@ AUTH_RATE_LIMITS: dict[str, tuple[int, int]] = {
     "register": (5, 60),
     "login": (8, 60),
     "password_change": (5, 60),
+    "password_reset_request": (5, 300),
+    "password_reset_confirm": (8, 300),
     "avatar_upload": (5, 60),
     "subscription": (6, 60),
 }

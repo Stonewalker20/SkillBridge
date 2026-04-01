@@ -37,12 +37,23 @@ pip install -r requirements.txt
 ## Optional Environment Variables
 
 ```bash
+PASSWORD_RESET_TOKEN_TTL_MINUTES=60
 LOCAL_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 LOCAL_ZERO_SHOT_MODEL=MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33
 LOCAL_MODEL_DEVICE=-1
 LOCAL_MODEL_PREWARM=true
 ADMIN_OWNER_EMAILS=owner@example.com
 ADMIN_TEAM_EMAILS=teammate1@example.com,teammate2@example.com
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_ID=
+STRIPE_PRICE_ID_STARTER=
+STRIPE_PRICE_ID_PRO=
+STRIPE_PRICE_ID_ELITE=
+STRIPE_CURRENCY=usd
+STRIPE_SUCCESS_URL=
+STRIPE_CANCEL_URL=
+STRIPE_BILLING_PORTAL_RETURN_URL=
 MEDIA_STORAGE_MODE=local
 MEDIA_S3_ENDPOINT_URL=
 MEDIA_S3_BUCKET=
@@ -60,8 +71,11 @@ Notes:
 - `LOCAL_MODEL_PREWARM=true` loads the transformer models on backend startup instead of waiting for the first Job Match or Evidence request.
 - `ADMIN_OWNER_EMAILS` bootstraps owner access on registration for the listed emails.
 - `ADMIN_TEAM_EMAILS` bootstraps team access on registration for the listed emails.
+- `PASSWORD_RESET_TOKEN_TTL_MINUTES` controls how long password reset links remain valid.
+- Stripe variables are required when live subscription checkout is enabled.
 - `MEDIA_STORAGE_MODE=local` keeps uploads on disk for development.
 - `MEDIA_STORAGE_MODE=s3` requires the S3/R2 endpoint, bucket, region, access key, secret key, and a public base URL if the bucket is not already public.
+- See `../docs/env_matrix.md` for the full deploy-time variable matrix.
 
 ## Run
 

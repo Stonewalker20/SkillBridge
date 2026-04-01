@@ -9,12 +9,15 @@ import { api, type RewardsSummary } from "../services/api";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { AVATAR_PRESETS } from "../lib/avatarPresets";
 import { RewardBadgeIcon } from "../lib/rewardBadgeIcons";
+import { useAuth } from "../context/AuthContext";
 import {
   REWARD_TIERS,
   highestUnlockedRewardTier,
+  isTierUnlockableUnlocked,
   rewardTierAtLeast,
   rewardTierClasses,
   rewardTierLabel,
+  unlockableCountForTier,
   type RewardTier,
 } from "../lib/rewardTiers";
 
@@ -24,6 +27,8 @@ function milestoneCounterLabel(counterKey: string): string {
       return "evidence items";
     case "profile_skills_confirmed":
       return "confirmed skills";
+    case "skill_categories_covered":
+      return "skill categories";
     case "resume_snapshots_uploaded":
       return "resume sources";
     case "job_matches_run":
@@ -42,6 +47,8 @@ function milestoneNextStep(counterKey: string, remaining: number): string {
       return `Add ${remaining} more evidence ${remaining === 1 ? "item" : "items"}.`;
     case "profile_skills_confirmed":
       return `Confirm ${remaining} more profile ${remaining === 1 ? "skill" : "skills"}.`;
+    case "skill_categories_covered":
+      return `Confirm skills in ${remaining} more ${remaining === 1 ? "category" : "categories"}.`;
     case "resume_snapshots_uploaded":
       return `Upload ${remaining} more ${remaining === 1 ? "resume source" : "resume sources"}.`;
     case "job_matches_run":
@@ -54,6 +61,7 @@ function milestoneNextStep(counterKey: string, remaining: number): string {
 }
 
 export function AccountAchievements() {
+  const { user } = useAuth();
   const { activeHeaderTheme, themes } = useHeaderTheme();
   const [rewards, setRewards] = useState<RewardsSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,23 +84,25 @@ export function AccountAchievements() {
   }, []);
 
   const badgeTotal = rewards?.badgeCount ?? rewards?.totalCount ?? rewards?.achievements.length ?? 0;
-  const badgeUnlocked = rewards?.unlockedBadgeCount ?? rewards?.unlockedCount ?? 0;
   const hasRewardData = Boolean(rewards && (badgeTotal > 0 || rewards.achievements.length > 0 || (rewards.badges?.length ?? 0) > 0));
   const nextAchievement = rewards?.nextAchievement ?? null;
   const recentUnlocks = rewards?.recentUnlocks ?? [];
   const badges = useMemo(() => rewards?.badges ?? rewards?.achievements ?? [], [rewards]);
+  const isAdminUser = ["owner", "admin", "team"].includes(String(user?.role ?? "").trim().toLowerCase());
   const highestTier = useMemo(
     () => highestUnlockedRewardTier(badges.filter((badge) => badge.unlocked).map((badge) => badge.current_tier ?? badge.tier)),
     [badges]
   );
   const unlockedThemeCount = useMemo(
-    () => themes.filter((theme) => rewardTierAtLeast(highestTier, theme.unlockTier)).length,
-    [highestTier, themes]
+    () => themes.filter((theme) => !hasRewardData || isTierUnlockableUnlocked(theme, badges, isAdminUser)).length,
+    [badges, hasRewardData, isAdminUser, themes]
   );
   const unlockedAvatarPresetCount = useMemo(
-    () => AVATAR_PRESETS.filter((preset) => rewardTierAtLeast(highestTier, preset.unlockTier)).length,
-    [highestTier]
+    () => AVATAR_PRESETS.filter((preset) => !hasRewardData || isTierUnlockableUnlocked(preset, badges, isAdminUser)).length,
+    [badges, hasRewardData, isAdminUser]
   );
+  const masteredBadgeCount = rewards?.masteredBadgeCount ?? badges.filter((badge) => badge.current_tier === "master").length;
+  const completionPct = rewards?.completionPct ?? 0;
   const tierProgression = useMemo(
     () =>
       REWARD_TIERS.map((tier) => {
@@ -106,10 +116,6 @@ export function AccountAchievements() {
       }),
     [badges]
   );
-  const unlockRate = useMemo(() => {
-    if (!hasRewardData || badgeTotal <= 0) return 0;
-    return Math.round((badgeUnlocked / badgeTotal) * 100);
-  }, [badgeTotal, badgeUnlocked, hasRewardData]);
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -130,12 +136,12 @@ export function AccountAchievements() {
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Unlocked</p>
-                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{hasRewardData ? `${badgeUnlocked}/${badgeTotal}` : "Syncing"}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Mastered</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{hasRewardData ? `${masteredBadgeCount}/${badgeTotal}` : "Syncing"}</p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Completion</p>
-                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{hasRewardData ? `${unlockRate}%` : "Unavailable"}</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{hasRewardData ? `${Math.round(completionPct)}%` : "Unavailable"}</p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70 sm:col-span-1 col-span-2">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Themes</p>
@@ -249,7 +255,7 @@ export function AccountAchievements() {
                 </p>
               </div>
               <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
-                {badgeUnlocked}/{badgeTotal || badges.length}
+                {masteredBadgeCount}/{badgeTotal || badges.length} mastered
               </Badge>
             </div>
 
@@ -305,7 +311,7 @@ export function AccountAchievements() {
                   </p>
                 </div>
                 <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
-                  {badgeUnlocked}/{badgeTotal}
+                  {Math.round(completionPct)}% complete
                 </Badge>
               </div>
 
@@ -386,6 +392,13 @@ export function AccountAchievements() {
                 {tierProgression.map((entry) => {
                   const tier = entry.tier as RewardTier;
                   const tierClass = rewardTierClasses(tier);
+                  const unlockedThemeOptionsAtTier = themes.filter(
+                    (theme) => theme.unlockTier === tier && isTierUnlockableUnlocked(theme, badges, isAdminUser)
+                  ).length;
+                  const unlockedAvatarOptionsAtTier = AVATAR_PRESETS.filter(
+                    (preset) => preset.unlockTier === tier && isTierUnlockableUnlocked(preset, badges, isAdminUser)
+                  ).length;
+                  const availableTierUnlockCount = unlockableCountForTier(badges, tier, isAdminUser);
                   return (
                     <div
                       key={tier}
@@ -400,6 +413,11 @@ export function AccountAchievements() {
                         </p>
                       </div>
                       <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{entry.status}</p>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        {availableTierUnlockCount} badge{availableTierUnlockCount === 1 ? "" : "s"} at this tier currently unlock
+                        {" "}
+                        {unlockedThemeOptionsAtTier} theme{unlockedThemeOptionsAtTier === 1 ? "" : "s"} and {unlockedAvatarOptionsAtTier} avatar colorway{unlockedAvatarOptionsAtTier === 1 ? "" : "s"}.
+                      </p>
                     </div>
                   );
                 })}

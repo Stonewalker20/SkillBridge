@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import hashlib
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
 from bson import ObjectId
@@ -19,7 +20,18 @@ from app.core.auth import (
     now_utc,
     normalize_exp,
 )
-from app.models.auth import RegisterIn, LoginIn, AuthOut, UserOut, UserPatch, PasswordChangeIn
+from app.models.auth import (
+    RegisterIn,
+    LoginIn,
+    AuthOut,
+    UserOut,
+    UserPatch,
+    PasswordChangeIn,
+    PasswordResetRequestIn,
+    PasswordResetConfirmIn,
+    PasswordResetOut,
+    SubscriptionActivateIn,
+)
 from app.utils.mongo import oid_str
 from app.utils.media_storage import avatar_storage_key_from_user, get_avatar_storage_provider
 from app.utils.security import AUTH_RATE_LIMITS, build_rate_limit_identifier, enforce_rate_limit
@@ -45,6 +57,8 @@ AVATAR_PRESETS = {
 ALLOWED_AVATAR_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 SUBSCRIPTION_DEFAULT_PLAN = "pro"
 SUBSCRIPTION_DEFAULT_STATUS = "inactive"
+SUBSCRIPTION_PLAN_KEYS = {"starter", "pro", "elite"}
+PASSWORD_RESET_COLLECTION = "password_reset_tokens"
 
 
 def serialize_user_out(user: dict) -> UserOut:
@@ -117,6 +131,32 @@ def _session_expiry_state(session: dict) -> str | None:
     if expires_at <= now_utc():
         return "expired"
     return None
+
+
+def _hash_password_reset_token(token: str) -> str:
+    return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
+
+
+def _build_password_reset_url(token: str) -> str:
+    base = settings.public_app_url.rstrip("/")
+    return f"{base}/reset-password?token={token}"
+
+
+async def _issue_password_reset_token(user: dict) -> str:
+    db = get_db()
+    issued_at = now_utc()
+    raw_token = secrets.token_urlsafe(32)
+    await db[PASSWORD_RESET_COLLECTION].delete_many({"user_id": user["_id"]})
+    await db[PASSWORD_RESET_COLLECTION].insert_one(
+        {
+            "user_id": user["_id"],
+            "token_hash": _hash_password_reset_token(raw_token),
+            "created_at": issued_at,
+            "expires_at": issued_at + timedelta(minutes=max(5, int(settings.password_reset_token_ttl_minutes or 60))),
+            "used_at": None,
+        }
+    )
+    return raw_token
 
 @router.post("/register", response_model=AuthOut)
 async def register(payload: RegisterIn, request: Request):
@@ -204,6 +244,81 @@ async def login(payload: LoginIn, request: Request):
     )
 
 
+@router.post("/password-reset/request", response_model=PasswordResetOut)
+async def request_password_reset(payload: PasswordResetRequestIn, request: Request):
+    db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="auth.password_reset_request",
+        identifier=build_rate_limit_identifier(request, payload.email),
+        limit=AUTH_RATE_LIMITS["password_reset_request"][0],
+        window_seconds=AUTH_RATE_LIMITS["password_reset_request"][1],
+    )
+
+    response = PasswordResetOut(
+        message="If that email is registered, a password reset link is ready."
+    )
+    user = await db["users"].find_one({"email": payload.email})
+    if not user or not is_user_active(user):
+        return response
+
+    raw_token = await _issue_password_reset_token(user)
+    if settings.app_env_normalized == "development":
+        response.reset_url = _build_password_reset_url(raw_token)
+    return response
+
+
+@router.post("/password-reset/confirm", response_model=PasswordResetOut)
+async def confirm_password_reset(payload: PasswordResetConfirmIn, request: Request):
+    db = get_db()
+    await enforce_rate_limit(
+        db,
+        scope="auth.password_reset_confirm",
+        identifier=build_rate_limit_identifier(request, payload.token),
+        limit=AUTH_RATE_LIMITS["password_reset_confirm"][0],
+        window_seconds=AUTH_RATE_LIMITS["password_reset_confirm"][1],
+    )
+
+    token_hash = _hash_password_reset_token(payload.token)
+    token_doc = await db[PASSWORD_RESET_COLLECTION].find_one({"token_hash": token_hash})
+    if not token_doc:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    if token_doc.get("used_at") is not None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    expires_at = normalize_exp(token_doc.get("expires_at"))
+    if not expires_at or expires_at <= now_utc():
+        await db[PASSWORD_RESET_COLLECTION].delete_one({"_id": token_doc["_id"]})
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user = await db["users"].find_one({"_id": token_doc.get("user_id")})
+    if not user or not is_user_active(user):
+        await db[PASSWORD_RESET_COLLECTION].delete_one({"_id": token_doc["_id"]})
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    password_salt, password_hash = _password_parts_for_user(user)
+    if password_salt and password_hash and verify_password(payload.new_password, password_salt, password_hash):
+        raise HTTPException(status_code=400, detail="New password must be different")
+
+    changed_at = now_utc()
+    password_parts = hash_password(payload.new_password)
+    await db["users"].update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {
+                "password_salt": password_parts["salt"],
+                "password_hash": password_parts["hash"],
+                "password_changed_at": changed_at,
+                "updated_at": changed_at,
+            }
+        },
+    )
+    await db["sessions"].delete_many({"user_id": user["_id"]})
+    await db[PASSWORD_RESET_COLLECTION].delete_many({"user_id": user["_id"]})
+    return PasswordResetOut(message="Password reset complete. You can sign in with your new password.")
+
+
 @router.get("/me", response_model=UserOut)
 async def me(user=Depends(require_user)):
     return serialize_user_out(user)
@@ -239,7 +354,7 @@ async def patch_me(payload: UserPatch, user=Depends(require_user)):
 
 
 @router.post("/me/subscription", response_model=UserOut)
-async def activate_subscription(request: Request, user=Depends(require_user)):
+async def activate_subscription(payload: SubscriptionActivateIn, request: Request, user=Depends(require_user)):
     db = get_db()
     await enforce_rate_limit(
         db,
@@ -258,6 +373,10 @@ async def activate_subscription(request: Request, user=Depends(require_user)):
             detail="Mock subscription activation is only available in development. Use billing checkout in staging or production.",
         )
 
+    requested_plan = str(payload.plan or SUBSCRIPTION_DEFAULT_PLAN).strip().lower() or SUBSCRIPTION_DEFAULT_PLAN
+    if requested_plan not in SUBSCRIPTION_PLAN_KEYS:
+        raise HTTPException(status_code=400, detail="Invalid subscription plan.")
+
     activated_at = now_utc()
     renewal_at = activated_at + timedelta(days=30)
     await db["users"].update_one(
@@ -265,7 +384,7 @@ async def activate_subscription(request: Request, user=Depends(require_user)):
         {
             "$set": {
                 "subscription_status": "active",
-                "subscription_plan": SUBSCRIPTION_DEFAULT_PLAN,
+                "subscription_plan": requested_plan,
                 "subscription_started_at": user.get("subscription_started_at") or activated_at,
                 "subscription_renewal_at": renewal_at,
                 "billing_provider": "mock",
@@ -334,6 +453,8 @@ async def upload_avatar(request: Request, file: UploadFile = File(...), user=Dep
         limit=AUTH_RATE_LIMITS["avatar_upload"][0],
         window_seconds=AUTH_RATE_LIMITS["avatar_upload"][1],
     )
+    if not has_subscription_access(user):
+        raise HTTPException(status_code=402, detail="Active subscription required for profile image uploads")
 
     filename = str(file.filename or "").strip()
     suffix = Path(filename).suffix.lower()

@@ -424,8 +424,8 @@ export function Skills() {
   return (
     <div className="space-y-6">
       {/* Top bar: search/filter + Add Skill */}
-      <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <Input
             placeholder="Search skills..."
             value={searchTerm}
@@ -451,10 +451,12 @@ export function Skills() {
           <Badge variant="secondary">From Evidence: {visibleEvidenceSkillIds.size}</Badge>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
           <Dialog open={isManageOpen} onOpenChange={setIsManageOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline">Manage Custom Skills</Button>
+              <Button variant="outline" size="sm" className="h-10 rounded-xl px-4 text-sm font-medium whitespace-nowrap">
+                Manage Custom Skills
+              </Button>
             </DialogTrigger>
 
             <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden p-0 dark:border-slate-800 dark:bg-slate-950">
@@ -549,8 +551,8 @@ export function Skills() {
             }}
           >
             <DialogTrigger asChild>
-              <Button className={activeHeaderTheme.buttonClass}>
-                <Plus className="h-4 w-4 mr-2" />
+              <Button size="sm" className={`h-10 rounded-xl px-4 text-sm font-medium whitespace-nowrap ${activeHeaderTheme.buttonClass}`}>
+                <Plus className="mr-2 h-4 w-4" />
                 Add Skill
               </Button>
             </DialogTrigger>
@@ -670,18 +672,14 @@ export function Skills() {
           const effectiveProficiency = confirmed
             ? Math.max(1, Math.min(5, confirmationEntry!.proficiency ?? confirmationEntry!.manualProficiency ?? 1))
             : 0;
-          const prof = confirmed ? String(effectiveProficiency) : "";
           const categoryList = skillCategoryList(skill);
 
           return (
-            <Card key={skill.id} className="p-4 transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900/80">
+            <Card key={skill.id} className="group p-3.5 transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900/80">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="flex-1">
                   <h3 className="text-base font-semibold leading-tight text-gray-900 dark:text-slate-100">{skill.name}</h3>
                   <p className="text-xs text-gray-600 dark:text-slate-300">{categoryList.join(" • ")}</p>
-                  {Array.isArray(skill.aliases) && skill.aliases.length > 0 && (
-                    <p className="mt-1 line-clamp-2 text-[11px] text-gray-500 dark:text-slate-400">Also known as: {skill.aliases.join(", ")}</p>
-                  )}
                 </div>
 
                 <div className="shrink-0">
@@ -690,8 +688,8 @@ export function Skills() {
                       size="sm"
                       className={
                         confirmed
-                          ? "h-8 px-2.5 text-xs bg-gray-200 text-gray-700 hover:bg-gray-300"
-                          : `h-8 px-2.5 text-xs ${activeHeaderTheme.buttonClass}`
+                          ? "h-8 rounded-lg px-2.5 text-xs bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          : `h-8 rounded-lg px-2.5 text-xs ${activeHeaderTheme.buttonClass}`
                       }
                       onClick={() => handleToggleConfirm(skill.id)}
                       disabled={busySkillId === skill.id}
@@ -724,36 +722,46 @@ export function Skills() {
               </div>
 
               <div className="mt-3">
-                <div className="mb-1 text-[11px] text-gray-600 dark:text-slate-300">Proficiency (1–5)</div>
-                {confirmed && confirmationEntry ? (
-                  <div className="mb-2 text-[12px] font-medium text-gray-900 dark:text-slate-100">
-                    {effectiveProficiency}/5
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-gray-500 dark:text-slate-400">
+                      {confirmed ? "Proficiency" : "Confirm to rate"}
+                    </div>
+                    <div className="mt-1 text-xs font-medium text-gray-900 dark:text-slate-100">
+                      {confirmed ? `${effectiveProficiency}/5` : "Not confirmed"}
+                    </div>
                   </div>
-                ) : null}
-                {confirmed && confirmationEntry && confirmationEntry.evidenceCount > 0 ? (
-                  <div className="mb-2 text-[11px] leading-snug text-gray-500 dark:text-slate-400">
-                    {confirmationEntry.evidenceCount} evidence item{confirmationEntry.evidenceCount === 1 ? "" : "s"} support this skill.
-                    {confirmationEntry.autoProficiency > confirmationEntry.manualProficiency
-                      ? ` Auto-raised from ${confirmationEntry.manualProficiency} to ${confirmationEntry.autoProficiency}.`
-                      : ""}
+                  <div className="flex items-center gap-1.5">
+                    {PROF_LEVELS.map((level) => {
+                      const filled = confirmed && level <= effectiveProficiency;
+                      return (
+                        <button
+                          key={`${skill.id}:proficiency:${level}`}
+                          type="button"
+                          onClick={() => handleProficiencyChange(skill.id, String(level))}
+                          disabled={!confirmed || busySkillId === skill.id}
+                          className={`h-4 w-4 rounded-full border transition ${filled ? "border-slate-900 bg-slate-900 dark:border-slate-100 dark:bg-slate-100" : "border-slate-300 bg-transparent dark:border-slate-600"} ${confirmed ? "hover:scale-110" : "cursor-not-allowed opacity-40"}`}
+                          aria-label={`Set ${skill.name} proficiency to ${level}`}
+                          title={confirmed ? `Set proficiency to ${level}` : "Confirm skill to set proficiency"}
+                        />
+                      );
+                    })}
                   </div>
-                ) : null}
-                <Select
-                  value={prof}
-                  onValueChange={(v) => handleProficiencyChange(skill.id, v)}
-                  disabled={!confirmed || busySkillId === skill.id}
-                >
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder={confirmed ? "Select proficiency..." : "Confirm skill to set proficiency"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROF_LEVELS.map((p) => (
-                      <SelectItem key={p} value={String(p)}>
-                        {p}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                </div>
+                <div className="max-h-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-focus-within:mt-2 group-focus-within:max-h-16 group-focus-within:opacity-100 group-hover:mt-2 group-hover:max-h-16 group-hover:opacity-100">
+                  {confirmed && confirmationEntry && confirmationEntry.evidenceCount > 0 ? (
+                    <div className="text-[11px] leading-snug text-gray-500 dark:text-slate-400">
+                      {confirmationEntry.evidenceCount} evidence item{confirmationEntry.evidenceCount === 1 ? "" : "s"} support this skill.
+                      {confirmationEntry.autoProficiency > confirmationEntry.manualProficiency
+                        ? ` Auto-raised from ${confirmationEntry.manualProficiency} to ${confirmationEntry.autoProficiency}.`
+                        : ""}
+                    </div>
+                  ) : Array.isArray(skill.aliases) && skill.aliases.length > 0 ? (
+                    <div className="line-clamp-2 text-[11px] text-gray-500 dark:text-slate-400">
+                      Also known as: {skill.aliases.join(", ")}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </Card>
           );

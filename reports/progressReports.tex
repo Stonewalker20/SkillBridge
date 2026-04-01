@@ -41,14 +41,6 @@
 % ---------------------------
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 
-\newcommand{\SafeImageOrPlaceholder}[2]{%
-  \IfFileExists{#1}{%
-    \fbox{\includegraphics[width=#2]{#1}}%
-  }{%
-    \fbox{\parbox[c][2.25in][c]{#2}{\centering Missing image placeholder\\[0.35em]\texttt{\detokenize{#1}}}}%
-  }%
-}
-
 % ---------------------------
 % Week Summary Page Macro
 % Each week starts on a new page and the first page is summary + contributions table.
@@ -83,7 +75,7 @@
 % Single Image Page Macro
 % Use for one full-width screenshot/figure per page.
 % ---------------------------
-\newcommand{\ImagePage}[3]{
+\NewDocumentCommand{\ImagePage}{m m m g}{
   \clearpage
   \section*{Week #1 -- Images}
   \addcontentsline{toc}{section}{Week #1 -- Images}
@@ -92,7 +84,7 @@
   \vspace{0.75em}
   \begin{figure}[H]
     \centering
-    \SafeImageOrPlaceholder{#2}{0.95\linewidth}
+    \fbox{\includegraphics[width=0.95\linewidth]{#2}}
     \caption{#3}
   \end{figure}
 }
@@ -102,7 +94,7 @@
 % Layout: 2-up or 4-up image grid on a single page.
 % Usage:
 %   \MultiImagePageTwo{week}{imgA}{capA}{imgB}{capB}{page title}
-%   \MultiImagePageFour{week}{imgA}{capA}{imgB}{capB}{imgC}{capC}{imgD}{capD}{page title}
+%   \MultiImagePageFour{page title}{imgA}{capA}{imgB}{capB}{imgC}{capC}{imgD}{capD}
 % ---------------------------
 
 \newcommand{\MultiImagePageTwo}[6]{
@@ -113,37 +105,59 @@
   \vspace{0.5em}
   \begin{figure}[H]
     \centering
-    \begin{tabularx}{\linewidth}{@{}X X@{}}
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \SafeImageOrPlaceholder{#2}{0.95\linewidth} &
+      \fbox{\includegraphics[width=0.95\linewidth]{#2}}
+
+      \small #3
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \SafeImageOrPlaceholder{#4}{0.95\linewidth} \\
-      \small #3 & \small #5 \\
-    \end{tabularx}
+      \fbox{\includegraphics[width=0.95\linewidth]{#4}}
+
+      \small #5
+    \end{minipage}
   \end{figure}
 }
 
-\newcommand{\MultiImagePageFour}[9]{
+\NewDocumentCommand{\MultiImagePageFour}{m m m m m m m m m}{
   \clearpage
-  \section*{Week #1 -- Image Grid}
-  \addcontentsline{toc}{section}{Week #1 -- Image Grid}
+  \section*{#1}
+  \addcontentsline{toc}{section}{#1}
 
   \vspace{0.5em}
   \begin{figure}[H]
     \centering
-    \begin{tabularx}{\linewidth}{@{}X X@{}}
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \SafeImageOrPlaceholder{#2}{0.95\linewidth} &
+      \fbox{\includegraphics[width=0.95\linewidth]{#2}}
+
+      \small #3
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \SafeImageOrPlaceholder{#4}{0.95\linewidth} \\
-      \small #3 & \small #5 \\
-      \\
+      \fbox{\includegraphics[width=0.95\linewidth]{#4}}
+
+      \small #5
+    \end{minipage}
+
+    \vspace{1em}
+
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \SafeImageOrPlaceholder{#6}{0.95\linewidth} &
+      \fbox{\includegraphics[width=0.95\linewidth]{#6}}
+
+      \small #7
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.48\linewidth}
       \centering
-      \SafeImageOrPlaceholder{#8}{0.95\linewidth} \\
-      \small #7 & \small #9 \\
-    \end{tabularx}
+      \fbox{\includegraphics[width=0.95\linewidth]{#8}}
+
+      \small #9
+    \end{minipage}
   \end{figure}
 }
 
@@ -157,7 +171,7 @@
   \vspace*{1in}
   {\LARGE \textbf{SkillBridge Weekly Progress Reports}\par}
   \vspace{0.5in}
-  \includegraphics[width=0.33\textwidth]{assets/SkillBridgeLogo.png}\\
+  \includegraphics[width=0.33\textwidth]{images/SkillBridgeLogo.png}\\
   \vspace{0.5in}
   {\large CSI 4999 -- Senior Capstone (Winter 2026)\par}
   \vspace{0.5in}
@@ -169,11 +183,387 @@
   \end{tabular}
 
   \vfill
-  {\large \textbf{Reports Included:} Weeks 1 through 8\par}
+  {\large \textbf{Reports Included:} PR1 through 6 + Midterm\par}
 \end{titlepage}
 
 \tableofcontents
 \clearpage
+
+% =========================================================
+% POST-MIDTERM WEEKLY REPORTS
+% =========================================================
+\section*{Post-Midterm Weekly Reports}
+\addcontentsline{toc}{section}{Post-Midterm Weekly Reports}
+
+% =========================================================
+% WEEK 6 (PR6)
+% =========================================================
+\WeekReport{6}{March 11 -- March 17, 2026}{
+Week 6 focused on extending SkillBridge with three straightforward portfolio and admin workflows that fit the original capstone plan cleanly. The team implemented a skill detail view with linked evidence and projects, admin-side role tagging for job postings, and taxonomy maintenance for aliases and relationships. These additions were validated through API execution, MongoDB persistence, and downstream visibility in the system.
+}{
+Cordell Stonecipher & Implemented backend endpoints, linking logic, taxonomy flows, and validation for PR6 use cases & Images: Swagger + Compass + report updates \\
+}
+
+\subsection*{Week 6 -- Implemented Use Cases}
+\addcontentsline{toc}{subsection}{Week 6 -- Implemented Use Cases}
+\begin{itemize}
+  \item \textbf{UC 2.3 -- View Skill Detail Page with Linked Projects/Evidence}
+  \item \textbf{UC 4.2 -- Tag a Posting by Role}
+  \item \textbf{UC 4.4 -- Maintain Taxonomy: Skill Aliases and Relationships}
+\end{itemize}
+
+\subsection*{Week 6 -- Screenshots of Implemented Features}
+\addcontentsline{toc}{subsection}{Week 6 -- Screenshots of Implemented Features}
+
+\MultiImagePageTwo{6}
+  {images/Skills.png}{Frontend: skill detail and linked evidence/project context for UC 2.3}
+  {images/pr5_link_skill_project_frontend.png}{Frontend: linked project evidence shown alongside skill context for UC 2.3}
+  {UC 2.3 -- Skill Detail + Linked Evidence/Projects}
+
+\MultiImagePageTwo{6}
+  {images/pr5_moderate_job_frontend.png.png}{Frontend / admin job review view used to tag a posting by role for UC 4.2}
+  {images/pr6_use_case_diagram_highlighted.pdf}{Use case diagram highlighting PR6 use cases (UC 2.3, UC 4.2, UC 4.4)}
+  {UC 4.2 -- Role Tagging + Use Case Diagram}
+
+\MultiImagePageTwo{6}
+  {images/pr5_add_skill_swagger.png.png}{Swagger placeholder to be replaced with alias / relation taxonomy endpoint execution}
+  {images/pr5_add_skill_db.png.png}{MongoDB Compass placeholder to be replaced with updated skills / skill\_relations documents}
+  {UC 4.4 -- Swagger + Database Placeholder}
+
+\subsection*{Week 6 -- Database Queries Used (MongoDB)}
+\addcontentsline{toc}{subsection}{Week 6 -- Database Queries Used (MongoDB)}
+
+\noindent
+\textbf{UC 2.3 -- View Skill Detail Page with Linked Projects/Evidence}
+\begin{verbatim}
+db.skills.aggregate([
+  { $match: { _id: ObjectId("<skill_id>") } },
+  { $lookup: {
+      from: "projects",
+      localField: "_id",
+      foreignField: "skill_ids",
+      as: "linked_projects"
+  }},
+  { $lookup: {
+      from: "evidence",
+      localField: "_id",
+      foreignField: "skill_ids",
+      as: "linked_evidence"
+  }}
+])
+\end{verbatim}
+
+\noindent
+\textbf{UC 4.2 -- Tag a Posting by Role}
+\begin{verbatim}
+db.jobs.updateOne(
+  { _id: ObjectId("<job_id>") },
+  {
+    $addToSet: { role_ids: "<role_id>" },
+    $set: { updated_at: new Date() }
+  }
+)
+\end{verbatim}
+
+\noindent
+\textbf{UC 4.4 -- Maintain Taxonomy: Skill Aliases and Relationships}
+\begin{verbatim}
+db.skills.updateOne(
+  { _id: ObjectId("<skill_id>") },
+  {
+    $set: {
+      aliases: ["Prompt Engineering", "Prompt Design"],
+      updated_at: new Date()
+    }
+  }
+)
+
+db.skill_relations.insertOne({
+  from_skill_id: ObjectId("<from_skill_id>"),
+  to_skill_id: ObjectId("<to_skill_id>"),
+  relation_type: "related_to",
+  created_at: new Date()
+})
+\end{verbatim}
+
+\subsection*{Week 6 -- Short Technical Explanation}
+\addcontentsline{toc}{subsection}{Week 6 -- Short Technical Explanation}
+
+\noindent
+\textbf{UC 2.3 -- View Skill Detail Page with Linked Projects/Evidence:}
+This use case gives users a single skill-centered view that brings together the projects and evidence items supporting that skill. It makes the portfolio more navigable and turns each skill into a traceable record instead of an isolated label.
+
+\noindent
+\textbf{UC 4.2 -- Tag a Posting by Role:}
+This use case allows the system to attach one or more role identifiers to a job posting. Once tagged, those postings can be reused in role-level analytics and grouped with similar jobs for downstream weighting logic.
+
+\noindent
+\textbf{UC 4.4 -- Maintain Taxonomy: Skill Aliases and Relationships:}
+This use case keeps the skill taxonomy clean and more expressive by allowing aliases and explicit relationships between skills. It improves extraction, matching, and graph-based analytics by making the catalog less brittle and more semantically connected.
+
+\subsection*{Week 6 -- Video Demonstration}
+\addcontentsline{toc}{subsection}{Week 6 -- Video Demonstration}
+\noindent
+Video link: \href{PASTE_PR6_VIDEO_LINK_HERE}{Video Link}
+
+% =========================================================
+% WEEK 5 (PR5)
+% =========================================================
+\WeekReport{5}{March 4 -- March 10, 2026}{
+Week 5 focused on extending SkillBridge’s portfolio and moderation capabilities with four additional database-backed use cases. The team implemented skill-to-project linking, evidence artifact association, skill creation with category metadata, and administrative moderation for community-submitted job postings. Each feature was validated across three layers: FastAPI Swagger execution, MongoDB Compass persistence, and frontend rendering in the SkillBridge interface.
+}{
+Cordell Stonecipher & Implemented backend endpoints, persistence logic, and validation for all four use cases & Images: Swagger + Compass + frontend \\
+}
+
+\subsection*{Week 5 -- Implemented Use Cases}
+\addcontentsline{toc}{subsection}{Week 5 -- Implemented Use Cases}
+\begin{itemize}
+  \item \textbf{UC 1.2 -- Link a Skill to a Project}
+  \item \textbf{UC 1.3 -- Add Evidence Artifact and Associate with Skill/Project}
+  \item \textbf{UC 2.1 -- Add a Skill with Category/Tags}
+  \item \textbf{UC 4.1 -- Review and Approve/Reject Community-Submitted Job Postings}
+\end{itemize}
+
+\subsection*{Week 5 -- Screenshots of Implemented Features}
+\addcontentsline{toc}{subsection}{Week 5 -- Screenshots of Implemented Features}
+
+\MultiImagePageTwo{5}
+  {images/pr5_link_skill_project_swagger.png.png}{Swagger: UC 1.2 link-skill-to-project endpoint executed}
+  {images/pr5_link_skill_project_db.png.png}{MongoDB Compass: project document updated with linked skill reference(s)}
+  {UC 1.2 -- Swagger + Database}
+
+\ImagePage{5}{images/pr5_link_skill_project_frontend.png}{Frontend: project detail or portfolio page showing linked skills for UC 1.2}
+
+\MultiImagePageTwo{5}
+  {images/pr5_add_evidence_swagger.png.png}{Swagger: UC 1.3 evidence creation / association endpoint executed}
+  {images/pr5_add_evidence_db.png.png}{MongoDB Compass: evidence document stored with linked skill/project references}
+  {UC 1.3 -- Swagger + Database}
+
+\ImagePage{5}{images/pr5_add_evidence_frontend.png.png.png}{Frontend: evidence page displaying the added artifact and associated skill/project tags for UC 1.3}
+
+\MultiImagePageTwo{5}
+  {images/pr5_add_skill_swagger.png.png}{Swagger: UC 2.1 add-skill endpoint executed}
+  {images/pr5_add_skill_db.png.png}{MongoDB Compass: inserted skill document with category and aliases/tags}
+  {UC 2.1 -- Swagger + Database}
+
+\ImagePage{5}{images/pr5_add_skill_frontend.png.png}{Frontend: skills page displaying the newly added skill for UC 2.1}
+
+\MultiImagePageTwo{5}
+  {images/pr5_moderate_job_swagger.png.png}{Swagger: UC 4.1 job moderation endpoint executed}
+  {images/pr5_moderate_job_db.png.png}{MongoDB Compass: moderated job document showing updated review status}
+  {UC 4.1 -- Swagger + Database}
+
+\ImagePage{5}{images/pr5_moderate_job_frontend.png.png}{Frontend: admin moderation page showing approved/rejected community-submitted job posting for UC 4.1}
+
+\ImagePage{5}{images/pr5_use_case_diagram_highlighted.png}{Use Case Diagram Highlighting Implemented Use Cases (UC 1.2, UC 1.3, UC 2.1, UC 4.1)}
+
+\subsection*{Week 5 -- Database Queries Used (MongoDB)}
+\addcontentsline{toc}{subsection}{Week 5 -- Database Queries Used (MongoDB)}
+
+\noindent
+\textbf{UC 1.2 -- Link a Skill to a Project}
+\begin{verbatim}
+db.projects.updateOne(
+  { _id: ObjectId("<project_id>"), user_id: "student1" },
+  {
+    $addToSet: { skill_ids: ObjectId("<skill_id>") },
+    $set: { updated_at: new Date() }
+  }
+)
+\end{verbatim}
+
+\noindent
+\textbf{UC 1.3 -- Add Evidence Artifact and Associate with Skill/Project}
+\begin{verbatim}
+db.evidence.insertOne({
+  user_id: "student1",
+  title: "FastAPI Resume Parser Prototype",
+  type: "project",
+  excerpt: "Implemented ingestion and parsing pipeline.",
+  skill_ids: [ObjectId("<skill_id>")],
+  project_id: ObjectId("<project_id>"),
+  created_at: new Date(),
+  updated_at: new Date()
+})
+\end{verbatim}
+
+\noindent
+\textbf{UC 2.1 -- Add a Skill with Category/Tags}
+\begin{verbatim}
+db.skills.insertOne({
+  user_id: "student1",
+  name: "FastAPI",
+  category: "Backend Development",
+  aliases: ["fast api", "python api"],
+  proficiency: 3,
+  created_at: new Date(),
+  updated_at: new Date()
+})
+\end{verbatim}
+
+\noindent
+\textbf{UC 4.1 -- Review and Approve/Reject Community-Submitted Job Postings}
+\begin{verbatim}
+db.jobs.updateOne(
+  { _id: ObjectId("<job_id>") },
+  {
+    $set: {
+      moderation_status: "approved",
+      moderated_by: "admin1",
+      moderated_at: new Date(),
+      updated_at: new Date()
+    }
+  }
+)
+\end{verbatim}
+
+\subsection*{Week 5 -- Short Technical Explanation}
+\addcontentsline{toc}{subsection}{Week 5 -- Short Technical Explanation}
+
+\noindent
+\textbf{UC 1.2 -- Link a Skill to a Project:}
+This use case allows the system to connect validated skills directly to portfolio projects. By storing these relationships, the platform can show how specific work artifacts support individual skill claims.
+
+\noindent
+\textbf{UC 1.3 -- Add Evidence Artifact and Associate with Skill/Project:}
+This use case persists user evidence, such as project descriptions, files, or written artifacts, and links that evidence to both projects and skills. This strengthens traceability between a user’s raw inputs and their displayed competencies.
+
+\noindent
+\textbf{UC 2.1 -- Add a Skill with Category/Tags:}
+This use case allows users or administrators to extend the skill catalog with structured metadata such as category and aliases. It supports taxonomy growth and improves later extraction, filtering, and matching workflows.
+
+\noindent
+\textbf{UC 4.1 -- Review and Approve/Reject Community-Submitted Job Postings:}
+This use case supports administrative moderation of submitted jobs before those postings are used in analytics or shown to other users. It improves quality control and prevents invalid or low-quality postings from affecting the platform.
+
+\subsection*{Week 5 -- Video Demonstration}
+\addcontentsline{toc}{subsection}{Week 5 -- Video Demonstration}
+\noindent
+Video link: \href{PASTE_PR5_VIDEO_LINK_HERE}{Video Link}
+
+% =========================================================
+% WEEK 4 (PR4)
+% =========================================================
+\WeekReport{4}{February 26 -- March 3, 2026}{
+Week 4 focused on extending SkillBridge from skill validation into portfolio intelligence and personalized output generation. The backend now supports a user-specific dashboard summary, project record creation for persistent portfolio building, and tailored resume generation based on confirmed skills and a selected job description. The tailored resume work was implemented as an additional feature beyond the original capstone use case numbering, while the dashboard and project workflows map directly to the original use case plan.
+}{
+Cordell Stonecipher & Implemented dashboard summary, project creation flow, and tailored resume generation as an additional feature & Images: Swagger + Compass + generated output \\
+}
+
+
+
+\subsection*{Week 4 -- Implemented Use Cases}
+\addcontentsline{toc}{subsection}{Week 4 -- Implemented Use Cases}
+\begin{itemize}
+  \item \textbf{UC 1.4 -- Dashboard Summary}
+  \item \textbf{UC 1.1 -- Create / Manage Project Entry}
+  \item \textbf{Additional Feature -- Generate Tailored Resume from Confirmed Skills + Job Description}
+\end{itemize}
+
+\subsection*{Week 4 -- Screenshots of Implemented Features}
+\addcontentsline{toc}{subsection}{Week 4 -- Screenshots of Implemented Features}
+
+\ImagePage{4}{images/SB_Dashboard.png}{Frontend: Dashboard page rendering the user summary widgets for UC 1.4}
+
+\MultiImagePageTwo{4}
+  {images/api_evidence.png}{Swagger: UC 1.1 project endpoint executed}
+  {images/db_evidence.png}{MongoDB Compass: project document stored in the projects collection}
+  {UC 1.1 -- Swagger + Database}
+
+\ImagePage{4}{images/ui_evidence.png}{Frontend: Portfolio / Projects page displaying the saved project entry for UC 1.1}
+
+\MultiImagePageTwo{4}
+  {images/api_tailor.png}{Swagger: tailored resume generation endpoint executed}
+  {images/db_tailor.png}{MongoDB Compass: tailored\_resumes document persisted after generation}
+  {Additional Feature -- Swagger + Database}
+
+\ImagePage{4}{images/ui_tailor.png}{Frontend: Tailored resume interface displaying generated resume content for the additional tailored resume feature}
+
+\ImagePage{4}{images/pr4_use_case_diagram.png}{Use Case Diagram Highlighting Implemented Original Use Cases (UC 1.4, UC 1.1) plus the additional tailored resume feature}
+
+\subsection*{Week 4 -- Database Queries Used (MongoDB)}
+\addcontentsline{toc}{subsection}{Week 4 -- Database Queries Used (MongoDB)}
+
+\noindent
+\textbf{UC 1.4 -- Dashboard Summary}
+\begin{verbatim}
+db.projects.find(
+  { user_id: "student1" },
+  { title: 1, description: 1, created_at: 1 }
+).sort({ created_at: -1 }).limit(10)
+
+db.evidence.aggregate([
+  { $match: { user_id: "student1" } },
+  { $unwind: "$skill_ids" },
+  { $group: { _id: "$skill_ids", evidence_count: { $sum: 1 } } },
+  { $sort: { evidence_count: -1 } },
+  { $limit: 10 }
+])
+
+db.job_match_runs.find(
+  { user_id: "student1" },
+  { score: 1, created_at: 1, job_id: 1 }
+).sort({ created_at: -1 }).limit(5)
+\end{verbatim}
+
+\noindent
+\textbf{UC 1.1 -- Create / Manage Project Entry}
+\begin{verbatim}
+db.projects.insertOne({
+  user_id: "student1",
+  title: "SkillBridge Backend Integration",
+  description: "Implemented project, dashboard, and resume APIs.",
+  start_date: new Date("2026-02-26"),
+  end_date: null,
+  skills: ["FastAPI", "MongoDB", "React"],
+  created_at: new Date(),
+  updated_at: new Date()
+})
+\end{verbatim}
+
+\noindent
+\textbf{Additional Feature -- Generate Tailored Resume from Confirmed Skills + Job Description}
+\begin{verbatim}
+db.job_ingests.findOne({ _id: ObjectId("<job_id>"), user_id: "student1" })
+
+db.resume_skill_confirmations.find(
+  { user_id: "student1" },
+  { confirmed: 1 }
+)
+
+db.evidence.find(
+  { user_id: "student1" },
+  { title: 1, type: 1, skill_ids: 1, excerpt: 1 }
+)
+
+db.tailored_resumes.insertOne({
+  user_id: "student1",
+  job_id: ObjectId("<job_id>"),
+  resume_snapshot_id: ObjectId("<snapshot_id>"),
+  generated_text: "<tailored_resume_text>",
+  created_at: new Date()
+})
+\end{verbatim}
+
+\subsection*{Week 4 -- Short Technical Explanation}
+\addcontentsline{toc}{subsection}{Week 4 -- Short Technical Explanation}
+
+\noindent
+\textbf{UC 1.4 -- Dashboard Summary:}
+This feature aggregates user-specific portfolio information into a single response for the dashboard page. The endpoint collects recent projects, top evidenced skills, and latest match-analysis activity so the frontend can render a consolidated overview without issuing many separate requests.
+
+\noindent
+\textbf{UC 1.1 -- Create / Manage Project Entry:}
+This feature allows a user to persist a project artifact as part of their portfolio history. Each project record stores metadata such as title, description, dates, and related skills, making it possible to connect user work history to evidence-backed skill development.
+
+\noindent
+\textbf{Additional Feature -- Generate Tailored Resume from Confirmed Skills + Job Description:}
+This feature uses the selected job posting together with the user’s validated skills and evidence to construct a more job-relevant resume draft. The result is saved so it can be revisited later, compared against other job targets, or exported in future iterations.
+
+\subsection*{Week 4 -- Video Demonstration}
+\addcontentsline{toc}{subsection}{Week 4 -- Video Demonstration}
+\noindent
+Video link: \href{https://www.loom.com/share/5e02115145c841f9a0e833ab8cc311f8}{Video Link}
 
 % =========================================================
 % MIDTERM PRESENTATION
@@ -198,14 +588,15 @@ At the midpoint of the project, SkillBridge has evolved from a backend proof of 
   \item Job Match workflow including job ingestion, skill extraction, required/preferred coverage, semantic alignment, keyword overlap, history, and reanalysis.
   \item Tailored resume workflow including preview generation, saved tailored resumes, PDF export, and resume management.
   \item Admin workflow including user-role management, summary metrics, and job moderation endpoints.
+  \item Role and taxonomy workflow including role tagging, role skill weights, aliases, and skill relations.
 \end{itemize}
 
 \subsection*{Midterm -- Current Technical Architecture}
 \addcontentsline{toc}{subsection}{Midterm -- Current Technical Architecture}
 \begin{itemize}
-  \item \textbf{Frontend:} React + Vite application with authenticated routes for Dashboard, Skills, Evidence, Job Match, Tailored Resumes, Account, and Admin.
-  \item \textbf{Backend:} FastAPI service exposing REST endpoints for auth, skills, confirmations, evidence, jobs, tailoring, dashboard analytics, portfolio/projects, taxonomy, and admin features.
-  \item \textbf{Database:} MongoDB used for users, sessions, evidence, skills, confirmations, job analyses, tailored resumes, and admin-visible moderation state.
+  \item \textbf{Frontend:} React + Vite application with authenticated routes for Dashboard, Skills, Evidence, Job Match, Tailored Resumes, Account, Analytics, and Admin.
+  \item \textbf{Backend:} FastAPI service exposing REST endpoints for auth, skills, confirmations, evidence, jobs, tailoring, dashboard analytics, portfolio/projects, taxonomy, roles, and admin features.
+  \item \textbf{Database:} MongoDB used for users, sessions, evidence, skills, confirmations, projects, job analyses, tailored resumes, role weights, and admin-visible moderation state.
   \item \textbf{ML / Inference Layer:} Local transformer-backed semantic matching and skill extraction with a fallback local rule/hash path.
 \end{itemize}
 
@@ -226,7 +617,7 @@ At the midpoint of the project, SkillBridge has evolved from a backend proof of 
     job\_ingests & \_id, user\_id, title, company, location, text, extracted\_skills, keywords, created\_at & Stores normalized job postings before scoring and tailoring. \\
     job\_match\_runs & \_id, user\_id, job\_id, match\_score, semantic\_alignment\_score, matched\_skills, missing\_skills, analysis, created\_at & Stores computed job-match analysis results and history. \\
     tailored\_resumes & \_id, user\_id, job\_id, selected\_skill\_ids, selected\_item\_ids, sections, plain\_text, created\_at & Stores generated tailored resume outputs and exportable content. \\
-    portfolio\_items / projects & \_id, user\_id, title, description, skill\_ids, visibility, created\_at & Stores supporting portfolio content linked to skills and evidence-backed experience. \\
+    role\_skill\_weights / skill\_relations & \_id, role\_id or skill ids, weights or relation\_type, created\_at & Stores reusable role analytics and taxonomy graph metadata. \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -245,7 +636,7 @@ At the midpoint of the project, SkillBridge has evolved from a backend proof of 
     User $\rightarrow$ Evidence & evidence.user\_id & Connects uploaded or pasted artifacts to extracted and supported skills. \\
     User $\rightarrow$ Job Analyses & job\_ingests.user\_id and job\_match\_runs.user\_id & Lets each user analyze and revisit job postings independently. \\
     User $\rightarrow$ Tailored Resumes & tailored\_resumes.user\_id & Stores generated resume outputs tied to a specific user's profile and analysis history. \\
-    User $\rightarrow$ Portfolio / Projects & portfolio\_items.user\_id and projects.user\_id & Connects project evidence and public/private portfolio material to the user's profile. \\
+    User $\rightarrow$ Projects & projects.user\_id and project\_skill\_links.project\_id & Connects projects and portfolio evidence back to supported skills. \\
     User $\rightarrow$ Admin Privileges & users.role & Determines whether the user can access moderation and platform management pages. \\
     \bottomrule
   \end{tabularx}
@@ -311,41 +702,23 @@ At the midpoint of the project, SkillBridge has evolved from a backend proof of 
   \item Viewing skill counts, unsupported skills, and evidence-supported skills.
   \item Running job analyses and inspecting matched skills, missing skills, semantic alignment, and keyword overlap.
   \item Generating and storing tailored resumes for later retrieval.
-  \item Viewing site-level administrative information from a role-gated admin workspace.
+  \item Viewing site-level administrative and taxonomy information from role-gated workflows.
 \end{itemize}
 
 \subsection*{Midterm -- Presentation Screenshot Placeholders}
 \addcontentsline{toc}{subsection}{Midterm -- Presentation Screenshot Placeholders}
-\noindent
-The repository does not currently contain the actual midterm screenshots. The boxes below are compile-safe placeholders for the presentation draft. Replace them with real screenshots once they are exported.
 
-\begin{figure}[H]
-  \centering
-  \begin{tabular}{cc}
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Dashboard Screenshot\\(current metrics, activity, categories)}} &
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Skills Screenshot\\(confirmed skills, evidence-backed skills, proficiency)}} \\
-    \small Website view: Dashboard & \small Website view: Skills \\
-    \\[0.75em]
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Evidence Screenshot\\(multi-file upload, extracted skills review)}} &
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering Job Match Screenshot\\(coverage snapshot, matched/missing skills, semantic alignment)}} \\
-    \small Website view: Evidence & \small Website view: Job Match \\
-  \end{tabular}
-  \caption{Midterm presentation website screenshots to replace with actual captured images.}
-\end{figure}
+\MultiImagePageFour{Midterm Website Screens}
+  {images/Dashboard.png}{Website view: Dashboard}
+  {images/Skills.png}{Website view: Skills}
+  {images/Evidence.png}{Website view: Evidence}
+  {images/Job Browser.png}{Website view: Job Browser}
 
-\begin{figure}[H]
-  \centering
-  \begin{tabular}{cc}
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\users / sessions / role assignments}} &
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\evidence / confirmations / skill links}} \\
-    \small Database view: user data and access control & \small Database view: evidence and skill relations \\
-    \\[0.75em]
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\job\_ingests / job\_match\_runs}} &
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering MongoDB Screenshot\\tailored\_resumes / admin-related collections}} \\
-    \small Database view: job analysis history & \small Database view: tailored outputs and admin state \\
-  \end{tabular}
-  \caption{Midterm presentation database screenshots to replace with actual MongoDB Compass captures.}
-\end{figure}
+\MultiImagePageFour{Midterm Database Screens}
+  {images/pr2_db_resume_snapshots.png}{Database view: resume snapshots}
+  {images/pr2_db_skill_extractions.png}{Database view: skill extractions}
+  {images/pr2_db_evidence.png}{Database view: evidence}
+  {images/db_tailor.png}{Database view: tailored resumes}
 
 \subsection*{Midterm -- Recommended Live Demo Sequence}
 \addcontentsline{toc}{subsection}{Midterm -- Recommended Live Demo Sequence}
@@ -356,109 +729,16 @@ The repository does not currently contain the actual midterm screenshots. The bo
   \item Confirm extracted skills on the Skills page and show unsupported confirmed skills.
   \item Open Job Match, analyze a posting, and explain the score breakdown and semantic alignment.
   \item Generate a tailored resume and show that it appears on the Tailored Resumes page.
-  \item Log in as an owner/team user and briefly show the Admin workspace.
+  \item Show role/taxonomy administration and the effect of role tagging.
   \item Close by showing the MongoDB collections that store the corresponding data.
 \end{enumerate}
 
 % =========================================================
-% WEEK 4 (PR4) -- MOST RECENT
+% PRE-MIDTERM WEEKLY REPORTS
 % =========================================================
-\WeekReport{4}{February 26 -- March 3, 2026}{
-Week 4 focused on extending SkillBridge beyond ingestion and extraction into user-facing project organization, personalized dashboard aggregation, and admin moderation workflows. The backend now supports linking confirmed skills to specific portfolio projects, computing dashboard summaries from multiple user collections, and moderating community-submitted job postings through an approval or rejection flow.
-}{
-Justin Elia & Validation support for project and moderation flows & \\
-Spencer Roeren & Report review and UI alignment support & \\
-Cordell Stonecipher & Implemented UC 1.2, UC 1.4, and UC 4.1 endpoints + aggregation logic + testing & (Artifacts: API routes + tests + report updates) \\
-}
-
-\subsection*{Week 4 -- Implemented Use Cases}
-\addcontentsline{toc}{subsection}{Week 4 -- Implemented Use Cases}
-\begin{itemize}
-  \item \textbf{UC 1.2 -- Link Skill to Project}
-  \item \textbf{UC 1.4 -- Dashboard Summary (User-Specific)}
-  \item \textbf{UC 4.1 -- Moderate Job Postings}
-\end{itemize}
-
-\subsection*{Week 4 -- Screenshots of Implemented Features}
-\addcontentsline{toc}{subsection}{Week 4 -- Screenshots of Implemented Features}
-\noindent
-The PR4 screenshots have not been exported into the repository yet. The boxes below are compile-safe placeholders for the final report draft.
-
-\begin{figure}[H]
-  \centering
-  \begin{tabular}{cc}
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 1.2 Placeholder\\Project skill link API response\\and project\_skill\_links collection view}} &
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 1.4 Placeholder\\Dashboard summary API response\\and dashboard metric cards}} \\
-    \small Planned evidence: project-skill linking & \small Planned evidence: dashboard summary aggregation \\
-    \\[0.75em]
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering UC 4.1 Placeholder\\Pending jobs list, moderation PATCH\\and updated moderation status}} &
-    \fbox{\parbox[c][2.1in][c]{0.42\linewidth}{\centering PR4 Use Case Diagram Placeholder\\Highlight UC 1.2, UC 1.4, and UC 4.1}} \\
-    \small Planned evidence: moderation workflow & \small Planned evidence: highlighted use case diagram \\
-  \end{tabular}
-  \caption{PR4 implementation evidence placeholders for UC 1.2, UC 1.4, and UC 4.1.}
-\end{figure}
-
-\subsection*{Week 4 -- Database Queries Used (MongoDB Equivalent to SQL)}
-\addcontentsline{toc}{subsection}{Week 4 -- Database Queries Used (MongoDB Equivalent to SQL)}
-
-\noindent
-\textbf{UC 1.2 -- Link Skill to Project}
-\begin{verbatim}
-db.project_skill_links.findOne({
-  project_id: ObjectId("<project_id>"),
-  skill_id: ObjectId("<skill_id>")
-})
-
-db.project_skill_links.insertOne({
-  project_id: ObjectId("<project_id>"),
-  skill_id: ObjectId("<skill_id>"),
-  created_at: new Date()
-})
-\end{verbatim}
-
-\noindent
-\textbf{UC 1.4 -- Dashboard Summary}
-\begin{verbatim}
-db.projects.find(
-  { user_id: { $in: [ObjectId("<user_id>"), "<user_id>"] } },
-  { title: 1, description: 1, created_at: 1 }
-).sort({ created_at: -1 }).limit(10)
-
-db.evidence.aggregate([
-  { $match: { user_id: { $in: [ObjectId("<user_id>"), "<user_id>"] } } },
-  { $unwind: "$skill_ids" },
-  { $group: { _id: "$skill_ids", evidence_count: { $sum: 1 } } },
-  { $sort: { evidence_count: -1 } },
-  { $limit: 8 }
-])
-
-db.resume_skill_confirmations.aggregate([
-  { $match: { user_id: { $in: [ObjectId("<user_id>"), "<user_id>"] }, resume_snapshot_id: null } },
-  { $unwind: "$confirmed" },
-  { $group: { _id: "$confirmed.skill_id" } },
-  { $count: "n" }
-])
-\end{verbatim}
-
-\noindent
-\textbf{UC 4.1 -- Moderate Job Postings}
-\begin{verbatim}
-db.jobs.find({ moderation_status: "pending" }).sort({ created_at: -1 })
-
-db.jobs.updateOne(
-  { _id: ObjectId("<job_id>") },
-  { $set: {
-      moderation_status: "rejected",
-      moderation_reason: "Rejected by reviewer",
-      updated_at: new Date()
-  }}
-)
-\end{verbatim}
-
-\subsection*{Week 4 -- Video Demonstration}
-\addcontentsline{toc}{subsection}{Week 4 -- Video Demonstration}
-\noindent
-Video link: To be added for PR4 delivery.
+\clearpage
+\section*{Pre-Midterm Weekly Reports}
+\addcontentsline{toc}{section}{Pre-Midterm Weekly Reports}
 
 % =========================================================
 % WEEK 3 (PR3) -- MOST RECENT
@@ -482,19 +762,10 @@ Cordell Stonecipher & UC 2.2 API endpoints + aggregation logic + testing & (Imag
 \subsection*{Week 3 -- Screenshots of Implemented Features}
 \addcontentsline{toc}{subsection}{Week 3 -- Screenshots of Implemented Features}
 
-\ImagePage{3}
-  {images/pr3_compass_confirm_doc.png}{Swagger: UC 3.3 POST confirm-skills executed}
-  {UC 3.3 Validation}
-
-\ImagePage{3}
-  {images/pr3_compass_skill_updated.png}{Swagger: UC 2.2 PATCH skill proficiency executed}
-  {UC 2.2 Validation}
-
-\ImagePage{3}
-  {images/pr3_compass_confirmed_gaps.png}{Swagger: UC 2.4 confirmed gaps endpoint executed}
-  {UC 2.4 Confirmed Gaps Validation}
-
-  \ImagePage{2}{images/pr3_usecase_diagram_highlighted.png}{Use Case Diagram Highlighting Implemented Use Cases (UC 3.3, UC 2.2, UC 2.4)}
+\ImagePage{3}{images/pr3_compass_confirm_doc.png}{Swagger: UC 3.3 POST confirm-skills executed}
+\ImagePage{3}{images/pr3_compass_skill_updated.png}{Swagger: UC 2.2 PATCH skill proficiency executed}
+\ImagePage{3}{images/pr3_compass_confirmed_gaps.png}{Swagger: UC 2.4 confirmed gaps endpoint executed}
+\ImagePage{3}{images/pr3_usecase_diagram_highlighted.png}{Use Case Diagram Highlighting Implemented Use Cases (UC 3.3, UC 2.2, UC 2.4)}
 
 \subsection*{Week 3 -- Database Queries Used (MongoDB Equivalent to SQL)}
 \addcontentsline{toc}{subsection}{Week 3 -- Database Queries Used (MongoDB Equivalent to SQL)}
@@ -536,12 +807,11 @@ db.resume_skill_confirmations.aggregate([
 \subsection*{Week 3 -- Video Demonstration}
 \addcontentsline{toc}{subsection}{Week 3 -- Video Demonstration}
 \noindent
-Video link: \href{https://www.loom.com/share/3b685219180343ff8ff40dd97bf698a3}{https://www.loom.com/share/3b685219180343ff8ff40dd97bf698a3}
+Video link: \href{https://www.loom.com/share/3b685219180343ff8ff40dd97bf698a3}{Video Link}
 
 % =========================================================
 % WEEK 2
 % =========================================================
-
 
 \WeekReport{2}{(Feb 15th)}{
 Week 2 focused on implementing and validating three fully functional backend use cases using realistic seeded datasets. The system integrates Kaggle resume data and LinkedIn job postings into MongoDB and exposes structured FastAPI endpoints for resume ingestion, automated skill extraction, and skill gap analysis. All features were tested via Swagger and validated in MongoDB Compass to confirm correct persistence, aggregation behavior, and UI compatibility.
@@ -628,8 +898,7 @@ db.skills.aggregate([
 \subsection*{Week 2 -- Video Demonstration}
 \addcontentsline{toc}{subsection}{Week 2 -- Video Demonstration}
 \noindent
-Video link: \url{https://drive.google.com/file/d/1VNMVQtzIe4HL9UoQhuhnphgiitfG7b9m/view?usp=drive_link}
-
+Video link: \href{https://drive.google.com/file/d/1VNMVQtzIe4HL9UoQhuhnphgiitfG7b9m/view?usp=drive_link}{Video Link}
 
 \WeekReport{1}{(Feb 8th)}{
 Week 1 established the project foundation by initializing the GitHub repository, setting up a local MongoDB database using Docker, and implementing a FastAPI backend skeleton. Realistic sample datasets were collected and inserted into core collections to support early UI development and validate planned display scenarios. The team aligned on primary use cases and defined how resumes, papers, and job listings will be represented as evidence-backed skills within the system.
@@ -677,7 +946,7 @@ The UI will display data using the backend API endpoints:
     \begin{subfigure}{0.48\textwidth}
         \centering
         \begin{tikzpicture}
-            \node[anchor=south west, inner sep=0] (image) at (0,0) {\SafeImageOrPlaceholder{images/Dashboard.png}{\linewidth}};
+            \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=\linewidth]{images/Dashboard.png}};
             \begin{scope}[x={(image.south east)},y={(image.north west)}]
                 \node [anchor=south east, fill=black, fill opacity=0.5, text=white, font=\sffamily\tiny, inner sep=2pt, rounded corners=1pt] at (0.98, 0.05) {Dashboard View};
             \end{scope}
@@ -688,7 +957,7 @@ The UI will display data using the backend API endpoints:
     \begin{subfigure}{0.48\textwidth}
         \centering
         \begin{tikzpicture}
-            \node[anchor=south west, inner sep=0] (image) at (0,0) {\SafeImageOrPlaceholder{images/Skills.png}{\linewidth}};
+            \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=\linewidth]{images/Skills.png}};
             \begin{scope}[x={(image.south east)},y={(image.north west)}]
                 \node [anchor=south east, fill=black, fill opacity=0.5, text=white, font=\sffamily\tiny, inner sep=2pt, rounded corners=1pt] at (0.98, 0.05) {Skills View};
             \end{scope}
@@ -702,7 +971,7 @@ The UI will display data using the backend API endpoints:
     \begin{subfigure}{0.48\textwidth}
         \centering
         \begin{tikzpicture}
-            \node[anchor=south west, inner sep=0] (image) at (0,0) {\SafeImageOrPlaceholder{images/Evidence.png}{\linewidth}};
+            \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=\linewidth]{images/Evidence.png}};
             \begin{scope}[x={(image.south east)},y={(image.north west)}]
                 \node [anchor=south east, fill=black, fill opacity=0.5, text=white, font=\sffamily\tiny, inner sep=2pt, rounded corners=1pt] at (0.98, 0.05) {Evidence View};
             \end{scope}
@@ -713,7 +982,7 @@ The UI will display data using the backend API endpoints:
     \begin{subfigure}{0.48\textwidth}
         \centering
         \begin{tikzpicture}
-            \node[anchor=south west, inner sep=0] (image) at (0,0) {\SafeImageOrPlaceholder{images/Job Browser.png}{\linewidth}};
+            \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=\linewidth]{images/Job Browser.png}};
             \begin{scope}[x={(image.south east)},y={(image.north west)}]
                 \node [anchor=south east, fill=black, fill opacity=0.5, text=white, font=\sffamily\tiny, inner sep=2pt, rounded corners=1pt] at (0.98, 0.05) {Job Browser View};
             \end{scope}
@@ -725,7 +994,7 @@ The UI will display data using the backend API endpoints:
     \label{fig:skillbridge_ui}
 \end{figure}
 
-\subsection*{Week 1 -- How the UI Displays Data} 
+\subsection*{Week 1 -- How the UI Displays Data}
 
 \begin{itemize}
     \item \textbf{Dashboard, The Overview:} The Dashboard acts as a command center, using individual summary widgets to display diverse data types: Key Metrics: Large-font text (e.g., "12/15 Skills") highlights critical progress. Lists: Simple bulleted lists display "Top Skills" and "Recommended Actions." Data Tables: The "Latest Job Analyses" section uses a traditional row-based table to compare specific data points like company names and match percentages.
@@ -750,10 +1019,9 @@ The UI will display data using the backend API endpoints:
 %                     {Database + API Screenshots}
 
 % UI mockups (example: 4-up page)
-% \MultiImagePageFour{1}{images/week1_ui_skill_catalog.png}{UI Mockup: Skill Catalog}
+% \MultiImagePageFour{UI Mockups (Planned Use Cases)}{images/week1_ui_skill_catalog.png}{UI Mockup: Skill Catalog}
 %                      {images/week1_ui_evidence.png}{UI Mockup: Evidence Management}
 %                      {images/week1_ui_jobs.png}{UI Mockup: Job Browser}
 %                      {images/week1_ui_match.png}{UI Mockup: Match Results}
-%                      {UI Mockups (Planned Use Cases)}
 
 \end{document}

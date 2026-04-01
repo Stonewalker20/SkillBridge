@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { ArrowRight, BarChart3, FolderOpen, Layers3, Target } from "lucide-react";
 import {
   api,
@@ -11,7 +11,6 @@ import {
   type LearningPathSkillDetail,
   type Skill,
   type SkillTrajectoryOut,
-  type UserSkillVectorHistoryPoint,
 } from "../services/api";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -33,7 +32,6 @@ type AnalyticsState = {
   confirmation: ConfirmationOut | null;
   trajectory: SkillTrajectoryOut | null;
   learningProgress: LearningPathProgress[];
-  vectorHistory: UserSkillVectorHistoryPoint[];
 };
 
 const CHART_COLORS = ["#1E3A8A", "#0F766E", "#F59E0B", "#2563EB", "#14B8A6", "#F97316", "#7C3AED", "#DC2626"];
@@ -110,7 +108,6 @@ export function SkillAnalytics() {
     confirmation: null,
     trajectory: null,
     learningProgress: [],
-    vectorHistory: [],
   });
   const [selectedLearningSkill, setSelectedLearningSkill] = useState<string | null>(null);
   const [selectedLearningSkillDetail, setSelectedLearningSkillDetail] = useState<LearningPathSkillDetail | null>(null);
@@ -123,20 +120,19 @@ export function SkillAnalytics() {
     let active = true;
     const load = async () => {
       try {
-        const [skills, evidence, confirmation, trajectory, learningProgress, vectorHistory] = await Promise.all([
+        const [skills, evidence, confirmation, trajectory, learningProgress] = await Promise.all([
           loadAllSkills(),
           api.listEvidence({ origin: "user" }).catch(() => [] as Evidence[]),
           api.getProfileConfirmation().catch(() => null as ConfirmationOut | null),
           api.getSkillTrajectory().catch(() => null as SkillTrajectoryOut | null),
           api.listLearningPathProgress().catch(() => [] as LearningPathProgress[]),
-          api.getUserSkillVectorHistory().catch(() => [] as UserSkillVectorHistoryPoint[]),
         ]);
         if (!active) return;
-        setState({ loading: false, skills, evidence, confirmation, trajectory, learningProgress, vectorHistory });
+        setState({ loading: false, skills, evidence, confirmation, trajectory, learningProgress });
       } catch (error) {
         console.error("Failed to load skill analytics:", error);
         if (!active) return;
-        setState({ loading: false, skills: [], evidence: [], confirmation: null, trajectory: null, learningProgress: [], vectorHistory: [] });
+        setState({ loading: false, skills: [], evidence: [], confirmation: null, trajectory: null, learningProgress: [] });
       }
     };
     load();
@@ -276,7 +272,6 @@ export function SkillAnalytics() {
       careerPaths: state.trajectory?.career_paths ?? [],
       learningPath: state.trajectory?.learning_path ?? [],
       learningProgress: state.learningProgress,
-      vectorHistory: state.vectorHistory,
     };
   }, [state]);
 
@@ -388,29 +383,7 @@ export function SkillAnalytics() {
         ))}
       </div>
 
-      <div id="overview" className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr] scroll-mt-24">
-        <AnalyticsSection
-          title="Vector Drift"
-          description="Aggregate profile score across recent updates."
-          className="h-full"
-        >
-          {analytics.vectorHistory.length === 0 ? (
-            <div className="text-sm text-slate-500 dark:text-slate-400">No vector history yet. Analyze a job to generate the first point.</div>
-          ) : (
-            <div className="h-56 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={analytics.vectorHistory}>
-                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.18} />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value: number) => [`${Math.round(Number(value) || 0)}%`, "Vector score"]} />
-                  <Line type="monotone" dataKey="score" stroke="#1E3A8A" strokeWidth={2.5} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </AnalyticsSection>
-
+      <div id="overview" className="grid grid-cols-1 gap-6 scroll-mt-24">
         <AnalyticsSection title="Evidence Mix" description="What is supporting the profile today.">
           {analytics.evidenceTypes.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">No evidence added yet.</div>

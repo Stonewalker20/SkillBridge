@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 class RewardCountersOut(BaseModel):
     evidence_saved: int = 0
     profile_skills_confirmed: int = 0
+    skill_categories_covered: int = 0
     resume_snapshots_uploaded: int = 0
     job_matches_run: int = 0
     tailored_resumes_generated: int = 0
@@ -41,6 +42,10 @@ class RewardsSummaryOut(BaseModel):
     counters: RewardCountersOut
     unlocked_count: int = 0
     total_count: int = 0
+    mastered_badge_count: int = 0
+    tier_step_unlocked_count: int = 0
+    tier_step_total_count: int = 0
+    completion_pct: float = 0.0
     badge_count: int = 0
     unlocked_badge_count: int = 0
     achievements: list[RewardAchievementOut] = Field(default_factory=list)

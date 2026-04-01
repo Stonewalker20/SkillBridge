@@ -25,13 +25,46 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { api } from "../services/api";
+import { api, type BillingPlan } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
 import { useHeaderTheme } from "../lib/headerTheme";
 import { avatarPresetClass } from "../lib/avatarPresets";
 import { AccountSectionNav } from "../components/AccountSectionNav";
 import { SubscriptionGate } from "../components/SubscriptionGate";
+
+const DEFAULT_BILLING_PLANS: BillingPlan[] = [
+  {
+    key: "starter",
+    label: "Starter",
+    price_monthly: 9,
+    price_display: "$9/mo",
+    description: "Core workflow access for evidence, skills, jobs, and tailored resumes.",
+    features: ["Core workflow access", "Standard customization", "Profile image upload"],
+    recommended: false,
+    checkout_available: false,
+  },
+  {
+    key: "pro",
+    label: "Pro",
+    price_monthly: 19,
+    price_display: "$19/mo",
+    description: "Best all-around tier for active job seekers and regular platform use.",
+    features: ["Everything in Starter", "Priority billing support", "Best value for most users"],
+    recommended: true,
+    checkout_available: false,
+  },
+  {
+    key: "elite",
+    label: "Elite",
+    price_monthly: 39,
+    price_display: "$39/mo",
+    description: "Highest tier for heavy usage and the strongest support priority.",
+    features: ["Everything in Pro", "Highest-priority support", "Best fit for weekly power usage"],
+    recommended: false,
+    checkout_available: false,
+  },
+];
 
 export function Account() {
   const { refreshUser } = useAuth();
@@ -55,6 +88,7 @@ export function Account() {
   const [subscriptionStatus, setSubscriptionStatus] = useState("inactive");
   const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null);
   const [subscriptionRenewalAt, setSubscriptionRenewalAt] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState("pro");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarPreset, setAvatarPreset] = useState<string | null>("midnight");
 
@@ -80,6 +114,7 @@ export function Account() {
         setAvatarPreset(me?.avatar_preset || "midnight");
         setBillingStatus(billing);
         setBillingMessage(billing?.message ?? null);
+        setSelectedPlan(me?.subscription_plan || billing?.current_plan || billing?.plans?.find((plan: BillingPlan) => plan.recommended)?.key || "pro");
         const hasAccess = ["owner", "admin", "team"].includes(String(me?.role ?? "").toLowerCase()) || String(me?.subscription_status ?? "").toLowerCase() === "active";
         setAiSettings(hasAccess ? await api.getAIPreferences().catch(() => null) : null);
       } catch (e: any) {
@@ -102,6 +137,17 @@ export function Account() {
 
   const isAdminRole = ["owner", "admin", "team"].includes(String(accountRole).toLowerCase());
   const hasSubscriptionAccess = isAdminRole || subscriptionStatus === "active";
+  const billingPlans = useMemo(() => {
+    const plans = Array.isArray(billingStatus?.plans) && billingStatus.plans.length ? billingStatus.plans : DEFAULT_BILLING_PLANS;
+    return plans.map((plan) => ({
+      ...plan,
+      checkout_available: plan.checkout_available || billingStatus?.mode === "mock",
+    }));
+  }, [billingStatus]);
+  const selectedPlanMeta = useMemo(
+    () => billingPlans.find((plan) => plan.key === selectedPlan) ?? billingPlans.find((plan) => plan.recommended) ?? billingPlans[0],
+    [billingPlans, selectedPlan]
+  );
 
   const refreshBillingState = async () => {
     const [me, billing] = await Promise.all([
@@ -116,13 +162,15 @@ export function Account() {
     setSubscriptionRenewalAt(me?.subscription_renewal_at || null);
     setBillingStatus(billing);
     setBillingMessage(billing?.message ?? null);
+    setSelectedPlan(me?.subscription_plan || billing?.current_plan || billing?.plans?.find((plan: BillingPlan) => plan.recommended)?.key || "pro");
   };
 
-  const handleStartCheckout = async () => {
+  const handleStartCheckout = async (planOverride?: string) => {
+    const plan = planOverride || selectedPlan || "pro";
     setStartingBilling(true);
     setBillingMessage(null);
     try {
-      const session = await api.createBillingCheckout();
+      const session = await api.createBillingCheckout(plan);
       setBillingStatus((current: any) => (current ? { ...current, ...session } : session));
       setBillingMessage(session.message ?? null);
       if (session.status === "created" && session.checkout_url) {
@@ -167,13 +215,14 @@ export function Account() {
     }
   };
 
-  const handleUseDevFallback = async () => {
+  const handleUseDevFallback = async (planOverride?: string) => {
+    const plan = planOverride || selectedPlan || "pro";
     setUsingDevFallback(true);
     setBillingMessage(null);
     try {
-      const updated = await api.activateSubscription();
+      const updated = await api.activateSubscription(plan);
       setSubscriptionStatus(updated.subscription_status || "active");
-      setSubscriptionPlan(updated.subscription_plan || "pro");
+      setSubscriptionPlan(updated.subscription_plan || plan);
       setSubscriptionRenewalAt(updated.subscription_renewal_at || null);
       setBillingStatus((current: any) => ({
         ...(current || {}),
@@ -191,7 +240,7 @@ export function Account() {
         id: `account:subscription:${Date.now()}`,
         type: "account",
         action: "activated",
-        name: "Subscription activated",
+        name: `${plan} subscription activated`,
       });
       toast.success("Development fallback activated");
     } catch (e: any) {
@@ -354,21 +403,21 @@ export function Account() {
         renewalAt={subscriptionRenewalAt}
         role={accountRole}
         compact
-        onActivate={hasSubscriptionAccess ? undefined : handleStartCheckout}
+        onActivate={hasSubscriptionAccess ? undefined : () => handleStartCheckout(selectedPlanMeta?.key)}
         activating={startingBilling}
-        ctaLabel="Start checkout"
-        secondaryAction={billingStatus?.dev_fallback_available ? handleUseDevFallback : undefined}
+        ctaLabel={selectedPlanMeta ? `Choose ${selectedPlanMeta.label}` : "Start checkout"}
+        secondaryAction={billingStatus?.dev_fallback_available ? () => handleUseDevFallback(selectedPlanMeta?.key) : undefined}
         secondaryActionLabel="Use dev fallback"
         statusMessage={billingMessage || billingStatus?.message || undefined}
       />
 
       {!hasSubscriptionAccess ? (
         <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Billing status</h3>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Subscription plans</h3>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                Use Stripe checkout when billing is configured. If Stripe is missing in local development, the explicit fallback stays available.
+                Pick the plan that fits your budget and usage. Stripe handles live checkout, and local development can still use the explicit fallback.
               </p>
               <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
                 <p>Provider: {billingStatus?.provider || "stripe"}</p>
@@ -378,18 +427,66 @@ export function Account() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Button onClick={handleStartCheckout} disabled={startingBilling} className={activeHeaderTheme.buttonClass}>
-                {startingBilling ? "Starting checkout..." : "Start checkout"}
+              <Button onClick={() => handleStartCheckout(selectedPlanMeta?.key)} disabled={startingBilling} className={activeHeaderTheme.buttonClass}>
+                {startingBilling ? "Starting checkout..." : `Checkout ${selectedPlanMeta?.label ?? "plan"}`}
               </Button>
               <Button variant="outline" onClick={handleOpenBillingPortal} disabled={openingBillingPortal || !billingStatus?.portal_available}>
                 {openingBillingPortal ? "Opening..." : "Open billing portal"}
               </Button>
               {billingStatus?.dev_fallback_available ? (
-                <Button variant="secondary" onClick={handleUseDevFallback} disabled={usingDevFallback}>
+                <Button variant="secondary" onClick={() => handleUseDevFallback(selectedPlanMeta?.key)} disabled={usingDevFallback}>
                   {usingDevFallback ? "Applying fallback..." : "Use dev fallback"}
                 </Button>
               ) : null}
             </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 xl:grid-cols-3">
+            {billingPlans.map((plan) => {
+              const isSelected = selectedPlan === plan.key;
+              return (
+                <button
+                  key={plan.key}
+                  type="button"
+                  onClick={() => setSelectedPlan(plan.key)}
+                  className={`rounded-3xl border p-5 text-left transition ${
+                    isSelected
+                      ? "border-slate-900 bg-slate-50 shadow-sm dark:border-slate-100 dark:bg-slate-900"
+                      : "border-slate-200 bg-white/80 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/50 dark:hover:border-slate-700"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plan.label}</h4>
+                        {plan.recommended ? (
+                          <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200">
+                            Recommended
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{plan.price_display}</p>
+                    </div>
+                    {isSelected ? (
+                      <span className="rounded-full border border-slate-900 bg-slate-900 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950">
+                        Selected
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{plan.description}</p>
+                  <div className="mt-4 space-y-2">
+                    {plan.features.map((feature) => (
+                      <div key={`${plan.key}:${feature}`} className="text-sm text-slate-700 dark:text-slate-200">
+                        • {feature}
+                      </div>
+                    ))}
+                  </div>
+                  {!plan.checkout_available ? (
+                    <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">Live checkout is not configured for this plan yet.</p>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         </Card>
       ) : null}
@@ -534,11 +631,11 @@ export function Account() {
                   <p className="text-sm text-slate-600 dark:text-slate-300">
                     AI settings unlock after your subscription is active. That keeps the core workspace gated until billing is live.
                   </p>
-                  <Button onClick={handleStartCheckout} disabled={startingBilling} className={activeHeaderTheme.buttonClass}>
-                    {startingBilling ? "Starting checkout..." : "Start checkout"}
+                  <Button onClick={() => handleStartCheckout(selectedPlanMeta?.key)} disabled={startingBilling} className={activeHeaderTheme.buttonClass}>
+                    {startingBilling ? "Starting checkout..." : `Checkout ${selectedPlanMeta?.label ?? "plan"}`}
                   </Button>
                   {billingStatus?.dev_fallback_available ? (
-                    <Button variant="outline" onClick={handleUseDevFallback} disabled={usingDevFallback}>
+                    <Button variant="outline" onClick={() => handleUseDevFallback(selectedPlanMeta?.key)} disabled={usingDevFallback}>
                       {usingDevFallback ? "Applying fallback..." : "Use dev fallback"}
                     </Button>
                   ) : null}
