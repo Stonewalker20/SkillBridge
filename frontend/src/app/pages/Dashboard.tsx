@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { api, type Skill, type ConfirmationOut, type RewardAchievement, type RewardsSummary } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
 import { Card } from "../components/ui/card";
-import { Award, FileText, FolderOpen, Rocket, Target, TrendingUp, X } from "lucide-react";
+import { Award, CheckCircle2, FileText, FolderOpen, LifeBuoy, Rocket, Target, TrendingUp, X } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { useHeaderTheme } from "../lib/headerTheme";
+import { GET_STARTED_STEPS } from "../lib/getStarted";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAccountPreferences } from "../context/AccountPreferencesContext";
 
@@ -202,13 +204,15 @@ async function loadAllSkills(): Promise<Skill[]> {
 }
 
 export function Dashboard() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { activities, clearActivities } = useActivity();
   const { activeHeaderTheme } = useHeaderTheme();
   const { preferences } = useAccountPreferences();
   const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
   const [rewards, setRewards] = useState<RewardsSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatingGuide, setUpdatingGuide] = useState(false);
+  const [guideStartRecorded, setGuideStartRecorded] = useState(false);
   const [hiddenRecentActivityKeys, setHiddenRecentActivityKeys] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -236,6 +240,17 @@ export function Dashboard() {
       return [];
     }
   });
+  const completedGuideSteps = useMemo(
+    () => new Set((user?.onboarding?.completed_steps ?? []).map((value) => String(value || "").trim()).filter(Boolean)),
+    [user?.onboarding?.completed_steps]
+  );
+  const nextGuideStep = useMemo(
+    () => GET_STARTED_STEPS.find((step) => !completedGuideSteps.has(step.key)) ?? null,
+    [completedGuideSteps]
+  );
+  const guideProgressPct = GET_STARTED_STEPS.length
+    ? Math.round((completedGuideSteps.size / GET_STARTED_STEPS.length) * 100)
+    : 0;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -358,7 +373,77 @@ export function Dashboard() {
     };
 
     fetchData();
-  }, [activities, user?.id]);
+  }, [user?.id]);
+
+  useEffect(() => {
+    setGuideStartRecorded(false);
+  }, [user?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const markStarted = async () => {
+      if (!user?.is_new_user || user?.onboarding?.started_at || updatingGuide || guideStartRecorded) return;
+      try {
+        await api.updateMyOnboarding({
+          started_at: new Date().toISOString(),
+          last_step: nextGuideStep?.key ?? GET_STARTED_STEPS[0]?.key ?? null,
+        });
+        setGuideStartRecorded(true);
+        if (!cancelled) {
+          await refreshUser();
+        }
+      } catch {
+        // Guide progress is additive. If this fails, the UI can still render.
+      }
+    };
+    void markStarted();
+    return () => {
+      cancelled = true;
+    };
+  }, [guideStartRecorded, nextGuideStep?.key, refreshUser, updatingGuide, user?.is_new_user, user?.onboarding?.started_at]);
+
+  const updateGuideState = async (payload: Parameters<typeof api.updateMyOnboarding>[0]) => {
+    setUpdatingGuide(true);
+    try {
+      await api.updateMyOnboarding(payload);
+      await refreshUser();
+    } finally {
+      setUpdatingGuide(false);
+    }
+  };
+
+  const markGuideStepComplete = async (stepKey: string) => {
+    const nextCompletedSteps = Array.from(new Set([...completedGuideSteps, stepKey]));
+    const payload: Parameters<typeof api.updateMyOnboarding>[0] = {
+      completed_steps: nextCompletedSteps,
+      last_step: stepKey,
+    };
+    if (nextCompletedSteps.length >= GET_STARTED_STEPS.length) {
+      payload.completed_at = new Date().toISOString();
+    }
+    try {
+      await updateGuideState(payload);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to update your get started progress");
+    }
+  };
+
+  const dismissGuide = async () => {
+    try {
+      await updateGuideState({ dismissed_at: new Date().toISOString() });
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to hide the get started guide");
+    }
+  };
+
+  const rememberGuideStep = (stepKey: string) => {
+    void api
+      .updateMyOnboarding({ last_step: stepKey })
+      .then(() => refreshUser())
+      .catch(() => {
+        // Non-blocking navigation helper.
+      });
+  };
 
   const stats = useMemo(
     () => [
@@ -402,15 +487,20 @@ export function Dashboard() {
         (rewards.totalCount ?? 0) > 0)
   );
 
+  const combinedRecentActivity = useMemo(
+    () => mergeRecentActivity([activities, summary.recentActivity]),
+    [activities, summary.recentActivity]
+  );
+
   const visibleRecentActivity = useMemo(
     () =>
-      summary.recentActivity.filter(
+      combinedRecentActivity.filter(
         (activity) =>
           !clearedRecentActivityIds.includes(String(activity.id)) &&
           !hiddenRecentActivityKeys.includes(String(activity.eventKey ?? `${activity.id}:${activity.date}`)) &&
           !clearedRecentActivityKeys.includes(String(activity.eventKey ?? `${activity.id}:${activity.date}`))
       ),
-    [summary.recentActivity, hiddenRecentActivityKeys, clearedRecentActivityKeys, clearedRecentActivityIds]
+    [combinedRecentActivity, hiddenRecentActivityKeys, clearedRecentActivityKeys, clearedRecentActivityIds]
   );
 
   const portfolioVisualMetrics = useMemo(
@@ -434,8 +524,8 @@ export function Dashboard() {
   };
 
   const handleClearRecentActivity = () => {
-    setClearedRecentActivityKeys(summary.recentActivity.map((activity) => String(activity.eventKey ?? `${activity.id}:${activity.date}`)));
-    setClearedRecentActivityIds(summary.recentActivity.map((activity) => String(activity.id)));
+    setClearedRecentActivityKeys(combinedRecentActivity.map((activity) => String(activity.eventKey ?? `${activity.id}:${activity.date}`)));
+    setClearedRecentActivityIds(combinedRecentActivity.map((activity) => String(activity.id)));
     setHiddenRecentActivityKeys([]);
     clearActivities();
   };
@@ -466,6 +556,121 @@ export function Dashboard() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {user?.is_new_user ? (
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2">
+                <Rocket className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Get Started Guide</h3>
+              </div>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                This checklist walks new users through the main SkillBridge flow so the profile, evidence, matching, and analytics views all have real data behind them.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                {completedGuideSteps.size}/{GET_STARTED_STEPS.length} complete
+              </Badge>
+              <Button variant="ghost" size="sm" onClick={() => void dismissGuide()} disabled={updatingGuide}>
+                Hide guide
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 h-2.5 rounded-full bg-slate-200 dark:bg-slate-700">
+            <div className={`h-2.5 rounded-full ${activeHeaderTheme.barClass}`} style={{ width: `${Math.max(8, guideProgressPct)}%` }} />
+          </div>
+
+          {nextGuideStep ? (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/30">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recommended next step</div>
+                  <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">{nextGuideStep.title}</div>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{nextGuideStep.description}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild size="sm" className={activeHeaderTheme.buttonClass}>
+                    <Link
+                      to={nextGuideStep.href}
+                      onClick={() => {
+                        rememberGuideStep(nextGuideStep.key);
+                      }}
+                    >
+                      {nextGuideStep.cta}
+                    </Link>
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => void markGuideStepComplete(nextGuideStep.key)} disabled={updatingGuide}>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Mark complete
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            {GET_STARTED_STEPS.map((step) => {
+              const complete = completedGuideSteps.has(step.key);
+              return (
+                <div
+                  key={step.key}
+                  className={`rounded-2xl border p-4 ${
+                    complete
+                      ? "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20"
+                      : "border-slate-200 bg-white/70 dark:border-slate-800 dark:bg-slate-950/20"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className={`rounded-xl p-2 ${complete ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}>
+                        <step.icon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{step.title}</div>
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{step.description}</p>
+                      </div>
+                    </div>
+                    <Badge
+                      className={complete ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-300" : "dark:border-slate-700 dark:text-slate-200"}
+                      variant="outline"
+                    >
+                      {complete ? "Done" : "Open"}
+                    </Badge>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link
+                        to={step.href}
+                        onClick={() => {
+                          rememberGuideStep(step.key);
+                        }}
+                      >
+                        {step.cta}
+                      </Link>
+                    </Button>
+                    {!complete ? (
+                      <Button size="sm" variant="ghost" onClick={() => void markGuideStepComplete(step.key)} disabled={updatingGuide}>
+                        Mark complete
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <LifeBuoy className="h-4 w-4" />
+            Need help during setup?
+            <Link className={`font-medium ${activeHeaderTheme.accentTextClass}`} to="/app/account/help">
+              Open the help page
+            </Link>
+          </div>
+        </Card>
       ) : null}
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -504,55 +709,57 @@ export function Dashboard() {
           </Badge>
         </div>
 
-        <div className="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
-            {hasRewardsData && rewards?.nextAchievement ? (
-              <>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next Unlock</div>
-                    <div className="mt-2 text-xl font-semibold text-slate-900 dark:text-slate-100">{rewards.nextAchievement.title}</div>
-                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.description}</p>
-                    <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">{rewardProgressLabel(rewards.nextAchievement)}</p>
+        <div className={`mt-5 grid gap-4 ${preferences.showNextAchievementCard ? "xl:grid-cols-[1.1fr_0.9fr]" : ""}`}>
+          {preferences.showNextAchievementCard ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
+              {hasRewardsData && rewards?.nextAchievement ? (
+                <>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next Unlock</div>
+                      <div className="mt-2 text-xl font-semibold text-slate-900 dark:text-slate-100">{rewards.nextAchievement.title}</div>
+                      <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.description}</p>
+                      <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">{rewardProgressLabel(rewards.nextAchievement)}</p>
+                    </div>
+                    {REWARD_ACTIONS[rewards.nextAchievement.counter_key] ? (
+                      <Button asChild size="sm" className={activeHeaderTheme.buttonClass}>
+                        <Link to={REWARD_ACTIONS[rewards.nextAchievement.counter_key].href}>
+                          {REWARD_ACTIONS[rewards.nextAchievement.counter_key].label}
+                        </Link>
+                      </Button>
+                    ) : null}
                   </div>
-                  {REWARD_ACTIONS[rewards.nextAchievement.counter_key] ? (
-                    <Button asChild size="sm" className={activeHeaderTheme.buttonClass}>
-                      <Link to={REWARD_ACTIONS[rewards.nextAchievement.counter_key].href}>
-                        {REWARD_ACTIONS[rewards.nextAchievement.counter_key].label}
-                      </Link>
-                    </Button>
-                  ) : null}
+                  <div className="mt-4 h-2.5 rounded-full bg-slate-200 dark:bg-slate-700">
+                    <div
+                      className={`h-2.5 rounded-full ${activeHeaderTheme.barClass}`}
+                      style={{ width: `${Math.max(6, Math.min(100, rewards.nextAchievement.progress_pct))}%` }}
+                    />
+                  </div>
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.reward}</p>
+                </>
+              ) : !hasRewardsData ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                    <Award className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+                    <span className="text-lg font-semibold">Achievement progress is unavailable right now</span>
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
+                    Reward data did not load, so milestone counts are hidden until the next successful sync.
+                  </p>
                 </div>
-                <div className="mt-4 h-2.5 rounded-full bg-slate-200 dark:bg-slate-700">
-                  <div
-                    className={`h-2.5 rounded-full ${activeHeaderTheme.barClass}`}
-                    style={{ width: `${Math.max(6, Math.min(100, rewards.nextAchievement.progress_pct))}%` }}
-                  />
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                    <Rocket className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
+                    <span className="text-lg font-semibold">All current milestones unlocked</span>
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
+                    You have cleared the current progression track. New milestones can be added on top of this reward system without changing the existing history.
+                  </p>
                 </div>
-                <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{rewards.nextAchievement.reward}</p>
-              </>
-            ) : !hasRewardsData ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
-                  <Award className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
-                  <span className="text-lg font-semibold">Achievement progress is unavailable right now</span>
-                </div>
-                <p className="text-sm text-slate-600 dark:text-slate-300">
-                  Reward data did not load, so milestone counts are hidden until the next successful sync.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
-                  <Rocket className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
-                  <span className="text-lg font-semibold">All current milestones unlocked</span>
-                </div>
-                <p className="text-sm text-slate-600 dark:text-slate-300">
-                  You have cleared the current progression track. New milestones can be added on top of this reward system without changing the existing history.
-                </p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : null}
 
           <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/30">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recent Unlocks</div>
@@ -632,18 +839,21 @@ export function Dashboard() {
           ) : (
             <div className="max-h-[22rem] space-y-4 overflow-y-auto pr-1">
               {summary.topSkillCategories.map((category) => {
-                const denom = summary.topSkillCategories.reduce((acc, c) => acc + (c.count || 0), 0) || 1;
-                const pct = Math.min(100, Math.max(0, (category.count / denom) * 100));
+                const totalSkills = Math.max(summary.totalSkills || 0, 1);
+                const pct = Math.min(100, Math.max(0, (category.count / totalSkills) * 100));
 
                 return (
                   <div key={category.category}>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-900 dark:text-slate-100">{category.category}</span>
-                      <span className="text-sm text-gray-600 dark:text-slate-300">{category.count} skills</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-300">
+                        {category.count}/{summary.totalSkills} skills
+                      </span>
                     </div>
                     <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800">
                       <div className={`h-2.5 rounded-full transition-all ${activeHeaderTheme.barClass}`} style={{ width: `${pct}%` }} />
                     </div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{pct.toFixed(0)}% of your confirmed skills</div>
                   </div>
                 );
               })}
