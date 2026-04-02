@@ -55,7 +55,7 @@
   }%
 }
 \newcommand{\oaklandbrandbadge}{%
-  \raisebox{0.01cm}{\tikz[baseline=(box.base)]\node[rounded corners=4pt, fill=oustone, inner xsep=2.2pt, inner ysep=0.2pt] (box) {\oaklandbrandmark};}%
+  \raisebox{0.275cm}{\tikz[baseline=(box.base)]\node[rounded corners=4pt, fill=oustone, inner xsep=2.2pt, inner ysep=0.2pt] (box) {\oaklandbrandmark};}%
 }
 \newcommand{\oaklandtitlemark}{%
   \begin{tikzpicture}[baseline=(mark.base)]
@@ -92,10 +92,10 @@
   \hbox{%
     \begin{beamercolorbox}[wd=\paperwidth,ht=0.54cm,dp=0.15cm,leftskip=0.38cm,rightskip=0.3cm]{footline}
       \begin{minipage}[c][0.54cm][c]{0.70\paperwidth}
-        \centering{\scriptsize\bfseries Oakland University}\hspace{0.55em}{\scriptsize School of Engineering and Computer Science}
+        \centering\raisebox{0.265cm}{\scriptsize\bfseries Oakland University\hspace{0.55em}{\scriptsize School of Engineering and Computer Science}}
       \end{minipage}%
       \begin{minipage}[c][0.54cm][c]{0.14\paperwidth}
-        \centering{\scriptsize\insertframenumber/\inserttotalframenumber}
+        \centering\raisebox{0.265cm}{\scriptsize\insertframenumber/\inserttotalframenumber}
       \end{minipage}%
       \begin{minipage}[c][0.54cm][c]{0.12\paperwidth}
         \centering\oaklandbrandbadge
@@ -246,50 +246,58 @@
 
 \begin{frame}{Database ERD}
   \centering
-  \resizebox{!}{0.71\textheight}{%
+  \resizebox{!}{0.72\textheight}{%
   \begin{tikzpicture}[
-    x=1.34cm,y=1.08cm,
+    x=1cm,y=1cm,
+    panel/.style={rounded corners=18pt, draw=ouline, line width=0.8pt, fill=white, fill opacity=0.88, text opacity=1},
+    label/.style={font=\scriptsize\bfseries, text=ougray},
     box/.style={rounded corners=10pt, draw=white, line width=0.7pt, text=white, minimum width=2.55cm, minimum height=0.92cm, font=\scriptsize\bfseries, align=center},
-    link/.style={line width=1.05pt, draw=sbnavy!82, rounded corners=6pt},
+    link/.style={draw=sbnavy!82, line width=1.05pt, -stealth},
+    softlink/.style={draw=sbnavy!58, line width=0.95pt, -stealth},
     note/.style={font=\scriptsize\color{sbmuted}, align=center}
   ]
-    \node[box, fill=oublack] (users) at (5.2,6.45) {USERS};
-    \node[box, fill=sbsky!85!oublack] (sessions) at (1.2,5.15) {SESSIONS};
-    \node[box, fill=sbviolet!75!oublack] (help) at (9.2,5.15) {HELP\\REQUESTS};
-    \node[box, fill=sbcoral!88!black] (projects) at (1.2,3.6) {PROJECTS};
-    \node[box, fill=sbcoral] (links) at (3.55,3.6) {PROJECT\_SKILL\\LINKS};
-    \node[box, fill=sbteal] (skills) at (5.9,3.6) {SKILLS};
-    \node[box, fill=sbteal!80!black] (evidence) at (8.25,3.6) {EVIDENCE};
-    \node[box, fill=sbviolet] (confirm) at (1.9,1.75) {RESUME\_SKILL\\CONFIRMATIONS};
-    \node[box, fill=sbsky!65!sbviolet] (resume) at (4.95,1.75) {RESUME\\SNAPSHOTS};
-    \node[box, fill=sbcoral!82!sbviolet] (jobs) at (8.0,1.75) {JOB\_INGESTS\\+ JOBS};
-    \node[box, fill=sbgold!85!black] (matchruns) at (5.55,-0.05) {JOB\_MATCH\\RUNS};
-    \node[box, fill=sbgold!70!sbteal] (tailored) at (8.55,-0.05) {TAILORED\\RESUMES};
+    \node[panel, fill=sbsky!10] at (2.3,3.85) [minimum width=3.55cm, minimum height=4.15cm] {};
+    \node[label] at (2.3,5.55) {Identity + Support};
+    \node[panel, fill=sbteal!8] at (7.3,3.85) [minimum width=8.05cm, minimum height=4.15cm] {};
+    \node[label] at (7.3,5.55) {Portfolio + Skill Graph};
+    \node[panel, fill=sbgold!10] at (12.55,2.55) [minimum width=4.45cm, minimum height=6.75cm] {};
+    \node[label] at (12.55,5.55) {Resume + Matching};
 
-    \coordinate (userbus) at (5.2,5.55);
-    \coordinate (skillbus) at (5.9,2.55);
-    \coordinate (jobbus) at (8.0,0.8);
+    \node[box, fill=oublack] (users) at (7.35,7.0) {USERS};
 
-    \draw[link] (users.south) -- (userbus);
-    \draw[link] (userbus) -| (sessions.east);
-    \draw[link] (userbus) -| (help.west);
-    \draw[link] (userbus) -| (projects.north);
-    \draw[link] (userbus) -| (skills.north);
-    \draw[link] (userbus) -| (evidence.north);
-    \draw[link] (userbus) -| (confirm.north);
-    \draw[link] (userbus) -| (resume.north);
-    \draw[link] (userbus) -| (jobs.north);
+    \node[box, fill=sbsky!85!oublack] (sessions) at (2.3,4.8) {SESSIONS};
+    \node[box, fill=sbviolet!75!oublack] (help) at (2.3,2.85) {HELP\\REQUESTS};
+
+    \node[box, fill=sbcoral!88!black] (projects) at (5.0,4.8) {PROJECTS};
+    \node[box, fill=sbcoral] (links) at (7.35,4.8) {PROJECT\_SKILL\\LINKS};
+    \node[box, fill=sbteal] (skills) at (9.7,4.8) {SKILLS};
+    \node[box, fill=sbteal!80!black] (evidence) at (5.0,2.85) {EVIDENCE};
+    \node[box, fill=sbviolet] (confirm) at (9.7,2.85) {RESUME\_SKILL\\CONFIRMATIONS};
+
+    \node[box, fill=sbsky!65!sbviolet] (resume) at (12.55,4.8) {RESUME\\SNAPSHOTS};
+    \node[box, fill=sbcoral!82!sbviolet] (jobs) at (12.55,2.85) {JOB\_INGESTS\\+ JOBS};
+    \node[box, fill=sbgold!85!black] (matchruns) at (12.55,0.90) {JOB\_MATCH\\RUNS};
+    \node[box, fill=sbgold!70!sbteal] (tailored) at (15.35,0.90) {TAILORED\\RESUMES};
+
+    \draw[link] (users.south) -- (sessions.north);
+    \draw[link] (users.south) -- (projects.north);
+    \draw[link] (users.south) -- (evidence.north);
+    \draw[link] (users.south) -- (confirm.north);
+    \draw[link] (users.south) -- (resume.north);
+    \draw[link] (users.south) -- (jobs.north);
+    \draw[softlink] (users.south) -- (help.north);
 
     \draw[link] (projects.east) -- (links.west);
     \draw[link] (links.east) -- (skills.west);
-    \draw[link] (evidence.west) -- (skills.east);
-    \draw[link] (confirm.east) -| (skillbus) -| (skills.south);
-    \draw[link] (jobs.south) -- (jobbus);
-    \draw[link] (jobbus) -| (matchruns.east);
-    \draw[link] (jobbus) -| (tailored.north);
-    \draw[link] (resume.south) |- (tailored.west);
+    \draw[link] (evidence.east) -| (skills.south west);
+    \draw[link] (confirm.west) -| (skills.south east);
 
-    \node[note] at (7.0,-0.95) {Job ingest powers match history and tailored resume output};
+    \draw[link] (resume.south) -- (matchruns.north);
+    \draw[link] (jobs.south) -- (matchruns.north);
+    \draw[link] (jobs.south) -- (tailored.north);
+    \draw[link] (matchruns.east) -- (tailored.west);
+
+    \node[note] at (7.35,-0.35) {Users supply proof, resumes, and jobs; skills connect the portfolio side to matching outcomes.};
   \end{tikzpicture}
   }
 \end{frame}
