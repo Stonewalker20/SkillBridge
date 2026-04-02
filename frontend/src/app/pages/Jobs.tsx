@@ -23,6 +23,13 @@ type RetrievedContextItem = {
   snippet: string;
   score: number;
   chunk_index?: number;
+  evidence_name?: string;
+  supporting_excerpt?: string;
+};
+
+type BreakdownIncludedItem = {
+  label?: string;
+  detail?: string;
 };
 
 type GapInsightItem = {
@@ -56,7 +63,7 @@ type MatchResult = {
   retrieved_context?: RetrievedContextItem[];
   gap_reasoning_summary?: string;
   gap_insights?: GapInsightItem[];
-  score_breakdown?: Array<{ label?: string; score?: number; detail?: string }>;
+  score_breakdown?: Array<{ label?: string; score?: number; detail?: string; included_items?: BreakdownIncludedItem[] }>;
   recommended_next_steps?: string[];
   extracted_skill_count?: number;
   confirmed_skill_count?: number;
@@ -126,53 +133,25 @@ function severityLabel(value: string): string {
   }
 }
 
-function summarizeSentence(text: string, fallback: string): string {
-  const value = String(text || "").trim();
+function compactRelevantExcerpt(text: string, fallback = "No specific proof excerpt was available."): string {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
   if (!value) return fallback;
-  const compact = value.replace(/\s+/g, " ");
-  return compact.length > 140 ? `${compact.slice(0, 137)}...` : compact;
-}
+  const segments = value
+    .split(/(?<=[.!?])\s+|\s*[;|]\s*|\s{2,}|\s+\.\.\.\s+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
 
-function parseSemanticExample(example: string): { title: string; explanation: string; excerpt?: string } {
-  const value = String(example || "").trim();
-  if (!value) {
-    return {
-      title: "Helpful match example",
-      explanation: "This is one of the places where your work lines up with the job.",
-    };
+  if (segments.length === 0) {
+    return value.length > 160 ? `${value.slice(0, 157)}...` : value;
   }
 
-  if (value.startsWith("Related confirmed skill: ")) {
-    const skill = value.slice("Related confirmed skill: ".length).trim();
-    return {
-      title: skill || "Related skill",
-      explanation: "This is a skill you already confirmed, so it helps show that your profile fits the job.",
-    };
-  }
+  const shortened = segments
+    .filter((segment) => segment.length >= 24)
+    .slice(0, 2)
+    .map((segment) => (segment.length > 72 ? `${segment.slice(0, 69)}...` : segment));
 
-  const alignMatch = value.match(/^(.*)\s+aligns with the posting language and matched skills$/i);
-  if (alignMatch?.[1]) {
-    return {
-      title: alignMatch[1].trim(),
-      explanation: "The same idea shows up in both your proof and the job posting.",
-    };
-  }
-
-  const colonIndex = value.indexOf(": ");
-  if (colonIndex > 0) {
-    const title = value.slice(0, colonIndex).trim();
-    const excerpt = value.slice(colonIndex + 2).trim();
-    return {
-      title: title || "Evidence example",
-      explanation: "This proof uses the same kind of work, tool, or result that the job is asking for.",
-      excerpt,
-    };
-  }
-
-  return {
-    title: value,
-    explanation: "This example helped the system connect your proof to the job in a simple way.",
-  };
+  const excerpt = shortened.join(" ... ") || (value.length > 140 ? `${value.slice(0, 137)}...` : value);
+  return excerpt;
 }
 
 function getBreakdownTooltipLines(
@@ -181,6 +160,13 @@ function getBreakdownTooltipLines(
 ): string[] {
   const label = String(entry?.label ?? "").toLowerCase();
   const lines: string[] = [];
+  const includedItems = asArray<BreakdownIncludedItem>(entry?.included_items)
+    .map((item) => [String(item?.label ?? "").trim(), String(item?.detail ?? "").trim()].filter(Boolean).join(": "))
+    .filter(Boolean);
+
+  if (includedItems.length > 0) {
+    lines.push(...includedItems.slice(0, 5));
+  }
 
   if (label.includes("required")) {
     lines.push(`Important skills matched: ${normalized.requiredMatchedCount}/${normalized.requiredSkillCount || normalized.extractedSkillCount || 0}`);
@@ -197,7 +183,10 @@ function getBreakdownTooltipLines(
   } else if (label.includes("proof")) {
     lines.push(`Matched skills with proof: ${normalized.evidenceAlignedCount}/${normalized.matchedSkillCount || 0}`);
     lines.push(`Matched skills without proof: ${normalized.evidenceGapCount}`);
-    const evidenceNames = normalized.retrievedContext.slice(0, 4).map((item) => item.title).filter(Boolean);
+    const evidenceNames = normalized.retrievedContext
+      .slice(0, 4)
+      .map((item) => item.evidence_name || item.title)
+      .filter(Boolean);
     if (evidenceNames.length) {
       lines.push(`Evidence used: ${evidenceNames.join(", ")}`);
     }
@@ -205,12 +194,16 @@ function getBreakdownTooltipLines(
     lines.push(`Important words found in your work: ${normalized.keywordOverlapTerms.length ? normalized.keywordOverlapTerms.slice(0, 6).join(", ") : "None"}`);
     lines.push(`This counts the job words that also appear in your evidence or resume text.`);
   } else if (label.includes("semantic")) {
-    const examples = normalized.semanticAlignmentExamples.slice(0, 3).map((value) => parseSemanticExample(value));
-    lines.push(`Examples used: ${examples.length}`);
     lines.push(`This checks whether your saved work sounds like the job, even if the wording is different.`);
-    examples.forEach((example) => {
-      lines.push(`${example.title}${example.excerpt ? `: ${example.excerpt}` : ""}`);
-    });
+    if (normalized.retrievedContext.length) {
+      const evidenceNames = normalized.retrievedContext
+        .slice(0, 3)
+        .map((item) => item.evidence_name || item.title)
+        .filter(Boolean);
+      if (evidenceNames.length) {
+        lines.push(`Compared against: ${evidenceNames.join(", ")}`);
+      }
+    }
   } else if (label.includes("overall")) {
     lines.push(`Blends skills, proof, keywords, and similarity checks.`);
     lines.push(`Matched skills: ${normalized.matchedSkillCount}/${normalized.extractedSkillCount || 0}`);
@@ -243,11 +236,10 @@ type NormalizedAnalysis = {
   missingSkillCount: number;
   strengthAreas: string[];
   relatedSkills: string[];
-  semanticAlignmentExamples: string[];
   retrievedContext: RetrievedContextItem[];
   gapReasoningSummary: string;
   gapInsights: GapInsightItem[];
-  scoreBreakdown: Array<{ label?: string; score?: number; detail?: string }>;
+  scoreBreakdown: Array<{ label?: string; score?: number; detail?: string; included_items?: BreakdownIncludedItem[] }>;
   nextSteps: string[];
   extractedSkillCount: number;
   confirmedSkillCount: number;
@@ -362,7 +354,9 @@ export function Jobs() {
 
   const normalized = useMemo<NormalizedAnalysis>(() => {
     const a = analysis || {};
-    const scoreBreakdown = asArray<{ label?: string; score?: number; detail?: string }>(a.score_breakdown ?? a.scoreBreakdown);
+    const scoreBreakdown = asArray<{ label?: string; score?: number; detail?: string; included_items?: BreakdownIncludedItem[] }>(
+      a.score_breakdown ?? a.scoreBreakdown
+    );
     const keywordOverlapBreakdown = scoreBreakdown.find(
       (item) => String(item?.label ?? "").toLowerCase() === "keyword overlap"
     );
@@ -389,7 +383,6 @@ export function Jobs() {
       missingSkillCount: Number(a.missing_skill_count ?? a.missingSkillCount ?? asArray<string>(a.missing_skills ?? a.missingSkills).length) || 0,
       strengthAreas: asArray<string>(a.strength_areas ?? a.strengthAreas),
       relatedSkills: asArray<string>(a.related_skills ?? a.relatedSkills),
-      semanticAlignmentExamples: asArray<string>(a.semantic_alignment_examples ?? a.semanticAlignmentExamples),
       retrievedContext: asArray<RetrievedContextItem>(a.retrieved_context ?? a.retrievedContext),
       gapReasoningSummary: String(a.gap_reasoning_summary ?? a.gapReasoningSummary ?? ""),
       gapInsights: asArray<GapInsightItem>(a.gap_insights ?? a.gapInsights),
@@ -1241,7 +1234,7 @@ export function Jobs() {
           <div>
             <p className="text-sm text-gray-500 dark:text-slate-400">Retrieved Evidence</p>
             <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
-              These are the evidence items and exact excerpts the system used to support this result.
+              These are the proof snippets the system used to support this result.
             </p>
           </div>
           <Badge className="border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
@@ -1256,37 +1249,15 @@ export function Jobs() {
           <div className="mt-4 grid max-h-[22rem] gap-3 overflow-y-auto pr-1 md:grid-cols-2">
             {normalized.retrievedContext.map((context) => (
               <div key={`${context.source_type}:${context.source_id}:${context.chunk_index ?? 0}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{context.title || "Evidence item"}</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {context.evidence_name || context.title || "Evidence item"}
+                </p>
                 <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
-                  <span className="font-medium text-slate-900 dark:text-slate-100">Used excerpt:</span>{" "}
-                  {context.snippet}
+                  <span className="font-medium text-slate-900 dark:text-slate-100">Used part:</span>{" "}
+                  {compactRelevantExcerpt(context.supporting_excerpt || context.snippet)}
                 </p>
               </div>
             ))}
-          </div>
-        )}
-      </Card>
-
-      <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-        <p className="text-sm text-gray-500 dark:text-slate-400">Semantic Alignment Examples</p>
-        {normalized.semanticAlignmentExamples.length === 0 ? (
-          <p className="mt-3 text-sm text-gray-600 dark:text-slate-300">No concrete examples yet. Add more evidence or projects tied to your confirmed skills to strengthen semantic matching.</p>
-        ) : (
-          <div className="mt-3 grid max-h-56 gap-3 overflow-y-auto pr-1 md:grid-cols-2">
-            {normalized.semanticAlignmentExamples.map((example) => {
-              const parsed = parseSemanticExample(example);
-              return (
-                <div key={example} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/70">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{parsed.title}</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{parsed.explanation}</p>
-                  {parsed.excerpt ? (
-                    <p className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-200">
-                      {summarizeSentence(parsed.excerpt, parsed.excerpt)}
-                    </p>
-                  ) : null}
-                </div>
-              );
-            })}
           </div>
         )}
       </Card>
