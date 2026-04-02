@@ -47,7 +47,7 @@
 \newcommand{\oaklandlogopath}{images/oakland_university_logo-freelogovectors.net_.png}
 \newcommand{\oaklandbrandmark}{%
   \IfFileExists{\oaklandlogopath}{%
-    \includegraphics[height=0.30cm]{\oaklandlogopath}%
+    \includegraphics[height=0.52cm]{\oaklandlogopath}%
   }{%
     \begin{tikzpicture}[baseline=(mark.base)]
       \node[rounded corners=3pt, fill=ougold, text=oublack, inner xsep=5pt, inner ysep=2.2pt, font=\scriptsize\bfseries] (mark) {OU};
@@ -55,7 +55,7 @@
   }%
 }
 \newcommand{\oaklandbrandbadge}{%
-  \raisebox{0.10cm}{\tikz[baseline=(box.base)]\node[rounded corners=4pt, fill=oustone, inner xsep=3.5pt, inner ysep=0.8pt] (box) {\oaklandbrandmark};}%
+  \raisebox{0.01cm}{\tikz[baseline=(box.base)]\node[rounded corners=4pt, fill=oustone, inner xsep=2.2pt, inner ysep=0.2pt] (box) {\oaklandbrandmark};}%
 }
 \newcommand{\oaklandtitlemark}{%
   \begin{tikzpicture}[baseline=(mark.base)]
@@ -92,13 +92,13 @@
   \hbox{%
     \begin{beamercolorbox}[wd=\paperwidth,ht=0.54cm,dp=0.15cm,leftskip=0.38cm,rightskip=0.3cm]{footline}
       \begin{minipage}[c][0.54cm][c]{0.70\paperwidth}
-        {\scriptsize\bfseries Oakland University}\hspace{0.55em}{\scriptsize School of Engineering and Computer Science}
+        \centering{\scriptsize\bfseries Oakland University}\hspace{0.55em}{\scriptsize School of Engineering and Computer Science}
       \end{minipage}%
       \begin{minipage}[c][0.54cm][c]{0.14\paperwidth}
-        \raggedleft{\scriptsize\insertframenumber/\inserttotalframenumber}
+        \centering{\scriptsize\insertframenumber/\inserttotalframenumber}
       \end{minipage}%
       \begin{minipage}[c][0.54cm][c]{0.12\paperwidth}
-        \raggedleft\oaklandbrandbadge
+        \centering\oaklandbrandbadge
       \end{minipage}%
     \end{beamercolorbox}%
   }%
