@@ -1,5 +1,7 @@
-import { Suspense, lazy, type ReactNode } from "react";
+import { Fragment, Suspense, lazy, type ReactNode } from "react";
 import { createBrowserRouter } from "react-router";
+import { DocumentTitle } from "./components/DocumentTitle";
+import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { RootLayout } from "./components/RootLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
@@ -16,11 +18,16 @@ const Skills = lazy(() => import("./pages/Skills").then((module) => ({ default: 
 const Evidence = lazy(() => import("./pages/Evidence").then((module) => ({ default: module.Evidence })));
 const Jobs = lazy(() => import("./pages/Jobs").then((module) => ({ default: module.Jobs })));
 const Account = lazy(() => import("./pages/Account").then((module) => ({ default: module.Account })));
+const AccountAI = lazy(() => import("./pages/AccountAI").then((module) => ({ default: module.AccountAI })));
 const AccountPersonalization = lazy(() =>
   import("./pages/AccountPersonalization").then((module) => ({ default: module.AccountPersonalization }))
 );
 const AccountAchievements = lazy(() =>
   import("./pages/AccountAchievements").then((module) => ({ default: module.AccountAchievements }))
+);
+const AccountHelp = lazy(() => import("./pages/AccountHelp").then((module) => ({ default: module.AccountHelp })));
+const AccountHelpGuide = lazy(() =>
+  import("./pages/AccountHelpGuide").then((module) => ({ default: module.AccountHelpGuide }))
 );
 const NotFound = lazy(() => import("./pages/NotFound").then((module) => ({ default: module.NotFound })));
 const TailoredResumes = lazy(() => import("./pages/TailoredResumes").then((module) => ({ default: module.TailoredResumes })));
@@ -38,55 +45,69 @@ function suspense(element: ReactNode) {
   return <Suspense fallback={<RouteLoading />}>{element}</Suspense>;
 }
 
+function page(title: string | undefined, element: ReactNode) {
+  return suspense(
+    <Fragment>
+      <DocumentTitle title={title} />
+      {element}
+    </Fragment>
+  );
+}
+
 export const router = createBrowserRouter([
   {
     path: "/",
+    errorElement: <RouteErrorBoundary scope="public" />,
     children: [
       {
         index: true,
-        element: suspense(<Landing />),
+        element: page("SkillBridge", <Landing />),
       },
       {
         path: "login",
-        element: suspense(<Login />),
+        element: page("Login", <Login />),
       },
       {
         path: "signup",
-        element: suspense(<SignUp />),
+        element: page("Sign Up", <SignUp />),
       },
       {
         path: "forgot-password",
-        element: suspense(<ForgotPassword />),
+        element: page("Forgot Password", <ForgotPassword />),
       },
       {
         path: "reset-password",
-        element: suspense(<ResetPassword />),
+        element: page("Reset Password", <ResetPassword />),
       },
     ],
   },
   {
     path: "/app",
+    errorElement: <RouteErrorBoundary scope="app" />,
     element: (
       <ProtectedRoute>
         <RootLayout />
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: suspense(<AppHome />) },
-      { path: "skills", element: suspense(<Skills />) },
-      { path: "evidence", element: suspense(<Evidence />) },
-      { path: "jobs", element: suspense(<Jobs />) },
-      { path: "resumes", element: suspense(<TailoredResumes />) },
-      { path: "analytics/skills", element: suspense(<SkillAnalytics />) },
-      { path: "analytics/career-paths/:roleId", element: suspense(<CareerPathDetail />) },
-      { path: "account", element: suspense(<Account />) },
-      { path: "account/personalization", element: suspense(<AccountPersonalization />) },
-      { path: "account/achievements", element: suspense(<AccountAchievements />) },
+      { index: true, element: page("Dashboard", <AppHome />) },
+      { path: "skills", element: page("Skills", <Skills />) },
+      { path: "evidence", element: page("Evidence", <Evidence />) },
+      { path: "jobs", element: page("Job Match", <Jobs />) },
+      { path: "resumes", element: page("Tailored Resumes", <TailoredResumes />) },
+      { path: "analytics/skills", element: page("Skill Analytics", <SkillAnalytics />) },
+      { path: "analytics/career-paths/:roleId", element: page("Career Path", <CareerPathDetail />) },
+      { path: "account", element: page("Account", <Account />) },
+      { path: "account/ai", element: page("AI Settings", <AccountAI />) },
+      { path: "account/personalization", element: page("Personalization", <AccountPersonalization />) },
+      { path: "account/achievements", element: page("Achievements", <AccountAchievements />) },
+      { path: "account/help", element: page("Help", <AccountHelp />) },
+      { path: "account/help/walkthrough", element: page("Help Guide", <AccountHelpGuide />) },
       {
         path: "admin",
         element: (
           <ProtectedRoute allowedRoles={["owner", "admin", "team"]}>
-            {suspense(<Admin />)}
+            {page("Admin", <Admin />)}
           </ProtectedRoute>
         ),
       },
@@ -94,7 +115,7 @@ export const router = createBrowserRouter([
         path: "admin/mlflow",
         element: (
           <ProtectedRoute allowedRoles={["owner", "admin", "team"]}>
-            {suspense(<AdminMlflow />)}
+            {page("Admin MLflow", <AdminMlflow />)}
           </ProtectedRoute>
         ),
       },
@@ -102,6 +123,6 @@ export const router = createBrowserRouter([
   },
   {
     path: "*",
-    element: suspense(<NotFound />),
+    element: page("Page Not Found", <NotFound />),
   },
 ]);

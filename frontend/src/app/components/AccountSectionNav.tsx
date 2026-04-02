@@ -1,7 +1,8 @@
 import { Link, useLocation } from "react-router";
-import { Award, SlidersHorizontal, User } from "lucide-react";
+import { Award, BookOpen, Cpu, LifeBuoy, SlidersHorizontal, User } from "lucide-react";
 import { cn } from "./ui/utils";
 import { useHeaderTheme } from "../lib/headerTheme";
+import { useAuth } from "../context/AuthContext";
 
 const LINKS = [
   {
@@ -17,21 +18,42 @@ const LINKS = [
     match: (pathname: string) => pathname.startsWith("/app/account/personalization"),
   },
   {
+    href: "/app/account/ai",
+    label: "AI Settings",
+    icon: Cpu,
+    match: (pathname: string) => pathname.startsWith("/app/account/ai"),
+  },
+  {
     href: "/app/account/achievements",
     label: "Achievements",
     icon: Award,
     match: (pathname: string) => pathname.startsWith("/app/account/achievements"),
+  },
+  {
+    href: "/app/account/help",
+    label: "Help Requests",
+    icon: LifeBuoy,
+    match: (pathname: string) => pathname === "/app/account/help",
+  },
+  {
+    href: "/app/account/help/walkthrough",
+    label: "Guide",
+    icon: BookOpen,
+    match: (pathname: string) => pathname.startsWith("/app/account/help/walkthrough"),
   },
 ];
 
 export function AccountSectionNav() {
   const location = useLocation();
   const { activeHeaderTheme } = useHeaderTheme();
+  const { user } = useAuth();
+  const unreadHelpCount = Math.max(0, Number(user?.help_unread_response_count ?? 0) || 0);
 
   return (
     <div className="flex flex-wrap gap-2">
       {LINKS.map((link) => {
         const isActive = link.match(location.pathname);
+        const showUnreadHelpCount = link.href === "/app/account/help" && unreadHelpCount > 0;
         return (
           <Link
             key={link.href}
@@ -45,6 +67,11 @@ export function AccountSectionNav() {
           >
             <link.icon className="h-4 w-4" />
             {link.label}
+            {showUnreadHelpCount ? (
+              <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white">
+                {unreadHelpCount}
+              </span>
+            ) : null}
           </Link>
         );
       })}
