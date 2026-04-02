@@ -8,11 +8,13 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import type { JobMatchHistoryEntry, ResumeSnapshotListEntry } from "../services/api";
 import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateCw, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router";
 import { useHeaderTheme } from "../lib/headerTheme";
+import { useAccountPreferences } from "../context/AccountPreferencesContext";
 
 type RetrievedContextItem = {
   source_type: string;
@@ -77,6 +79,7 @@ type MatchResult = {
 
 const asArray = <T,>(v: any): T[] => (Array.isArray(v) ? v : []);
 const DEFAULT_RESUME_SOURCE = "default";
+const TAILORED_RESUME_COMING_SOON = true;
 const snapshotResumeSourceValue = (snapshotId: string) => `snapshot:${snapshotId}`;
 const evidenceResumeSourceValue = (evidenceId: string) => `evidence:${evidenceId}`;
 
@@ -99,6 +102,170 @@ const REWARD_ACTIONS: Record<string, { href: string; label: string }> = {
   resume_snapshots_uploaded: { href: "/app/evidence?add=1&type=resume", label: "Add resume evidence" },
   job_matches_run: { href: "/app/jobs", label: "Run match" },
   tailored_resumes_generated: { href: "/app/jobs", label: "Generate resume" },
+};
+
+function gapTypeLabel(value: string): string {
+  switch (String(value || "").toLowerCase()) {
+    case "required":
+      return "Important";
+    case "preferred":
+      return "Helpful";
+    case "adjacent":
+      return "Close match";
+    default:
+      return "Other";
+  }
+}
+
+function severityLabel(value: string): string {
+  switch (String(value || "").toLowerCase()) {
+    case "high":
+      return "Needs attention";
+    default:
+      return "Worth improving";
+  }
+}
+
+function summarizeSentence(text: string, fallback: string): string {
+  const value = String(text || "").trim();
+  if (!value) return fallback;
+  const compact = value.replace(/\s+/g, " ");
+  return compact.length > 140 ? `${compact.slice(0, 137)}...` : compact;
+}
+
+function parseSemanticExample(example: string): { title: string; explanation: string; excerpt?: string } {
+  const value = String(example || "").trim();
+  if (!value) {
+    return {
+      title: "Helpful match example",
+      explanation: "This is one of the places where your work lines up with the job.",
+    };
+  }
+
+  if (value.startsWith("Related confirmed skill: ")) {
+    const skill = value.slice("Related confirmed skill: ".length).trim();
+    return {
+      title: skill || "Related skill",
+      explanation: "This is a skill you already confirmed, so it helps show that your profile fits the job.",
+    };
+  }
+
+  const alignMatch = value.match(/^(.*)\s+aligns with the posting language and matched skills$/i);
+  if (alignMatch?.[1]) {
+    return {
+      title: alignMatch[1].trim(),
+      explanation: "The same idea shows up in both your proof and the job posting.",
+    };
+  }
+
+  const colonIndex = value.indexOf(": ");
+  if (colonIndex > 0) {
+    const title = value.slice(0, colonIndex).trim();
+    const excerpt = value.slice(colonIndex + 2).trim();
+    return {
+      title: title || "Evidence example",
+      explanation: "This proof uses the same kind of work, tool, or result that the job is asking for.",
+      excerpt,
+    };
+  }
+
+  return {
+    title: value,
+    explanation: "This example helped the system connect your proof to the job in a simple way.",
+  };
+}
+
+function getBreakdownTooltipLines(
+  entry: NonNullable<MatchResult["score_breakdown"]>[number],
+  normalized: NormalizedAnalysis,
+): string[] {
+  const label = String(entry?.label ?? "").toLowerCase();
+  const lines: string[] = [];
+
+  if (label.includes("required")) {
+    lines.push(`Important skills matched: ${normalized.requiredMatchedCount}/${normalized.requiredSkillCount || normalized.extractedSkillCount || 0}`);
+    lines.push(`This part checks the main skills the job says you need.`);
+    if (normalized.matchedSkills.length) {
+      lines.push(`Matched skills: ${normalized.matchedSkills.slice(0, 5).join(", ")}`);
+    }
+  } else if (label.includes("nice") || label.includes("preferred")) {
+    lines.push(`Helpful skills matched: ${normalized.preferredMatchedCount}/${normalized.preferredSkillCount || 0}`);
+    lines.push(`Overall job skills matched: ${normalized.matchedSkillCount}/${normalized.extractedSkillCount || 0}`);
+    if (normalized.matchedSkills.length) {
+      lines.push(`Included skills: ${normalized.matchedSkills.slice(0, 5).join(", ")}`);
+    }
+  } else if (label.includes("proof")) {
+    lines.push(`Matched skills with proof: ${normalized.evidenceAlignedCount}/${normalized.matchedSkillCount || 0}`);
+    lines.push(`Matched skills without proof: ${normalized.evidenceGapCount}`);
+    const evidenceNames = normalized.retrievedContext.slice(0, 4).map((item) => item.title).filter(Boolean);
+    if (evidenceNames.length) {
+      lines.push(`Evidence used: ${evidenceNames.join(", ")}`);
+    }
+  } else if (label.includes("keyword")) {
+    lines.push(`Important words found in your work: ${normalized.keywordOverlapTerms.length ? normalized.keywordOverlapTerms.slice(0, 6).join(", ") : "None"}`);
+    lines.push(`This counts the job words that also appear in your evidence or resume text.`);
+  } else if (label.includes("semantic")) {
+    const examples = normalized.semanticAlignmentExamples.slice(0, 3).map((value) => parseSemanticExample(value));
+    lines.push(`Examples used: ${examples.length}`);
+    lines.push(`This checks whether your saved work sounds like the job, even if the wording is different.`);
+    examples.forEach((example) => {
+      lines.push(`${example.title}${example.excerpt ? `: ${example.excerpt}` : ""}`);
+    });
+  } else if (label.includes("overall")) {
+    lines.push(`Blends skills, proof, keywords, and similarity checks.`);
+    lines.push(`Matched skills: ${normalized.matchedSkillCount}/${normalized.extractedSkillCount || 0}`);
+    lines.push(`Proof-backed matches: ${normalized.evidenceAlignedCount}/${normalized.matchedSkillCount || 0}`);
+  } else {
+    lines.push(entry?.detail || "This score uses the information collected for the analysis.");
+  }
+
+  if (!lines.length) {
+    lines.push("This score uses the information collected for the analysis.");
+  }
+
+  return lines.slice(0, 6);
+}
+
+type NormalizedAnalysis = {
+  matchScore: number;
+  confidenceLabel: string;
+  analysisSummary: string;
+  resumeSnapshotId: string | null;
+  resumeEvidenceId: string | null;
+  templateSource: string | null;
+  ignoredSkills: string[];
+  addedFromMissingSkills: Array<{ skill_id: string; skill_name: string }>;
+  matchedSkillEntries: Array<{ skillId: string; skillName: string }>;
+  missingSkillEntries: Array<{ skillId: string; skillName: string }>;
+  matchedSkills: string[];
+  missingSkills: string[];
+  matchedSkillCount: number;
+  missingSkillCount: number;
+  strengthAreas: string[];
+  relatedSkills: string[];
+  semanticAlignmentExamples: string[];
+  retrievedContext: RetrievedContextItem[];
+  gapReasoningSummary: string;
+  gapInsights: GapInsightItem[];
+  scoreBreakdown: Array<{ label?: string; score?: number; detail?: string }>;
+  nextSteps: string[];
+  extractedSkillCount: number;
+  confirmedSkillCount: number;
+  requiredSkillCount: number;
+  requiredMatchedCount: number;
+  preferredSkillCount: number;
+  preferredMatchedCount: number;
+  evidenceAlignedCount: number;
+  evidenceGapCount: number;
+  keywordOverlapCount: number;
+  keywordOverlapTerms: string[];
+  keywordOverlapScore: number;
+  semanticAlignmentScore: number;
+  semanticAlignmentExplanation: string;
+  personalSkillVectorScore: number;
+  personalSkillVectorExplanation: string;
+  historyId?: string | null;
+  tailoredResumeId?: string | null;
 };
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -164,6 +331,7 @@ const uploadedResumeRewordTemplate = {
 export function Jobs() {
   const { recordActivity } = useActivity();
   const { activeHeaderTheme } = useHeaderTheme();
+  const { preferences } = useAccountPreferences();
   const [searchParams, setSearchParams] = useSearchParams();
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const [jobDescription, setJobDescription] = useState("");
@@ -192,7 +360,7 @@ export function Jobs() {
   const [addingMissingSkill, setAddingMissingSkill] = useState<string | null>(null);
   const [updatingIgnoredSkill, setUpdatingIgnoredSkill] = useState<string | null>(null);
 
-  const normalized = useMemo(() => {
+  const normalized = useMemo<NormalizedAnalysis>(() => {
     const a = analysis || {};
     const scoreBreakdown = asArray<{ label?: string; score?: number; detail?: string }>(a.score_breakdown ?? a.scoreBreakdown);
     const keywordOverlapBreakdown = scoreBreakdown.find(
@@ -730,7 +898,7 @@ export function Jobs() {
                 </div>
                 <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Run a grounded job-fit analysis</h1>
                 <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  Paste a posting to get a fit score, required-skill coverage, retrieval-backed reasoning, and a tailored resume path in the same design system as the rest of the app.
+                  Paste a job post to see how well your saved skills and proof match it, what is missing, and what to fix next.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3 sm:w-[20rem] lg:w-[22rem]">
@@ -751,7 +919,7 @@ export function Jobs() {
           </div>
         </div>
 
-        {rewards?.nextAchievement ? (
+        {preferences.showNextAchievementCard && rewards?.nextAchievement ? (
           <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -937,7 +1105,7 @@ export function Jobs() {
               </div>
               <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{jobTitle || company || "Job Match"}</h1>
               <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                Detailed score, skill gaps, semantic overlap, and tailored resume generation in the same visual system as the rest of SkillBridge.
+                Detailed score, skill gaps, and plain-language match feedback in the same visual system as the rest of SkillBridge.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1001,7 +1169,7 @@ export function Jobs() {
             <p className="text-gray-600 dark:text-slate-300">{company || ""}</p>
             {location ? <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{location}</p> : null}
             <p className="mt-4 text-sm leading-6 text-gray-700 dark:text-slate-200">
-              {normalized.analysisSummary || "This score estimates how well your confirmed skills, supporting evidence, and related work align with the posting."}
+              {normalized.analysisSummary || "This score shows how well your saved skills, proof, and work history match this job post."}
             </p>
           </div>
         </div>
@@ -1030,17 +1198,17 @@ export function Jobs() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-          <p className="text-sm text-gray-500 dark:text-slate-400">Semantic Alignment</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400">How close your work feels to the job</p>
           <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.semanticAlignmentScore}%</p>
           <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
-            {normalized.semanticAlignmentExplanation || "Semantic alignment looks beyond exact keyword matches and estimates how similar your saved work is to the role's themes and responsibilities."}
+            {normalized.semanticAlignmentExplanation || "This checks whether your saved work sounds similar to the job, even when the exact words are different."}
           </p>
         </Card>
         <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-          <p className="text-sm text-gray-500 dark:text-slate-400">Personal Skill Vector</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400">Overall profile match</p>
           <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{normalized.personalSkillVectorScore}%</p>
           <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
-            {normalized.personalSkillVectorExplanation || "This compares the job vector against your combined user profile vector built from confirmed skills, evidence, and resume context."}
+            {normalized.personalSkillVectorExplanation || "This compares the whole job post to your full profile to see how closely they match overall."}
           </p>
         </Card>
         <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
@@ -1050,8 +1218,8 @@ export function Jobs() {
             <p>Missing job skills: {normalized.missingSkillCount} of {normalized.extractedSkillCount}</p>
             <p>Required skills matched: {normalized.requiredMatchedCount} of {normalized.requiredSkillCount}</p>
             <p>Preferred skills matched: {normalized.preferredMatchedCount} of {normalized.preferredSkillCount}</p>
-            <p>Evidence-backed matched skills: {normalized.evidenceAlignedCount} of {normalized.matchedSkillCount}</p>
-            <p>Job keywords reflected in your work: {normalized.keywordOverlapScore}%</p>
+            <p>Matched skills with proof: {normalized.evidenceAlignedCount} of {normalized.matchedSkillCount}</p>
+            <p>Important job words found in your work: {normalized.keywordOverlapScore}%</p>
           </div>
           {normalized.keywordOverlapTerms.length > 0 ? (
             <div className="mt-4">
@@ -1073,33 +1241,26 @@ export function Jobs() {
           <div>
             <p className="text-sm text-gray-500 dark:text-slate-400">Retrieved Evidence</p>
             <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
-              These are the strongest evidence and resume snippets the backend retrieved to ground this analysis.
+              These are the evidence items and exact excerpts the system used to support this result.
             </p>
           </div>
           <Badge className="border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-            {normalized.retrievedContext.length} snippets
+            {normalized.retrievedContext.length} items
           </Badge>
         </div>
         {normalized.retrievedContext.length === 0 ? (
           <p className="mt-4 text-sm text-gray-600 dark:text-slate-300">
-            No retrieval context was available. Add resume or evidence text to strengthen grounded matching.
+            No supporting text was found. Add resume text or proof items to make this result stronger.
           </p>
         ) : (
           <div className="mt-4 grid max-h-[22rem] gap-3 overflow-y-auto pr-1 md:grid-cols-2">
             {normalized.retrievedContext.map((context) => (
               <div key={`${context.source_type}:${context.source_id}:${context.chunk_index ?? 0}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{context.title || "Retrieved context"}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                      {String(context.source_type || "context").replaceAll("_", " ")}
-                    </p>
-                  </div>
-                  <Badge className="shrink-0 border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/50 dark:text-sky-200">
-                    {Math.round(Number(context.score ?? 0) * 100)}%
-                  </Badge>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{context.snippet}</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{context.title || "Evidence item"}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
+                  <span className="font-medium text-slate-900 dark:text-slate-100">Used excerpt:</span>{" "}
+                  {context.snippet}
+                </p>
               </div>
             ))}
           </div>
@@ -1111,20 +1272,29 @@ export function Jobs() {
         {normalized.semanticAlignmentExamples.length === 0 ? (
           <p className="mt-3 text-sm text-gray-600 dark:text-slate-300">No concrete examples yet. Add more evidence or projects tied to your confirmed skills to strengthen semantic matching.</p>
         ) : (
-          <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1 text-sm text-gray-700 dark:text-slate-200">
-            {normalized.semanticAlignmentExamples.map((example) => (
-              <li key={example} className="rounded-md bg-slate-50 px-3 py-2 dark:bg-slate-950/70">
-                {example}
-              </li>
-            ))}
-          </ul>
+          <div className="mt-3 grid max-h-56 gap-3 overflow-y-auto pr-1 md:grid-cols-2">
+            {normalized.semanticAlignmentExamples.map((example) => {
+              const parsed = parseSemanticExample(example);
+              return (
+                <div key={example} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/70">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{parsed.title}</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{parsed.explanation}</p>
+                  {parsed.excerpt ? (
+                    <p className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-200">
+                      {summarizeSentence(parsed.excerpt, parsed.excerpt)}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         )}
       </Card>
 
       <Card id="job-reasoning" className="p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Score Breakdown</h3>
-          <p className="text-sm text-gray-600 dark:text-slate-300">The overall score weighs coverage of required skills, supporting evidence, and overlap with job language.</p>
+          <p className="text-sm text-gray-600 dark:text-slate-300">The score looks at important skills, proof behind those skills, and how closely your work matches the job post.</p>
         </div>
         <div className="space-y-4">
           {normalized.scoreBreakdown.length === 0 ? (
@@ -1132,19 +1302,36 @@ export function Jobs() {
           ) : (
             normalized.scoreBreakdown.map((item) => {
               const score = Number(item?.score ?? 0) || 0;
+              const tooltipLines = getBreakdownTooltipLines(item, normalized);
               return (
-                <div key={item?.label || score} className="space-y-2">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-slate-100">{item?.label || "Metric"}</p>
-                      <p className="text-sm text-gray-600 dark:text-slate-300">{item?.detail || ""}</p>
+                <Tooltip key={item?.label || score}>
+                  <TooltipTrigger asChild>
+                    <div className="group space-y-2 rounded-xl border border-transparent p-3 transition-colors hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-800 dark:hover:bg-slate-950/40">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-slate-100">{item?.label || "Metric"}</p>
+                          <p className="text-sm text-gray-600 dark:text-slate-300">{item?.detail || ""}</p>
+                        </div>
+                        <span className={`text-sm font-semibold ${getScoreColor(score)}`}>{score}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
+                        <div className="h-full rounded-full bg-[#1E3A8A]" style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
+                      </div>
                     </div>
-                    <span className={`text-sm font-semibold ${getScoreColor(score)}`}>{score}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
-                    <div className="h-full rounded-full bg-[#1E3A8A]" style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
-                  </div>
-                </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-md border border-slate-200 bg-white text-slate-700 shadow-xl dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                        What was counted
+                      </p>
+                      {tooltipLines.map((line) => (
+                        <p key={`${item?.label || "metric"}:${line}`} className="text-sm leading-5">
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
               );
             })
           )}
@@ -1311,13 +1498,13 @@ export function Jobs() {
       <Card className="p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
             <AlertCircle className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
-            <h3 className="font-semibold text-gray-900 dark:text-slate-100">Gap Reasoning</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-slate-100">Why the score is lower</h3>
           </div>
         <p className="mb-4 text-sm text-gray-600 dark:text-slate-300">
-          {normalized.gapReasoningSummary || "The backend did not return a detailed gap rationale for this analysis."}
+          {normalized.gapReasoningSummary || "The system did not return a clear reason for the missing skills in this result."}
         </p>
         {normalized.gapInsights.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-slate-400">No individual gap insights were returned.</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400">No detailed missing-skill notes were returned.</p>
         ) : (
           <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
             {normalized.gapInsights.map((insight) => (
@@ -1325,7 +1512,7 @@ export function Jobs() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{insight.skill_name}</span>
                   <Badge className="border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                    {insight.gap_type}
+                    {gapTypeLabel(insight.gap_type)}
                   </Badge>
                   <Badge
                     className={
@@ -1334,7 +1521,7 @@ export function Jobs() {
                         : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
                     }
                   >
-                    {insight.severity}
+                    {severityLabel(insight.severity)}
                   </Badge>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{insight.reason}</p>
@@ -1345,81 +1532,95 @@ export function Jobs() {
         )}
       </Card>
 
-      <Card id="job-resume" className="scroll-mt-24 border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Tailored Resume</h3>
-            <p className="text-sm text-gray-600 dark:text-slate-300">
-              Choose your resume source, then pick the resume style below it. Uploaded resumes can also be reworded while keeping their structure intact.
+      <Card id="job-resume" className="relative scroll-mt-24 overflow-hidden border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className={TAILORED_RESUME_COMING_SOON ? "pointer-events-none select-none blur-[5px] opacity-55" : ""} aria-hidden={TAILORED_RESUME_COMING_SOON}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Tailored Resume</h3>
+              <p className="text-sm text-gray-600 dark:text-slate-300">
+                Choose your resume source, then pick the resume style below it. Uploaded resumes can also be reworded while keeping their structure intact.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <div className="min-w-[260px] space-y-3">
+                <Select value={selectedResumeTemplate} onValueChange={setSelectedResumeTemplate}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Choose resume source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEFAULT_RESUME_SOURCE}>Default Template</SelectItem>
+                    {resumeSnapshots.map((snapshot) => (
+                      <SelectItem key={snapshot.snapshot_id} value={snapshotResumeSourceValue(snapshot.snapshot_id)}>
+                        {formatResumeTemplateLabel(snapshot)}
+                      </SelectItem>
+                    ))}
+                    {resumeEvidence.map((evidence) => (
+                      <SelectItem key={evidence.id} value={evidenceResumeSourceValue(evidence.id)}>
+                        {formatResumeEvidenceLabel(evidence)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedResumeLayout} onValueChange={setSelectedResumeLayout}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Choose resume style" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableResumeLayouts.map((template) => (
+                      <SelectItem key={template.value} value={template.value}>
+                        {template.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={handleGenerateResume}
+                disabled={TAILORED_RESUME_COMING_SOON || generating || !jobId}
+                className={activeHeaderTheme.buttonClass}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                {generating ? `Generating ${exportFormatLabel}...` : `Generate ${exportFormatLabel}`}
+              </Button>
+            </div>
+          </div>
+
+          <div className={`mt-4 rounded-2xl border p-4 ${activeHeaderTheme.softPanelClass}`}>
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {availableResumeLayouts.find((template) => template.value === selectedResumeLayout)?.label ?? "Resume style"}
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
+              {availableResumeLayouts.find((template) => template.value === selectedResumeLayout)?.description ??
+                "Choose the layout that best fits the role you are targeting."}
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <div className="min-w-[260px] space-y-3">
-              <Select value={selectedResumeTemplate} onValueChange={setSelectedResumeTemplate}>
-                <SelectTrigger className="h-10">
-                  <SelectValue placeholder="Choose resume source" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={DEFAULT_RESUME_SOURCE}>Default Template</SelectItem>
-                  {resumeSnapshots.map((snapshot) => (
-                    <SelectItem key={snapshot.snapshot_id} value={snapshotResumeSourceValue(snapshot.snapshot_id)}>
-                      {formatResumeTemplateLabel(snapshot)}
-                    </SelectItem>
-                  ))}
-                  {resumeEvidence.map((evidence) => (
-                    <SelectItem key={evidence.id} value={evidenceResumeSourceValue(evidence.id)}>
-                      {formatResumeEvidenceLabel(evidence)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedResumeLayout} onValueChange={setSelectedResumeLayout}>
-                <SelectTrigger className="h-10">
-                  <SelectValue placeholder="Choose resume style" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableResumeLayouts.map((template) => (
-                    <SelectItem key={template.value} value={template.value}>
-                      {template.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {lastTailoredId ? (
+            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-emerald-900/60 dark:bg-emerald-950/60 dark:text-emerald-200">
+              Tailored resume generated and downloaded. Resume id: <span className="font-mono">{lastTailoredId}</span>
             </div>
-            <Button
-              onClick={handleGenerateResume}
-              disabled={generating || !jobId}
-              className={activeHeaderTheme.buttonClass}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              {generating ? `Generating ${exportFormatLabel}...` : `Generate ${exportFormatLabel}`}
-            </Button>
-          </div>
+          ) : (
+            <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">
+              {resumeSnapshots.length > 0 || resumeEvidence.length > 0
+                ? "Pick a resume source and layout. Tailored resumes now download as DOCX first to preserve formatting, while resume evidence titles are rewritten into resume-friendly content."
+                : "Pick a layout, then generate a DOCX version from the default resume structure."}
+            </div>
+          )}
         </div>
 
-        <div className={`mt-4 rounded-2xl border p-4 ${activeHeaderTheme.softPanelClass}`}>
-          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            {availableResumeLayouts.find((template) => template.value === selectedResumeLayout)?.label ?? "Resume style"}
+        {TAILORED_RESUME_COMING_SOON ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/30 px-6 backdrop-blur-[1px] dark:bg-slate-950/35">
+            <div className="max-w-md rounded-3xl border border-slate-200 bg-white/88 px-6 py-5 text-center shadow-xl dark:border-slate-700 dark:bg-slate-900/88">
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Coming Soon</div>
+              <h4 className="mt-3 text-xl font-semibold text-slate-900 dark:text-slate-100">Tailored resumes are temporarily disabled</h4>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                This section is being reworked. You can still run job matches and review the score, skill gaps, and supporting proof while the resume tools are offline.
+              </p>
+            </div>
           </div>
-          <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
-            {availableResumeLayouts.find((template) => template.value === selectedResumeLayout)?.description ??
-              "Choose the layout that best fits the role you are targeting."}
-          </p>
-        </div>
-
-        {lastTailoredId ? (
-          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-emerald-900/60 dark:bg-emerald-950/60 dark:text-emerald-200">
-            Tailored resume generated and downloaded. Resume id: <span className="font-mono">{lastTailoredId}</span>
-          </div>
-        ) : (
-          <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">
-            {resumeSnapshots.length > 0 || resumeEvidence.length > 0
-              ? "Pick a resume source and layout. Tailored resumes now download as DOCX first to preserve formatting, while resume evidence titles are rewritten into resume-friendly content."
-              : "Pick a layout, then generate a DOCX version from the default resume structure."}
-          </div>
-        )}
+        ) : null}
       </Card>
 
       <Card id="job-history" className="scroll-mt-24 border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
