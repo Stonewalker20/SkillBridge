@@ -47,7 +47,7 @@
 \newcommand{\oaklandlogopath}{images/oakland_university_logo-freelogovectors.net_.png}
 \newcommand{\oaklandbrandmark}{%
   \IfFileExists{\oaklandlogopath}{%
-    \includegraphics[height=0.60cm]{\oaklandlogopath}%
+    \includegraphics[height=0.40cm]{\oaklandlogopath}%
   }{%
     \begin{tikzpicture}[baseline=(mark.base)]
       \node[rounded corners=3pt, fill=ougold, text=oublack, inner xsep=5pt, inner ysep=2.2pt, font=\scriptsize\bfseries] (mark) {OU};
@@ -55,17 +55,23 @@
   }%
 }
 \newcommand{\oaklandbrandbadge}{%
-  \raisebox{0.06cm}{\tikz[baseline=(box.base)]\node[rounded corners=4pt, fill=oustone, inner xsep=4pt, inner ysep=1.5pt] (box) {\oaklandbrandmark};}%
+  \raisebox{0.18cm}{\tikz[baseline=(box.base)]\node[rounded corners=4pt, fill=oustone, inner xsep=4pt, inner ysep=1pt] (box) {\oaklandbrandmark};}%
+}
+\newcommand{\oaklandtitlemark}{%
+  \begin{tikzpicture}[baseline=(mark.base)]
+    \node[text=white, font=\fontsize{26}{26}\selectfont\bfseries] (mark) {OU};
+    \node[text=white!82, font=\fontsize{7.5}{7.5}\selectfont\bfseries] at ([yshift=-10pt]mark.south) {OAKLAND UNIVERSITY};
+  \end{tikzpicture}%
 }
 
 \setbeamertemplate{background canvas}{%
   \begin{tikzpicture}[remember picture,overlay]
     \fill[white] (current page.south west) rectangle (current page.north east);
-    \fill[oustone] (current page.south west) rectangle ([yshift=0.45cm]current page.south east);
+    \fill[oustone] (current page.south west) rectangle ([yshift=0.56cm]current page.south east);
     \fill[ougold,opacity=0.10] (-0.8,7.2) circle (2.3);
     \fill[sbteal,opacity=0.05] (13.4,7.4) circle (2.4);
     \fill[ougoldlight,opacity=0.18] (12.7,-0.2) circle (1.7);
-    \draw[ouline,line width=0.4pt] ([yshift=0.45cm]current page.south west) -- ([yshift=0.45cm]current page.south east);
+    \draw[ouline,line width=0.4pt] ([yshift=0.56cm]current page.south west) -- ([yshift=0.56cm]current page.south east);
   \end{tikzpicture}
 }
 
@@ -84,14 +90,14 @@
 \setbeamertemplate{footline}{%
   \leavevmode%
   \hbox{%
-    \begin{beamercolorbox}[wd=\paperwidth,ht=0.62cm,dp=0.16cm,leftskip=0.38cm,rightskip=0.3cm]{footline}
-      \begin{minipage}[c][0.62cm][c]{0.70\paperwidth}
+    \begin{beamercolorbox}[wd=\paperwidth,ht=0.82cm,dp=0.24cm,leftskip=0.38cm,rightskip=0.3cm]{footline}
+      \begin{minipage}[c][0.82cm][c]{0.70\paperwidth}
         {\scriptsize\bfseries Oakland University}\hspace{0.55em}{\scriptsize School of Engineering and Computer Science}
       \end{minipage}%
-      \begin{minipage}[c][0.62cm][c]{0.14\paperwidth}
+      \begin{minipage}[c][0.82cm][c]{0.14\paperwidth}
         \raggedleft{\scriptsize\insertframenumber/\inserttotalframenumber}
       \end{minipage}%
-      \begin{minipage}[c][0.62cm][c]{0.12\paperwidth}
+      \begin{minipage}[c][0.82cm][c]{0.12\paperwidth}
         \raggedleft\oaklandbrandbadge
       \end{minipage}%
     \end{beamercolorbox}%
@@ -181,15 +187,9 @@
     \vspace{0.3em}
     {\color{white!75}\small\insertdate\par}
     \vfill
-    \IfFileExists{\oaklandwordmarkpath}{%
-      \begin{center}
-        \includegraphics[width=0.28\linewidth]{\oaklandwordmarkpath}
-      \end{center}
-    }{%
-      \begin{center}
-        {\color{white!85}\large Oakland University}
-      \end{center}
-    }%
+    \begin{center}
+      \oaklandtitlemark
+    \end{center}
   \end{minipage}
 }
 \title{SkillBridge Final Presentation}
@@ -221,16 +221,17 @@
 
 \begin{frame}{Users and Core Flows}
   \begin{columns}[T,totalwidth=\textwidth]
-    \column{0.48\textwidth}
-    {\small\bfseries User Types}\\[0.35em]
-    \includegraphics[width=\linewidth,height=0.32\textheight,keepaspectratio]{../use_case_standard_user.png}
-    \vspace{0.55em}
-    \includegraphics[width=\linewidth,height=0.32\textheight,keepaspectratio]{../use_case_admin_user.png}
-    \column{0.48\textwidth}
-    {\small\bfseries Core Pipelines}\\[0.35em]
-    \includegraphics[width=\linewidth,height=0.30\textheight,keepaspectratio]{../Frontend_evidence_component_flowchart.png}
-    \vspace{0.55em}
-    \includegraphics[width=\linewidth,height=0.30\textheight,keepaspectratio]{../job_match_analysis_pipeline_flowchart.png}
+    \column{0.49\textwidth}
+    {\small\bfseries User Types}\\[-0.15em]
+    \begin{columns}[T,totalwidth=\linewidth]
+      \column{0.49\linewidth}
+      \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio,trim=34 22 34 22,clip]{../use_case_standard_user.png}
+      \column{0.49\linewidth}
+      \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio,trim=34 22 34 22,clip]{../use_case_admin_user.png}
+    \end{columns}
+    \column{0.49\textwidth}
+    {\small\bfseries Core Pipeline}\\[-0.15em]
+    \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio,trim=24 28 24 28,clip]{../job_match_analysis_pipeline_flowchart.png}
   \end{columns}
 \end{frame}
 
@@ -238,44 +239,48 @@
   \centering
   \resizebox{!}{0.71\textheight}{%
   \begin{tikzpicture}[
-    x=1.38cm,y=1.02cm,
+    x=1.34cm,y=1.08cm,
     box/.style={rounded corners=10pt, draw=white, line width=0.7pt, text=white, minimum width=2.55cm, minimum height=0.92cm, font=\scriptsize\bfseries, align=center},
-    link/.style={line width=1.05pt, draw=sbnavy!82},
+    link/.style={line width=1.05pt, draw=sbnavy!82, rounded corners=6pt},
     note/.style={font=\scriptsize\color{sbmuted}, align=center}
   ]
-    \node[box, fill=oublack] (users) at (4.6,6.5) {USERS};
-    \node[box, fill=sbsky!85!oublack] (sessions) at (0.7,5.1) {SESSIONS};
-    \node[box, fill=sbteal] (skills) at (8.4,5.1) {SKILLS};
-    \node[box, fill=sbcoral!88!black] (projects) at (0.7,3.05) {PROJECTS};
-    \node[box, fill=sbcoral] (links) at (3.25,3.05) {PROJECT\_SKILL\\LINKS};
-    \node[box, fill=sbteal!80!black] (evidence) at (5.95,3.05) {EVIDENCE};
-    \node[box, fill=sbviolet] (confirm) at (1.55,0.85) {RESUME\_SKILL\\CONFIRMATIONS};
-    \node[box, fill=sbsky!65!sbviolet] (resume) at (4.55,0.85) {RESUME\\SNAPSHOTS};
-    \node[box, fill=sbcoral!82!sbviolet] (jobs) at (7.65,0.85) {JOB\_INGESTS\\+ JOBS};
-    \node[box, fill=sbgold!85!black] (matchruns) at (3.15,-1.35) {JOB\_MATCH\\RUNS};
-    \node[box, fill=sbgold!70!sbteal] (tailored) at (6.05,-1.35) {TAILORED\\RESUMES};
-    \node[box, fill=sbviolet!75!oublack] (help) at (10.65,5.1) {HELP\\REQUESTS};
+    \node[box, fill=oublack] (users) at (5.2,6.45) {USERS};
+    \node[box, fill=sbsky!85!oublack] (sessions) at (1.2,5.15) {SESSIONS};
+    \node[box, fill=sbviolet!75!oublack] (help) at (9.2,5.15) {HELP\\REQUESTS};
+    \node[box, fill=sbcoral!88!black] (projects) at (1.2,3.6) {PROJECTS};
+    \node[box, fill=sbcoral] (links) at (3.55,3.6) {PROJECT\_SKILL\\LINKS};
+    \node[box, fill=sbteal] (skills) at (5.9,3.6) {SKILLS};
+    \node[box, fill=sbteal!80!black] (evidence) at (8.25,3.6) {EVIDENCE};
+    \node[box, fill=sbviolet] (confirm) at (1.9,1.75) {RESUME\_SKILL\\CONFIRMATIONS};
+    \node[box, fill=sbsky!65!sbviolet] (resume) at (4.95,1.75) {RESUME\\SNAPSHOTS};
+    \node[box, fill=sbcoral!82!sbviolet] (jobs) at (8.0,1.75) {JOB\_INGESTS\\+ JOBS};
+    \node[box, fill=sbgold!85!black] (matchruns) at (5.55,-0.05) {JOB\_MATCH\\RUNS};
+    \node[box, fill=sbgold!70!sbteal] (tailored) at (8.55,-0.05) {TAILORED\\RESUMES};
 
-    \draw[link] (users) -- (sessions);
-    \draw[link] (users) -- (projects);
-    \draw[link] (users) -- (evidence);
-    \draw[link] (users) -- (confirm);
-    \draw[link] (users) -- (resume);
-    \draw[link] (users) -- (jobs);
-    \draw[link] (users) -- (matchruns);
-    \draw[link] (users) -- (tailored);
-    \draw[link] (users) -- (help);
-    \draw[link] (projects) -- (links);
-    \draw[link] (links) -- (skills);
-    \draw[link] (evidence) -- (skills);
-    \draw[link] (confirm) -- (skills);
-    \draw[link] (jobs) -- (matchruns);
-    \draw[link] (jobs) -- (tailored);
-    \draw[link] (resume) -- (tailored);
+    \coordinate (userbus) at (5.2,5.55);
+    \coordinate (skillbus) at (5.9,2.55);
+    \coordinate (jobbus) at (8.0,0.8);
 
-    \node[note] at (4.9,5.82) {User is the central owner across every workflow};
-    \node[note] at (5.25,2.3) {Skills connect proof, projects, and confirmations};
-    \node[note] at (5.2,-2.0) {Job analysis feeds match history and tailored resume output};
+    \draw[link] (users.south) -- (userbus);
+    \draw[link] (userbus) -| (sessions.east);
+    \draw[link] (userbus) -| (help.west);
+    \draw[link] (userbus) -| (projects.north);
+    \draw[link] (userbus) -| (skills.north);
+    \draw[link] (userbus) -| (evidence.north);
+    \draw[link] (userbus) -| (confirm.north);
+    \draw[link] (userbus) -| (resume.north);
+    \draw[link] (userbus) -| (jobs.north);
+
+    \draw[link] (projects.east) -- (links.west);
+    \draw[link] (links.east) -- (skills.west);
+    \draw[link] (evidence.west) -- (skills.east);
+    \draw[link] (confirm.east) -| (skillbus) -| (skills.south);
+    \draw[link] (jobs.south) -- (jobbus);
+    \draw[link] (jobbus) -| (matchruns.east);
+    \draw[link] (jobbus) -| (tailored.north);
+    \draw[link] (resume.south) |- (tailored.west);
+
+    \node[note] at (7.0,-0.95) {Job ingest powers match history and tailored resume output};
   \end{tikzpicture}
   }
 \end{frame}
