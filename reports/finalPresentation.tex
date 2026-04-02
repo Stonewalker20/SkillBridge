@@ -47,7 +47,7 @@
 \newcommand{\oaklandlogopath}{images/oakland_university_logo-freelogovectors.net_.png}
 \newcommand{\oaklandbrandmark}{%
   \IfFileExists{\oaklandlogopath}{%
-    \includegraphics[height=0.40cm]{\oaklandlogopath}%
+    \includegraphics[height=0.30cm]{\oaklandlogopath}%
   }{%
     \begin{tikzpicture}[baseline=(mark.base)]
       \node[rounded corners=3pt, fill=ougold, text=oublack, inner xsep=5pt, inner ysep=2.2pt, font=\scriptsize\bfseries] (mark) {OU};
@@ -55,7 +55,7 @@
   }%
 }
 \newcommand{\oaklandbrandbadge}{%
-  \raisebox{0.18cm}{\tikz[baseline=(box.base)]\node[rounded corners=4pt, fill=oustone, inner xsep=4pt, inner ysep=1pt] (box) {\oaklandbrandmark};}%
+  \raisebox{0.10cm}{\tikz[baseline=(box.base)]\node[rounded corners=4pt, fill=oustone, inner xsep=3.5pt, inner ysep=0.8pt] (box) {\oaklandbrandmark};}%
 }
 \newcommand{\oaklandtitlemark}{%
   \begin{tikzpicture}[baseline=(mark.base)]
@@ -67,11 +67,11 @@
 \setbeamertemplate{background canvas}{%
   \begin{tikzpicture}[remember picture,overlay]
     \fill[white] (current page.south west) rectangle (current page.north east);
-    \fill[oustone] (current page.south west) rectangle ([yshift=0.56cm]current page.south east);
+    \fill[oustone] (current page.south west) rectangle ([yshift=0.37cm]current page.south east);
     \fill[ougold,opacity=0.10] (-0.8,7.2) circle (2.3);
     \fill[sbteal,opacity=0.05] (13.4,7.4) circle (2.4);
     \fill[ougoldlight,opacity=0.18] (12.7,-0.2) circle (1.7);
-    \draw[ouline,line width=0.4pt] ([yshift=0.56cm]current page.south west) -- ([yshift=0.56cm]current page.south east);
+    \draw[ouline,line width=0.4pt] ([yshift=0.37cm]current page.south west) -- ([yshift=0.37cm]current page.south east);
   \end{tikzpicture}
 }
 
@@ -90,14 +90,14 @@
 \setbeamertemplate{footline}{%
   \leavevmode%
   \hbox{%
-    \begin{beamercolorbox}[wd=\paperwidth,ht=0.82cm,dp=0.24cm,leftskip=0.38cm,rightskip=0.3cm]{footline}
-      \begin{minipage}[c][0.82cm][c]{0.70\paperwidth}
+    \begin{beamercolorbox}[wd=\paperwidth,ht=0.54cm,dp=0.15cm,leftskip=0.38cm,rightskip=0.3cm]{footline}
+      \begin{minipage}[c][0.54cm][c]{0.70\paperwidth}
         {\scriptsize\bfseries Oakland University}\hspace{0.55em}{\scriptsize School of Engineering and Computer Science}
       \end{minipage}%
-      \begin{minipage}[c][0.82cm][c]{0.14\paperwidth}
+      \begin{minipage}[c][0.54cm][c]{0.14\paperwidth}
         \raggedleft{\scriptsize\insertframenumber/\inserttotalframenumber}
       \end{minipage}%
-      \begin{minipage}[c][0.82cm][c]{0.12\paperwidth}
+      \begin{minipage}[c][0.54cm][c]{0.12\paperwidth}
         \raggedleft\oaklandbrandbadge
       \end{minipage}%
     \end{beamercolorbox}%
@@ -114,7 +114,7 @@
 \lstdefinestyle{deckquery}{
   language=MongoShell,
   backgroundcolor=\color{sbnavy},
-  basicstyle=\ttfamily\tiny\color{sblight},
+  basicstyle=\ttfamily\fontsize{5.2}{5.8}\selectfont\color{sblight},
   identifierstyle=\color{sblight},
   keywordstyle=\color{sbteal},
   keywordstyle=[2]\color{sbsky},
@@ -124,7 +124,9 @@
   columns=fullflexible,
   keepspaces=true,
   frame=single,
-  framerule=0pt
+  framerule=0pt,
+  aboveskip=2pt,
+  belowskip=2pt
 }
 
 \newcommand{\pill}[2]{%
@@ -169,27 +171,34 @@
 }
 \setbeamertemplate{title page}{%
   \begin{tikzpicture}[remember picture,overlay]
-    \fill[oublack] (current page.south west) rectangle (current page.north east);
-    \fill[ougold] (current page.north west) rectangle ([xshift=2.8cm,yshift=-0.14cm]current page.north west);
-    \fill[ougold,opacity=0.16] ([xshift=10.4cm,yshift=5.9cm]current page.south west) circle (2.6cm);
-    \fill[sbteal,opacity=0.12] ([xshift=1.0cm,yshift=1.0cm]current page.south west) circle (1.8cm);
-    \fill[white,opacity=0.06] ([xshift=12.4cm,yshift=1.5cm]current page.south west) circle (1.3cm);
+    \fill[oustone] (current page.south west) rectangle (current page.north east);
+    \fill[ougold] (current page.north west) rectangle ([xshift=3.0cm,yshift=-0.14cm]current page.north west);
+    \fill[ougold,opacity=0.12] ([xshift=10.8cm,yshift=5.9cm]current page.south west) circle (2.5cm);
+    \fill[sbteal,opacity=0.10] ([xshift=1.0cm,yshift=1.0cm]current page.south west) circle (1.8cm);
+    \fill[oublack,opacity=0.05] ([xshift=12.4cm,yshift=1.5cm]current page.south west) circle (1.3cm);
+    \draw[ouline,line width=0.7pt] ([xshift=0.62cm,yshift=0.78cm]current page.south west) rectangle ([xshift=-0.62cm,yshift=-0.78cm]current page.north east);
   \end{tikzpicture}
   \vspace*{0.72cm}
   \begin{minipage}[t][0.77\textheight][t]{\textwidth}
-    {\color{white}\fontsize{21}{25}\selectfont\bfseries\inserttitle\par}
+    {\color{oublack}\fontsize{21}{25}\selectfont\bfseries\inserttitle\par}
     \vspace{0.45em}
-    {\color{white!88}\normalsize\insertsubtitle\par}
+    {\color{sbmuted}\normalsize\insertsubtitle\par}
     \vspace{0.95em}
-    {\color{white!94}\normalsize\insertauthor\par}
+    {\color{oublack}\normalsize\insertauthor\par}
     \vspace{0.45em}
-    {\color{white!80}\small School of Engineering and Computer Science\\Computer Science and Engineering Department\par}
+    {\color{sbmuted}\small School of Engineering and Computer Science\\Computer Science and Engineering Department\par}
     \vspace{0.3em}
-    {\color{white!75}\small\insertdate\par}
+    {\color{sbmuted}\small\insertdate\par}
     \vfill
-    \begin{center}
-      \oaklandtitlemark
-    \end{center}
+    \IfFileExists{\oaklandwordmarkpath}{%
+      \begin{center}
+        \includegraphics[width=0.24\linewidth]{\oaklandwordmarkpath}
+      \end{center}
+    }{%
+      \begin{center}
+        {\color{oublack}\large Oakland University}
+      \end{center}
+    }%
   \end{minipage}
 }
 \title{SkillBridge Final Presentation}
@@ -337,7 +346,7 @@ db.evidence.findOne(
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile,shrink=5]{Skills Page}
+\begin{frame}[fragile,shrink=5]{Skills}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
     \vspace{-0.45em}
@@ -393,7 +402,7 @@ db.project_skill_links.aggregate([
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile,shrink=5]{Resume Workflow Pages}
+\begin{frame}[fragile,shrink=5]{Resume Workflow}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
     \vspace{-0.45em}
@@ -420,18 +429,17 @@ db.resume_skill_confirmations.findOne(
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile,shrink=5]{Admin Job Review Page}
+\begin{frame}[fragile,shrink=5]{Admin Job Review}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
     \vspace{-0.45em}
-    \begin{block}{Page Coverage}
+    \begin{block}{Admin moderation and job intelligence}
       {\scriptsize
       \begin{itemize}
         \item UC 4.1 Review and moderate submitted jobs
         \item UC 4.2 Tag a posting by role
         \item UC 4.3 Aggregate postings by role
-      \end{itemize}
-      Admin moderation and job intelligence page.}
+      \end{itemize}}
     \end{block}
     \begin{block}{Mongo Query}
       \begin{lstlisting}[style=deckquery]
@@ -448,15 +456,14 @@ db.jobs.findOne(
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{Taxonomy Page}
+\begin{frame}[fragile]{Taxonomy}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
-    \begin{block}{Page Coverage}
+    \begin{block}{Alias and relationship maintenance}
       {\scriptsize
       \begin{itemize}
         \item UC 4.4 Maintain taxonomy
-      \end{itemize}
-      Alias and relationship maintenance.}
+      \end{itemize}}
     \end{block}
     \begin{block}{Mongo Query}
       \begin{lstlisting}[style=deckquery]
