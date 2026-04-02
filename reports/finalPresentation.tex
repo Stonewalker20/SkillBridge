@@ -42,15 +42,19 @@
 \setbeamercolor{frametitle}{fg=white,bg=oublack}
 \setbeamercolor{footline}{fg=white,bg=oublack}
 
-\newcommand{\oaklandlogopath}{images/oakland_university_logo.png}
+\newcommand{\oaklandwordmarkpath}{images/Oakland_University_logo.png}
+\newcommand{\oaklandlogopath}{images/oakland_university_logo-freelogovectors.net_.png}
 \newcommand{\oaklandbrandmark}{%
   \IfFileExists{\oaklandlogopath}{%
-    \includegraphics[height=0.72cm]{\oaklandlogopath}%
+    \includegraphics[height=0.68cm]{\oaklandlogopath}%
   }{%
     \begin{tikzpicture}[baseline=(mark.base)]
       \node[rounded corners=3pt, fill=ougold, text=oublack, inner xsep=5pt, inner ysep=2.2pt, font=\scriptsize\bfseries] (mark) {OU};
     \end{tikzpicture}%
   }%
+}
+\newcommand{\oaklandbrandbadge}{%
+  \tikz[baseline=(box.base)]\node[rounded corners=4pt, fill=oustone, inner xsep=4pt, inner ysep=2pt] (box) {\oaklandbrandmark};%
 }
 
 \setbeamertemplate{background canvas}{%
@@ -87,7 +91,7 @@
         \raggedleft{\scriptsize\insertframenumber/\inserttotalframenumber}
       \end{minipage}%
       \begin{minipage}[c][0.62cm][c]{0.12\paperwidth}
-        \raggedleft\oaklandbrandmark
+        \raggedleft\oaklandbrandbadge
       \end{minipage}%
     \end{beamercolorbox}%
   }%
@@ -126,6 +130,19 @@
     \includegraphics[width=\linewidth,height=0.57\textheight,keepaspectratio]{#1}
   \end{beamercolorbox}
 }
+\newcommand{\plainvisual}[2][0.69\textheight]{%
+  \centering
+  \includegraphics[width=\linewidth,height=#1,keepaspectratio]{#2}
+}
+\newcommand{\livelyvisual}[1]{%
+  \begin{tikzpicture}
+    \node[rounded corners=16pt, fill=oustone, minimum width=\linewidth, minimum height=0.66\textheight, inner sep=0pt] (panel) {};
+    \fill[sbsky, opacity=0.16] ([xshift=0.35cm,yshift=-0.28cm]panel.north west) circle (0.85cm);
+    \fill[sbcoral, opacity=0.14] ([xshift=-0.4cm,yshift=0.35cm]panel.south east) circle (1.0cm);
+    \fill[sbteal, opacity=0.10] ([xshift=4.9cm,yshift=-0.2cm]panel.north west) rectangle ++(1.55cm,-0.16cm);
+    \node[inner sep=0pt] at (panel.center) {\includegraphics[width=0.95\linewidth,height=0.60\textheight,keepaspectratio]{#1}};
+  \end{tikzpicture}%
+}
 \newcommand{\placeholdercard}[1]{%
   \begin{beamercolorbox}[wd=\linewidth,rounded=true,shadow=true,sep=0.22cm]{block body}
     \fbox{%
@@ -158,9 +175,13 @@
     \vspace{0.3em}
     {\color{white!75}\small\insertdate\par}
     \vfill
-    \begin{beamercolorbox}[wd=0.76\linewidth,rounded=true,shadow=true,sep=0.32cm]{block body}
-      \color{sbtext}\small Final capstone presentation for SkillBridge, with implemented use cases, database design, and final product workflows.
-    \end{beamercolorbox}
+    \IfFileExists{\oaklandwordmarkpath}{%
+      \begin{tikzpicture}
+        \node[rounded corners=8pt, fill=oustone, inner xsep=10pt, inner ysep=7pt] {\includegraphics[width=0.44\linewidth]{\oaklandwordmarkpath}};
+      \end{tikzpicture}
+    }{%
+      {\color{ougoldlight}\Large Oakland University}%
+    }%
   \end{minipage}
 }
 \title{SkillBridge Final Presentation}
@@ -177,94 +198,87 @@
 
 \begin{frame}{System At A Glance}
   \begin{columns}[T,totalwidth=\textwidth]
-    \column{0.48\textwidth}
+    \column{0.30\textwidth}
     \vspace{0.15em}
     {\Large \textbf{20 implemented use cases}}\\[0.4em]
     {\small SkillBridge turns projects, evidence, resumes, and job analysis into one guided career workspace.}
 
-    \vspace{0.9em}
+    \vspace{0.75em}
     \pill{sbteal}{React Frontend}\hspace{0.3em}
     \pill{sbsky}{FastAPI Backend}\hspace{0.3em}
     \pill{sbcoral}{MongoDB}
-
-    \vspace{0.9em}
-    \begin{block}{Deck Strategy}
-      \begin{itemize}
-        \item Correlated use cases are grouped on one slide
-        \item Mongo queries stay visible for grading
-        \item UI is treated as the hero of each feature spread
-      \end{itemize}
-    \end{block}
-    \column{0.49\textwidth}
-    \begin{beamercolorbox}[wd=\linewidth,rounded=true,shadow=true,sep=0.35cm]{block body}
-      \includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{images/skillbridge_full_use_case_diagram.png}
-    \end{beamercolorbox}
+    \column{0.67\textwidth}
+    \plainvisual[0.76\textheight]{images/skillbridge_full_use_case_diagram.png}
   \end{columns}
 \end{frame}
 
-\begin{frame}{Users, Flow, and Database Design}
+\begin{frame}{Users and Core Flows}
   \begin{columns}[T,totalwidth=\textwidth]
-    \column{0.46\textwidth}
+    \column{0.48\textwidth}
     \begin{block}{User Types}
-      \includegraphics[width=\linewidth,height=0.26\textheight,keepaspectratio]{../use_case_standard_user.png}
+      \includegraphics[width=\linewidth,height=0.28\textheight,keepaspectratio]{../use_case_standard_user.png}
       \vspace{0.35em}
-      \includegraphics[width=\linewidth,height=0.26\textheight,keepaspectratio]{../use_case_admin_user.png}
+      \includegraphics[width=\linewidth,height=0.28\textheight,keepaspectratio]{../use_case_admin_user.png}
     \end{block}
+    \column{0.48\textwidth}
     \begin{block}{Core Pipelines}
-      \includegraphics[width=\linewidth,height=0.14\textheight,keepaspectratio]{../Frontend_evidence_component_flowchart.png}
-      \vspace{0.25em}
-      \includegraphics[width=\linewidth,height=0.14\textheight,keepaspectratio]{../job_match_analysis_pipeline_flowchart.png}
-    \end{block}
-    \column{0.50\textwidth}
-    \begin{block}{Database ERD}
-      \centering
-      \begin{tikzpicture}[
-        x=0.88cm,y=0.88cm,
-        box/.style={rounded corners=9pt, draw=none, text=white, minimum width=2.15cm, minimum height=0.82cm, font=\scriptsize\bfseries, align=center},
-        link/.style={line width=0.9pt, draw=sbnavy!75},
-        note/.style={font=\tiny\color{sbmuted}}
-      ]
-        \node[box, fill=sbnavy] (users) at (2.8,5.9) {USERS};
-        \node[box, fill=sbsky!85!sbnavy] (sessions) at (0.6,4.7) {SESSIONS};
-        \node[box, fill=sbteal] (skills) at (5.3,4.8) {SKILLS};
-        \node[box, fill=sbcoral!90!black] (projects) at (0.8,3.25) {PROJECTS};
-        \node[box, fill=sbcoral] (links) at (3.0,3.25) {PROJECT\_SKILL\\LINKS};
-        \node[box, fill=sbteal!80!black] (evidence) at (5.45,3.25) {EVIDENCE};
-        \node[box, fill=sbviolet] (confirm) at (1.25,1.8) {RESUME\_SKILL\\CONFIRMATIONS};
-        \node[box, fill=sbsky!70!sbviolet] (resume) at (3.7,1.8) {RESUME\\SNAPSHOTS};
-        \node[box, fill=sbcoral!85!sbviolet] (jobs) at (6.0,1.8) {JOB\_INGESTS\\+ JOBS};
-        \node[box, fill=sbgold!85!black] (matchruns) at (2.45,0.45) {JOB\_MATCH\\RUNS};
-        \node[box, fill=sbgold!70!sbteal] (tailored) at (4.75,0.45) {TAILORED\\RESUMES};
-        \node[box, fill=sbviolet!80!sbnavy] (help) at (6.8,4.7) {HELP\\REQUESTS};
-
-        \draw[link] (users) -- (sessions);
-        \draw[link] (users) -- (projects);
-        \draw[link] (users) -- (evidence);
-        \draw[link] (users) -- (confirm);
-        \draw[link] (users) -- (resume);
-        \draw[link] (users) -- (jobs);
-        \draw[link] (users) -- (matchruns);
-        \draw[link] (users) -- (tailored);
-        \draw[link] (users) -- (help);
-        \draw[link] (projects) -- (links);
-        \draw[link] (links) -- (skills);
-        \draw[link] (evidence) -- (skills);
-        \draw[link] (confirm) -- (skills);
-        \draw[link] (jobs) -- (matchruns);
-        \draw[link] (jobs) -- (tailored);
-        \draw[link] (resume) -- (tailored);
-
-        \node[note] at (3.65,5.25) {User is the central owner};
-        \node[note] at (4.85,2.7) {Skills connect proof, projects, and confirmations};
-        \node[note] at (4.0,-0.1) {Job analysis drives matching and tailored output};
-      \end{tikzpicture}
+      \includegraphics[width=\linewidth,height=0.26\textheight,keepaspectratio]{../Frontend_evidence_component_flowchart.png}
+      \vspace{0.45em}
+      \includegraphics[width=\linewidth,height=0.26\textheight,keepaspectratio]{../job_match_analysis_pipeline_flowchart.png}
     \end{block}
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{Dashboard Page}
+\begin{frame}{Database ERD}
+  \centering
+  \resizebox{!}{0.71\textheight}{%
+  \begin{tikzpicture}[
+    x=1.12cm,y=1.12cm,
+    box/.style={rounded corners=10pt, draw=white, line width=0.7pt, text=white, minimum width=2.55cm, minimum height=0.92cm, font=\scriptsize\bfseries, align=center},
+    link/.style={line width=1.05pt, draw=sbnavy!82},
+    note/.style={font=\scriptsize\color{sbmuted}, align=center}
+  ]
+    \node[box, fill=oublack] (users) at (4.2,6.6) {USERS};
+    \node[box, fill=sbsky!85!oublack] (sessions) at (0.9,5.15) {SESSIONS};
+    \node[box, fill=sbteal] (skills) at (7.4,5.15) {SKILLS};
+    \node[box, fill=sbcoral!88!black] (projects) at (0.9,3.25) {PROJECTS};
+    \node[box, fill=sbcoral] (links) at (3.15,3.25) {PROJECT\_SKILL\\LINKS};
+    \node[box, fill=sbteal!80!black] (evidence) at (5.55,3.25) {EVIDENCE};
+    \node[box, fill=sbviolet] (confirm) at (1.45,1.15) {RESUME\_SKILL\\CONFIRMATIONS};
+    \node[box, fill=sbsky!65!sbviolet] (resume) at (4.15,1.15) {RESUME\\SNAPSHOTS};
+    \node[box, fill=sbcoral!82!sbviolet] (jobs) at (7.1,1.15) {JOB\_INGESTS\\+ JOBS};
+    \node[box, fill=sbgold!85!black] (matchruns) at (3.0,-1.0) {JOB\_MATCH\\RUNS};
+    \node[box, fill=sbgold!70!sbteal] (tailored) at (5.85,-1.0) {TAILORED\\RESUMES};
+    \node[box, fill=sbviolet!75!oublack] (help) at (8.75,5.15) {HELP\\REQUESTS};
+
+    \draw[link] (users) -- (sessions);
+    \draw[link] (users) -- (projects);
+    \draw[link] (users) -- (evidence);
+    \draw[link] (users) -- (confirm);
+    \draw[link] (users) -- (resume);
+    \draw[link] (users) -- (jobs);
+    \draw[link] (users) -- (matchruns);
+    \draw[link] (users) -- (tailored);
+    \draw[link] (users) -- (help);
+    \draw[link] (projects) -- (links);
+    \draw[link] (links) -- (skills);
+    \draw[link] (evidence) -- (skills);
+    \draw[link] (confirm) -- (skills);
+    \draw[link] (jobs) -- (matchruns);
+    \draw[link] (jobs) -- (tailored);
+    \draw[link] (resume) -- (tailored);
+
+    \node[note] at (4.2,5.88) {User is the central owner across every workflow};
+    \node[note] at (4.8,2.45) {Skills connect proof, projects, and confirmations};
+    \node[note] at (5.05,-1.8) {Job analysis feeds match history and tailored resume output};
+  \end{tikzpicture}
+  }
+\end{frame}
+
+\begin{frame}[fragile,shrink=2]{Dashboard Page}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
+    \vspace{-0.7em}
     \begin{block}{Page Coverage}
       {\scriptsize
       \begin{itemize}
@@ -284,13 +298,14 @@ db.evidence.aggregate([
       \end{lstlisting}
     \end{block}
     \column{0.68\textwidth}
-    \visualcard{images/Dashboard.png}{One page showing portfolio summary, proof totals, and entry points into the user's saved work.}
+    \plainvisual[0.73\textheight]{images/Dashboard.png}
   \end{columns}
 \end{frame}
 
 \begin{frame}[fragile]{Evidence Page}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
+    \vspace{-0.25em}
     \begin{block}{Page Coverage}
       {\scriptsize
       \begin{itemize}
@@ -308,13 +323,14 @@ db.evidence.findOne(
       \end{lstlisting}
     \end{block}
     \column{0.68\textwidth}
-    \visualcard{images/pr5_add_evidence_frontend.png.png.png}{Evidence capture, extraction, selection, and save flow on one page.}
+    \plainvisual[0.75\textheight]{images/pr5_add_evidence_frontend.png.png.png}
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{Skills Page}
+\begin{frame}[fragile,shrink=3]{Skills Page}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
+    \vspace{-0.45em}
     \begin{block}{Page Coverage}
       {\scriptsize
       \begin{itemize}
@@ -339,9 +355,10 @@ db.resume_skill_confirmations.findOne(
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{Skill Detail View}
+\begin{frame}[fragile,shrink=3]{Skill Detail View}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
+    \vspace{-0.45em}
     \begin{block}{Page Coverage}
       {\scriptsize
       \begin{itemize}
@@ -366,9 +383,10 @@ db.project_skill_links.aggregate([
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{Resume Workflow Pages}
+\begin{frame}[fragile,shrink=3]{Resume Workflow Pages}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
+    \vspace{-0.45em}
     \begin{block}{Page Coverage}
       {\scriptsize
       \begin{itemize}
@@ -392,9 +410,10 @@ db.resume_skill_confirmations.findOne(
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{Admin Job Review Page}
+\begin{frame}[fragile,shrink=3]{Admin Job Review Page}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
+    \vspace{-0.45em}
     \begin{block}{Page Coverage}
       {\scriptsize
       \begin{itemize}
@@ -463,7 +482,7 @@ db.job_match_runs.find(
       \end{lstlisting}
     \end{block}
     \column{0.68\textwidth}
-    \visualcard{../ssdanalyzejobmatch.png}{The jobs page shows readable fit analysis and the path into tailored resume generation.}
+    \livelyvisual{../ssdanalyzejobmatch.png}
   \end{columns}
 \end{frame}
 
@@ -490,20 +509,18 @@ db.help_requests.find(
   \end{columns}
 \end{frame}
 
-\begin{frame}{Close}
+\begin{frame}{Thank You}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.62\textwidth}
-    \begin{block}{What This Deck Shows}
-      \begin{itemize}
-        \item 20 implemented use cases across user and admin workflows
-        \item Updated UI, Mongo queries, flow diagrams, and database ERD
-        \item A clear final-product story: capture proof, confirm skills, analyze jobs, and guide the user
-      \end{itemize}
-    \end{block}
+    {\Large\bfseries Thank you for your time.}
+
+    \vspace{0.9em}
+    {\small
+    This presentation covered the final SkillBridge product, including 20 implemented use cases, the Mongo-backed data model, and the full user-to-admin workflow across skills, evidence, resumes, jobs, analytics, and help.}
     \column{0.34\textwidth}
     \begin{center}
       \vspace{1.4em}
-      {\Huge \textbf{Questions?}}
+      {\Huge \textbf{Any Questions?}}
     \end{center}
   \end{columns}
 \end{frame}
