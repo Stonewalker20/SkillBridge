@@ -133,27 +133,6 @@ function severityLabel(value: string): string {
   }
 }
 
-function compactRelevantExcerpt(text: string, fallback = "No specific proof excerpt was available."): string {
-  const value = String(text || "").replace(/\s+/g, " ").trim();
-  if (!value) return fallback;
-  const segments = value
-    .split(/(?<=[.!?])\s+|\s*[;|]\s*|\s{2,}|\s+\.\.\.\s+/)
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-
-  if (segments.length === 0) {
-    return value.length > 160 ? `${value.slice(0, 157)}...` : value;
-  }
-
-  const shortened = segments
-    .filter((segment) => segment.length >= 24)
-    .slice(0, 2)
-    .map((segment) => (segment.length > 72 ? `${segment.slice(0, 69)}...` : segment));
-
-  const excerpt = shortened.join(" ... ") || (value.length > 140 ? `${value.slice(0, 137)}...` : value);
-  return excerpt;
-}
-
 function getBreakdownTooltipLines(
   entry: NonNullable<MatchResult["score_breakdown"]>[number],
   normalized: NormalizedAnalysis,
@@ -1228,39 +1207,6 @@ export function Jobs() {
           ) : null}
         </Card>
       </div>
-
-      <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm text-gray-500 dark:text-slate-400">Retrieved Evidence</p>
-            <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
-              These are the proof snippets the system used to support this result.
-            </p>
-          </div>
-          <Badge className="border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-            {normalized.retrievedContext.length} items
-          </Badge>
-        </div>
-        {normalized.retrievedContext.length === 0 ? (
-          <p className="mt-4 text-sm text-gray-600 dark:text-slate-300">
-            No supporting text was found. Add resume text or proof items to make this result stronger.
-          </p>
-        ) : (
-          <div className="mt-4 grid max-h-[22rem] gap-3 overflow-y-auto pr-1 md:grid-cols-2">
-            {normalized.retrievedContext.map((context) => (
-              <div key={`${context.source_type}:${context.source_id}:${context.chunk_index ?? 0}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {context.evidence_name || context.title || "Evidence item"}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
-                  <span className="font-medium text-slate-900 dark:text-slate-100">Used part:</span>{" "}
-                  {compactRelevantExcerpt(context.supporting_excerpt || context.snippet)}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
 
       <Card id="job-reasoning" className="p-6 scroll-mt-24 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mb-4">
