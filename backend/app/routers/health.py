@@ -1,3 +1,5 @@
+"""Health-check routes used to validate API and database availability."""
+
 from fastapi import APIRouter
 from app.core.db import get_db
 

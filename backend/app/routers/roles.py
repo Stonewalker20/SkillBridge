@@ -1,3 +1,5 @@
+"""Role routes for creating target roles and computing role-specific skill weighting metadata."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
@@ -5,6 +7,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from app.core.db import get_db
 from app.utils.mongo import oid_str
+from app.utils.role_weights import refresh_role_weights
 from app.models.role import RoleIn, RoleOut
 
 router = APIRouter()
@@ -55,30 +58,7 @@ async def compute_role_weights(role_id: str):
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
 
-    # pull approved jobs tagged with this role
-    jobs = await db["jobs"].find(
-        {"moderation_status": "approved", "role_ids": role_id},
-        {"required_skill_ids": 1, "required_skills": 1},
-    ).to_list(length=2000)
-
-    total = len(jobs)
-    if total == 0:
-        weights = []
-    else:
-        counts = {}
-        for j in jobs:
-            for sid in (j.get("required_skill_ids") or []):
-                counts[sid] = counts.get(sid, 0) + 1
-        # normalize
-        weights = [{"skill_id": sid, "weight": counts[sid] / total} for sid in sorted(counts, key=lambda k: counts[k], reverse=True)]
-        # add skill name if available
-        for w in weights[:200]:
-            try:
-                soid = ObjectId(w["skill_id"])
-                s = await db["skills"].find_one({"_id": soid}, {"name": 1})
-                w["skill_name"] = (s or {}).get("name", "")
-            except Exception:
-                w["skill_name"] = ""
+    weights = await refresh_role_weights(db, role_id)
 
     doc = {
         "role_id": role_oid,

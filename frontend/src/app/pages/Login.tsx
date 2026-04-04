@@ -1,0 +1,151 @@
+import { useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { useAuth } from "../context/AuthContext";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Card } from "../components/ui/card";
+import { Mail, Lock, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import LogoImage from "../../imports/skillbridge_logo.png";
+import { PublicThemeToggle } from "../components/PublicThemeToggle";
+
+export function Login() {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.email || !formData.password) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await login(formData.email, formData.password);
+      toast.success("Welcome back!");
+      navigate("/app");
+    } catch (_error) {
+      toast.error("Invalid credentials. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#ffffff)] dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_45%,_#020617)] flex items-center justify-center p-4">
+      <div className="fixed right-4 top-4 z-20">
+        <PublicThemeToggle />
+      </div>
+      <div className="grid w-full max-w-5xl gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="hidden lg:flex flex-col justify-between rounded-[2rem] border border-slate-200 bg-[linear-gradient(135deg,_rgba(30,58,138,0.98),_rgba(245,158,11,0.94))] p-8 text-white shadow-xl">
+          <div>
+            <h1 className="mt-8 text-4xl font-bold leading-tight">Return to your skill intelligence workspace.</h1>
+            <p className="mt-4 text-base leading-7 text-blue-100">
+              Review evidence, analyze job fit, and keep your professional profile aligned without losing momentum.
+            </p>
+          </div>
+          <div className="space-y-3 text-sm text-blue-50">
+            <div className="rounded-2xl bg-white/10 px-4 py-3">Evidence-backed skills and job-match insights in one place.</div>
+            <div className="rounded-2xl bg-white/10 px-4 py-3">Tailored resume generation tied directly to your saved work.</div>
+          </div>
+        </div>
+
+      <Card className="w-full max-w-md border-slate-200 bg-white/95 p-8 shadow-xl dark:border-slate-800 dark:bg-slate-950/85 lg:max-w-none">
+        {/* Logo & Header */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <img src={LogoImage} alt="SkillBridge Logo" className="h-20 w-auto max-w-[240px] scale-[2.6] object-contain" />
+          </div>
+          <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-slate-50">Welcome Back</h1>
+          <p className="text-gray-600 dark:text-slate-300">Sign in to your SkillBridge account</p>
+        </div>
+
+        {/* Login Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <Label htmlFor="email" className="text-slate-800 dark:text-slate-200">Email Address</Label>
+            <div className="relative mt-1">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-slate-500" />
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="pl-10"
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="password" className="text-slate-800 dark:text-slate-200">Password</Label>
+            <div className="relative mt-1">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-slate-500" />
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter your password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="pl-10"
+                disabled={loading}
+              />
+            </div>
+            <div className="mt-2 text-right">
+              <Link to="/forgot-password" className="text-sm text-[#1E3A8A] hover:underline dark:text-blue-400">
+                Forgot password?
+              </Link>
+            </div>
+          </div>
+
+          <Button
+            type="submit"
+            className="w-full bg-[#1E3A8A] hover:bg-[#1e3a8a]/90"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing in...
+              </>
+            ) : (
+              "Sign In"
+            )}
+          </Button>
+        </form>
+
+        {/* Divider */}
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300 dark:border-slate-700" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="bg-white px-2 text-gray-500 dark:bg-slate-950 dark:text-slate-400">Don't have an account?</span>
+          </div>
+        </div>
+
+        {/* Sign Up Link */}
+        <Button variant="outline" asChild className="w-full">
+          <Link to="/signup">Create Account</Link>
+        </Button>
+
+        {/* Back to Home */}
+        <div className="mt-6 text-center">
+          <Link to="/" className="text-sm text-[#1E3A8A] hover:underline dark:text-blue-400">
+            ← Back to Home
+          </Link>
+        </div>
+      </Card>
+      </div>
+    </div>
+  );
+}

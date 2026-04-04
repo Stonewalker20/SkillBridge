@@ -1,0 +1,414 @@
+% =========================
+% SkillBridge Project Report (LaTeX)
+% CSI 4999: Senior Capstone Project - Winter 2026
+% Group of 4
+% =========================
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{tikz}
+\usepackage{caption}
+\usepackage{setspace}
+\usepackage{fancyhdr}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  citecolor=blue
+}
+
+\setlength{\parskip}{0.6em}
+\setlength{\parindent}{0pt}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{CSI 4999: Senior Capstone Project}
+\rhead{Winter 2026}
+\cfoot{\thepage}
+
+% ---------- Convenience ----------
+\newcommand{\ProjectName}{SkillBridge} % (Rubric: project name one or two words only)
+\newcommand{\Course}{CSI 4999: Senior Capstone Project}
+\newcommand{\Term}{Winter 2026}
+\newcommand{\Dept}{Computer Science and Engineering Department}
+\newcommand{\School}{School of Engineering and Computer Science}
+\newcommand{\Univ}{Oakland University}
+\newcommand{\Instructor}{Dr.\ Hadeel Mohammed Jawad}
+
+% ---------- Update these ----------
+\newcommand{\GroupNumber}{\#14} % <-- change to your actual group number
+\newcommand{\VideoLink}{https://www.loom.com/share/249216f7cc3841a38c9b1cc6b66d704b} % <-- paste your video URL
+
+\begin{document}
+
+% =========================
+% Cover Page  (Rubric #1)
+% =========================
+\begin{titlepage}
+  \centering
+  \vspace*{0.8cm}
+
+  {\Large \Univ \par}
+  \vspace{0.15cm}
+  {\large \School \par}
+  {\large \Dept \par}
+
+  \vspace{0.9cm}
+
+  {\Huge \bfseries \ProjectName \par}
+  \vspace{0.25cm}
+  {\large \itshape Portfolio Dashboard + Job Fit Analyzer \par}
+
+  \vspace{0.75cm}
+
+  % (Rubric #1) Logo or icon required
+  \includegraphics[width=0.33\textwidth]{logo.png}
+
+  \vfill
+
+  {\large \Course \par}
+  {\large \Term \par}
+  \vspace{0.2cm}
+  {\large Instructor: \Instructor \par}
+  \vspace{0.2cm}
+  {\large Date: \today \par}
+
+  \vspace{0.5cm}
+  {\large Group \GroupNumber \par}
+
+  \vspace{0.3cm}
+  {\large Team Members:\par}
+  \vspace{0.1cm}
+    Justin Elia\\
+    Jennifer Gonzalez\\
+    Spencer Roeren\\
+    Cordell Stonecipher\\
+
+  \vspace{0.5cm}
+  % (Rubric #1) Video link required
+  {\large Video Link: \href{\VideoLink}{\VideoLink}\par}
+
+  \vspace{0.3cm}
+
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =========================
+\section{Project Description} % (Rubric #2)
+\ProjectName\ is a database-driven web application that helps students and early-career professionals
+consolidate their skills, projects, and evidence into a single portfolio dashboard, then measure job fit
+by pasting real job postings found online.
+
+The core problem is that users often have valuable experience scattered across resumes, GitHub,
+coursework, and personal notes, but no centralized system that (1) tracks skills with evidence,
+(2) organizes projects and artifacts, and (3) evaluates readiness for a specific job posting.
+\ProjectName\ addresses this by providing a structured portfolio dashboard and a job posting analyzer
+that computes match coverage, identifies missing skills, and recommends next actions.
+
+A key design decision is that job posting data is provided by users (pasted job descriptions).
+This keeps the system simple, avoids scraping restrictions, and allows the job library to grow organically.
+Over time, community-submitted job postings are aggregated into a role library with skill weights derived
+from observed frequencies.
+
+% =========================
+\section{Targeted Audience} % (Rubric #3)
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Primary:} Undergraduate students and new graduates preparing for internships, jobs, and capstone projects.
+  \item \textbf{Secondary:} Career services staff and instructors who want a high-level view of skill development trends.
+  \item \textbf{Tertiary:} Student organizations or bootcamps that want a lightweight skill tracking + job readiness tool.
+\end{itemize}
+
+% =========================
+\section{Source of Revenue} % (Rubric #4)
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Freemium:} Free dashboard + limited job analyses per month; paid tier for unlimited analyses and exports.
+  \item \textbf{Institutional licensing:} Department/career center subscription for cohort analytics and administrative tools.
+  \item \textbf{Premium exports:} Paid PDF portfolio exports and interview-prep gap reports derived from match results.
+\end{itemize}
+
+% =========================
+\section{Similar Systems and Differentiation} % (Rubric #5)
+\subsection{Similar Systems}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{LinkedIn}: Stores experience/skills, but limited evidence linking and transparent job-fit scoring.
+  \item \textbf{GitHub + portfolio sites}: Strong for projects, but lack structured skill tracking and job-posting comparison.
+  \item \textbf{ATS resume scanners}: Compare resume to job postings, but do not maintain a long-term dashboard with evidence.
+  \item \textbf{Learning platforms (badges/certificates)}: Track learning events but not a full skill-evidence graph plus job matching.
+\end{itemize}
+
+\subsection{How \ProjectName\ is Different}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Evidence-based skills:} Skills can be linked to projects and artifacts, reducing unverifiable claims.
+  \item \textbf{User-provided postings:} No scraping required; users paste job descriptions directly for analysis and storage.
+  \item \textbf{Community role library:} Role skill weights emerge from aggregated postings over time.
+  \item \textbf{Granular skills:} Libraries (NumPy, Pandas, PostgreSQL) remain distinct skills rather than collapsing into parent labels.
+\end{itemize}
+
+% =========================
+\section{Users (Two Types) and Feature Access} % (Rubric #9)
+\textbf{User Type 1: Student (Standard User)} \\
+Can manage portfolio content and run job analyses, but has no moderation or role-weight controls.
+
+\textbf{User Type 2: Admin (Moderator/Curator)} \\
+Can review community job postings, manage taxonomy/aliases, and generate role-level analytics.
+
+\vspace{0.2cm}
+\textbf{Access Difference (Example):}
+\begin{itemize}[leftmargin=*]
+  \item Student sees: Portfolio + Resume Import + Job Analyzer features (Subsystems 1--3).
+  \item Admin sees: All student features + Admin/Library features (Subsystem 4).
+\end{itemize}
+
+% =========================
+\section{Subsystems and Features (Group of 4)} % (Rubric #6, #8, #9)
+
+\subsection{Subsystem 1: Portfolio Dashboard \& Evidence Mapping (Student)}
+\begin{enumerate}[leftmargin=*]
+  \item Create a project entry (add project metadata to database).
+  \item Link a skill to a project (many-to-many mapping insert).
+  \item Add evidence artifact (URL/file/notes) and associate with skill/project.
+  \item Run query: dashboard summary (top skills, recent projects, evidence coverage).
+\end{enumerate}
+
+\subsection{Subsystem 2: Skill Management (Granular Skills) (Student)}
+\begin{enumerate}[leftmargin=*]
+  \item Add a skill with category/tags (insert skill).
+  \item Update skill proficiency + last-used date (update skill metadata).
+  \item View skill detail page with linked projects/evidence (join query).
+  \item Run query: skills missing evidence or low-evidence skills (gap query).
+\end{enumerate}
+
+\subsection{Subsystem 3: Resume Import \& Confirmation (Student)}
+\begin{enumerate}[leftmargin=*]
+  \item Paste/upload resume text and store a resume snapshot (insert snapshot).
+  \item Extract suggested skills using taxonomy + aliases (query + extraction results).
+  \item Confirm/reject/edit extracted items and persist confirmed mappings (insert junction rows).
+  \item Save confirmed resume-derived skills/projects into dashboard entities (insert/update records).
+\end{enumerate}
+
+\subsection{Subsystem 4: Job Library, Role Weights \& Moderation (Admin)}
+\begin{enumerate}[leftmargin=*]
+  \item Review and approve/reject community-submitted job postings (moderation status update).
+  \item Tag a posting by role and store role metadata (insert/update role assignment).
+  \item Aggregate postings by role and compute skill weights (group-by queries + derived table update).
+  \item Maintain taxonomy: manage skill aliases and relationships (CRUD on alias/relation tables).
+\end{enumerate}
+
+\vspace{0.2cm}
+
+% =========================
+\section{Use Case Diagrams (Draw.io Exports)} % (Rubric #7)
+
+
+\vspace{0.2cm}
+\textbf{Subsystem 1 Use Case Diagram}\\
+\begin{figure}[H]
+  \centering
+  \fbox{\includegraphics[width=0.95\linewidth]{uc_subsystem1.png}}
+  \caption{Use Case Diagram: Portfolio Dashboard \& Evidence Mapping}
+\end{figure}
+
+\textbf{}Subsystem 2 Use Case Diagram}\\
+\begin{figure}[H]
+  \centering
+  \fbox{\includegraphics[width=0.95\linewidth]{uc_subsystem2.png}}
+  \caption{Use Case Diagram: Skill Management (Granular Skills)}
+\end{figure}
+
+\textbf{Subsystem 3 Use Case Diagram}\\
+\begin{figure}[H]
+  \centering
+  \fbox{\includegraphics[width=0.95\linewidth]{uc_subsystem3.png}}
+  \caption{Use Case Diagram: Resume Import \& Confirmation}
+\end{figure}
+
+\textbf{Subsystem 4 Use Case Diagram}\\
+\begin{figure}[H]
+  \centering
+  \fbox{\includegraphics[width=0.95\linewidth]{uc_subsystem4.png}}
+  \caption{Use Case Diagram: Job Library, Role Weights \& Moderation (Admin)}
+\end{figure}
+
+% =========================
+\section{Database Design (Initial ERD + Tables)} % (Rubric #10)
+The system uses a relational database to store users, skills, projects, evidence, resumes, job postings, and role aggregates.
+More tables are included than the minimum to support the four subsystems and enable realistic queries.
+
+\subsection{ERD (Initial Design)}
+\begin{figure}[H]
+  \centering
+  \fbox{\includegraphics[width=0.95\linewidth]{erd.png}}
+  \caption{Initial ERD (Entity Relationship Diagram)}
+\end{figure}
+
+\subsection{Core Tables (Draft)}
+\begin{longtable}{p{0.26\linewidth} p{0.70\linewidth}}
+\toprule
+\textbf{Table} & \textbf{Purpose / Key Columns} \\
+\midrule
+\endhead
+
+User & user\_id (PK), role (student/admin), created\_at \\
+Skill & skill\_id (PK), name, category, description \\
+SkillAlias & alias\_id (PK), skill\_id (FK), alias\_text \\
+SkillRelation & parent\_skill\_id (FK), child\_skill\_id (FK), relation\_type \\
+Project & project\_id (PK), user\_id (FK), title, summary, status, dates \\
+ProjectSkill & project\_id (FK), skill\_id (FK) (junction) \\
+Evidence & evidence\_id (PK), user\_id (FK), project\_id (FK), skill\_id (FK), type, url, notes \\
+ResumeSnapshot & resume\_id (PK), user\_id (FK), raw\_text, created\_at \\
+JobPosting & posting\_id (PK), submitter\_user\_id (FK), title, company, raw\_text, status, created\_at \\
+PostingSkill & posting\_id (FK), skill\_id (FK), confidence, evidence\_phrase \\
+Role & role\_id (PK), role\_name \\
+RoleSkillWeight & role\_id (FK), skill\_id (FK), weight, last\_updated \\
+JobAnalysis & analysis\_id (PK), posting\_id (FK), user\_id (FK), match\_score, created\_at \\
+AnalysisResult & analysis\_id (FK), skill\_id (FK), match\_type, coverage \\
+\bottomrule
+\end{longtable}
+
+\subsection{Data Volume Plan (Rubric Note)}
+\begin{itemize}[leftmargin=*]
+  \item Main table (\texttt{JobPosting} or \texttt{JobAnalysis}): plan for \textbf{30+ rows} using pasted postings from classmates and curated examples.
+  \item Supporting tables (\texttt{Skill}, \texttt{Project}, \texttt{Evidence}, etc.): plan for \textbf{10+ rows} each per user cohort.
+\end{itemize}
+
+% =========================
+\section{User Interface Wireframes / Storyboard} % (Rubric #11)
+
+\subsection{Key Screens}
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Dashboard:} portfolio summary, recent projects, evidence coverage.
+  \item \textbf{Skills:} skill list, details, evidence gaps.
+  \item \textbf{Resume Import \& Confirm:} paste/upload resume, extracted items, approve edits.
+  \item \textbf{Paste Job \& Analyze Match:} paste job posting, match breakdown, score.
+  \item \textbf{Admin Job Library \& Role Weights:} role table, weights, moderation controls.
+\end{enumerate}
+
+\subsection{Wireframe Images}
+\begin{figure}[H]
+  \centering
+  \fbox{\includegraphics[width=0.95\linewidth]{ui_dashboard.png}}
+  \caption{Dashboard (Wireframe)}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \fbox{\includegraphics[width=0.95\linewidth]{ui_skills.png}}
+  \caption{Skills (Wireframe)}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \fbox{\includegraphics[width=0.95\linewidth]{ui_resume_import.png}}
+  \caption{Resume Import \& Confirm (Wireframe)}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \fbox{\includegraphics[width=0.95\linewidth]{ui_job_analyzer.png}}
+  \caption{Paste Job \& Analyze Match (Wireframe)}
+\end{figure}
+
+% =========================
+\section{Responsive Design Plan} % (Rubric #12)
+\begin{figure}[H]
+  \centering
+  \fbox{\includegraphics[width=0.95\linewidth]{mobile-web_view.png}}
+  \caption{Mobile/Web Views}
+\end{figure}
+
+\subsection{Desktop View}
+\begin{itemize}[leftmargin=*]
+  \item Multi-column dashboard layout (skills summary, projects, recommendations).
+  \item Side-by-side job posting and match breakdown panels.
+  \item Admin tables with sortable columns for roles and weights.
+\end{itemize}
+
+\subsection{Mobile View}
+\begin{itemize}[leftmargin=*]
+  \item Single-column stacked cards with collapsible sections.
+  \item Match results displayed as expandable lists (Exact/Related/Missing).
+  \item Sticky action buttons for core actions (Analyze, Save, Add Skill).
+\end{itemize}
+
+% =========================
+\section{System Vision Document (SVD)} % (Rubric #13)
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{p{0.24\linewidth} p{0.68\linewidth}}
+\toprule
+\textbf{Element} & \textbf{Description} \\
+\midrule
+Vision & Centralize skills/projects into a dashboard and evaluate job fit by analyzing user-pasted job postings. \\
+Target Users & Students (standard users) and Admin moderators for taxonomy, moderation, and role analytics. \\
+Business Need & Reduce friction in job preparation by showing readiness, evidence-backed skills, and actionable gaps. \\
+Capabilities & Portfolio dashboard, skill-evidence mapping, resume import/confirm, job analyzer, admin job library and role weights. \\
+Benefits & Clear readiness metrics, better portfolio organization, more targeted skill building, evolving role expectations. \\
+\bottomrule
+\end{tabular}
+\caption{System Vision Document (SVD) Summary}
+\end{table}
+
+% =========================
+\section{Work Breakdown Structure (WBS) and Iteration Schedule} % (Rubric #14)
+\subsection{WBS (High-Level)}
+\begin{enumerate}[leftmargin=*]
+  \item Requirements \& Planning
+  \item Database \& ERD Finalization
+  \item Backend APIs (portfolio + job posting ingestion)
+  \item Frontend Wireframes to Working UI
+  \item Resume Import + Confirmation Flow
+  \item Job Posting Analyzer + Match Engine
+  \item Admin Library + Role Weight Aggregation
+  \item Testing + Demo Data
+  \item Deployment + Video + Presentation Assets
+\end{enumerate}
+
+\subsection{Iteration Schedule (Work Sequence)}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{p{0.16\linewidth} p{0.76\linewidth}}
+\toprule
+\textbf{Iteration} & \textbf{Deliverables} \\
+\midrule
+Iter 1 & Finalize scope, ERD draft, database schema, initial CRUD for skills/projects/evidence. \\
+Iter 2 & Implement resume import + confirmation; populate demo skills/projects/evidence. \\
+Iter 3 & Implement paste job analyzer + matching; save analysis results; basic UI views. \\
+Iter 4 & Admin moderation + role library aggregation + role-weight views; refine queries. \\
+Iter 5 & UI polish + responsive layout, testing, deployment, finalize documentation + video. \\
+\bottomrule
+\end{tabular}
+\caption{Iteration Schedule}
+\end{table}
+
+% =========================
+\section{ADDIE Model Integration} % (Rubric #15)
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Analyze:} Identify user pain points (scattered experience, unclear job readiness, lack of evidence mapping).
+  \item \textbf{Design:} Define subsystems, user roles, database schema, and wireframes for key workflows.
+  \item \textbf{Develop:} Implement database tables, APIs, matching engine, admin tools, and responsive UI components.
+  \item \textbf{Implement:} Deploy application, load demo postings and portfolio artifacts, run pilot usage with classmates.
+  \item \textbf{Evaluate:} Collect feedback on usability and match relevance; refine taxonomy/aliases and improve UI clarity.
+\end{itemize}
+
+% =========================
+\section{Conclusion}
+\ProjectName\ is a practical, database-driven web application that centralizes evidence-backed skills and projects
+into a portfolio dashboard and evaluates job fit using user-pasted job postings. The four-subsystem architecture
+supports two distinct user types (Student and Admin), includes 16 database-backed features excluding account actions,
+and provides clear artifacts required for capstone planning: use case diagrams, ERD, wireframes, responsive design plan,
+SVD, WBS, and iteration schedule.
+
+\end{document}

@@ -1,0 +1,3 @@
+{"_id": {"$oid": "69ab531c18d9eb602239b5d1"}, "skill_name": "AWS Lambda", "user_id": {"$oid": "69a46a36607c51e7c90e19ab"}, "status": "in_progress", "updated_at": {"$date": "2026-03-06T22:20:14.763Z"}}
+{"_id": {"$oid": "69c5c9613c0f3333644f60a1"}, "skill_name": "MI", "user_id": {"$oid": "69a46a36607c51e7c90e19ab"}, "status": "completed", "updated_at": {"$date": "2026-03-27T00:03:46.864Z"}}
+{"_id": {"$oid": "69cd4d0bbe796a23e593545b"}, "user_id": {"$oid": "69a46a36607c51e7c90e19ab"}, "skill_name": "PyTorch", "status": "completed", "updated_at": {"$date": "2026-04-01T16:51:29.750Z"}}

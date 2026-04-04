@@ -1,11 +1,29 @@
+# Frontend
 
-  # SkillBridge Web Application Design
+React + Vite client for SkillBridge.
 
-  This is a code bundle for SkillBridge Web Application Design. The original project is available at https://www.figma.com/design/C4OyaJcmwRsg2ZAFaZFQ2I/SkillBridge-Web-Application-Design.
+## Scripts
 
-  ## Running the code
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run lint:fix
+npm test
+npm run test:watch
+```
 
-  Run `npm i` to install the dependencies.
+## Containers
 
-  Run `npm run dev` to start the development server.
-  
+- `Dockerfile` is the development container and runs the Vite dev server.
+- `Dockerfile.prod` builds the static app and serves it with nginx.
+- `nginx.conf` keeps SPA routes working by falling back to `index.html`.
+
+## Notes
+
+- The workspace uses npm, backed by `package-lock.json`.
+- The lint setup is flat-config based in `eslint.config.js`.
+- Vitest runs in Node for the current baseline smoke test.
+- Use `frontend/.env.staging.example` and `frontend/.env.production.example` for deployed builds.
+- `VITE_API_BASE` should point at the public backend base URL for the target environment.
+- See `../docs/env_matrix.md` and `../docs/deployment_guide.md` for deployment setup.

@@ -1,3 +1,5 @@
+"""Pydantic schemas for role definitions and computed role weight outputs."""
+
 from __future__ import annotations
 
 from datetime import datetime

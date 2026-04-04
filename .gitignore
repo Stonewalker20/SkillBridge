@@ -4,15 +4,26 @@ __pycache__/
 *.pyo
 *.pyd
 *.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
 dist/
 build/
 
 # Data
 backend/data/raw/
+backend/data/seed/
+backend/ml_sandbox/artifacts/
+backend/ml_sandbox/datasets/generated/
+backend/tests/.tmp_avatars/
+backend/data/uploads/
+backend/backend/data/uploads/
+/data/
 
 # Envs
 .venv/
 venv/
+backend/.venv/
 
 # OS / IDE
 .DS_Store
@@ -29,7 +40,28 @@ venv/
 **/.docker/
 
 # Front End
-frontend/node_modules
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
 
 # Misc
 skillbridge_pr3_usecase.xml
+progressReports.aux
+progressReports.log
+progressReports.out
+progressReports.pdf
+progressReports.toc
+reports/.latex-build/
+reports/.pptx-export/
+reports/*.aux
+reports/*.fdb_latexmk
+reports/*.fls
+reports/*.listing
+reports/*.log
+reports/*.nav
+reports/*.out
+reports/*.snm
+reports/*.synctex.gz
+reports/*.toc
+reports/*.vrb
+reports/~$*.pptx

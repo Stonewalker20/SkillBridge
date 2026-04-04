@@ -1,0 +1,535 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{listings}
+\usepackage{etoolbox}
+\usepackage{multimedia}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{blocks}[rounded][shadow=true]
+
+\definecolor{oublack}{HTML}{121212}
+\definecolor{ougold}{HTML}{B59A57}
+\definecolor{ougoldlight}{HTML}{E3D4A5}
+\definecolor{oustone}{HTML}{F5F1E8}
+\definecolor{ougray}{HTML}{5C5A56}
+\definecolor{ouline}{HTML}{D8CCAB}
+\definecolor{sbnavy}{HTML}{0E172A}
+\definecolor{sbteal}{HTML}{0F766E}
+\definecolor{sbsky}{HTML}{38BDF8}
+\definecolor{sbcoral}{HTML}{F97316}
+\definecolor{sbviolet}{HTML}{7C3AED}
+\definecolor{sbgold}{HTML}{F59E0B}
+\definecolor{sbmint}{HTML}{EAF7F2}
+\definecolor{sbpanel}{HTML}{FBFAF7}
+\definecolor{sbtext}{HTML}{1B1A18}
+\definecolor{sbmuted}{HTML}{706B63}
+\definecolor{sbstring}{HTML}{A5D6FF}
+\definecolor{sblight}{HTML}{E6EDF3}
+
+\setbeamercolor{structure}{fg=ougold}
+\setbeamercolor{title}{fg=oublack}
+\setbeamercolor{subtitle}{fg=ougray}
+\setbeamercolor{author}{fg=ougray}
+\setbeamercolor{date}{fg=ougray}
+\setbeamercolor{normal text}{fg=sbtext,bg=white}
+\setbeamercolor{block title}{fg=white,bg=oublack}
+\setbeamercolor{block body}{fg=sbtext,bg=sbpanel}
+\setbeamercolor{frametitle}{fg=white,bg=oublack}
+\setbeamercolor{footline}{fg=white,bg=oublack}
+
+\newcommand{\oaklandwordmarkpath}{images/Oakland_University_logo.png}
+\newcommand{\oaklandlogopath}{images/oakland_university_logo-freelogovectors.net_.png}
+\newcommand{\skillbridgelogopath}{images/newskillbridgelogo.png}
+\newcommand{\oaklandbrandmark}{%
+  \IfFileExists{\oaklandlogopath}{%
+    \includegraphics[height=0.52cm]{\oaklandlogopath}%
+  }{%
+    \begin{tikzpicture}[baseline=(mark.base)]
+      \node[rounded corners=3pt, fill=ougold, text=oublack, inner xsep=5pt, inner ysep=2.2pt, font=\scriptsize\bfseries] (mark) {OU};
+    \end{tikzpicture}%
+  }%
+}
+\newcommand{\oaklandbrandbadge}{%
+  \raisebox{0.275cm}{\tikz[baseline=(box.base)]\node[rounded corners=4pt, fill=oustone, inner xsep=2.2pt, inner ysep=0.2pt] (box) {\oaklandbrandmark};}%
+}
+\newcommand{\oaklandtitlemark}{%
+  \begin{tikzpicture}[baseline=(mark.base)]
+    \node[text=white, font=\fontsize{26}{26}\selectfont\bfseries] (mark) {OU};
+    \node[text=white!82, font=\fontsize{7.5}{7.5}\selectfont\bfseries] at ([yshift=-10pt]mark.south) {OAKLAND UNIVERSITY};
+  \end{tikzpicture}%
+}
+\newcommand{\skillbridgecornerlogo}{%
+  \IfFileExists{\skillbridgelogopath}{%
+    \includegraphics[height=5.62cm]{\skillbridgelogopath}%
+  }{%
+    {\color{white}\scriptsize\bfseries SkillBridge}%
+  }%
+}
+
+\setbeamertemplate{background canvas}{%
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[white] (current page.south west) rectangle (current page.north east);
+    \fill[oustone] (current page.south west) rectangle ([yshift=0.37cm]current page.south east);
+    \fill[ougold,opacity=0.10] (-0.8,7.2) circle (2.3);
+    \fill[sbteal,opacity=0.05] (13.4,7.4) circle (2.4);
+    \fill[ougoldlight,opacity=0.18] (12.7,-0.2) circle (1.7);
+    \draw[ouline,line width=0.4pt] ([yshift=0.37cm]current page.south west) -- ([yshift=0.37cm]current page.south east);
+  \end{tikzpicture}
+}
+
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip
+  \begin{beamercolorbox}[wd=\paperwidth,ht=1.05cm,dp=0.22cm,leftskip=0.55cm,rightskip=0.3cm]{frametitle}
+    \begin{tikzpicture}[remember picture,overlay]
+      \fill[oublack] (0,0) rectangle (\paperwidth,1.28);
+      \fill[ougold] (0,0) rectangle (\paperwidth,0.10);
+      \fill[ougoldlight,opacity=0.55] (0.55,0.32) rectangle (4.6,0.36);
+    \end{tikzpicture}
+    \vspace*{0.1cm}\insertframetitle
+  \end{beamercolorbox}
+}
+
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=\paperwidth,ht=0.54cm,dp=0.15cm,leftskip=0.38cm,rightskip=0.3cm]{footline}
+      \begin{minipage}[c][0.54cm][c]{0.70\paperwidth}
+        \centering\raisebox{0.265cm}{\scriptsize\bfseries Oakland University\hspace{0.55em}{\scriptsize School of Engineering and Computer Science}}
+      \end{minipage}%
+      \begin{minipage}[c][0.54cm][c]{0.14\paperwidth}
+        \centering\raisebox{0.265cm}{\scriptsize\insertframenumber/\inserttotalframenumber}
+      \end{minipage}%
+      \begin{minipage}[c][0.54cm][c]{0.12\paperwidth}
+        \centering\oaklandbrandbadge
+      \end{minipage}%
+    \end{beamercolorbox}%
+  }%
+}
+
+\lstdefinelanguage{MongoShell}{
+  morekeywords={const,db,ObjectId,ISODate,true,false,null},
+  morekeywords=[2]{$match,$lookup,$unwind,$project,$group,$sort,$limit,$addFields,$size,$sum,$arrayElemAt,$in,$lte},
+  sensitive=true,
+  morestring=[b]",
+}
+
+\lstdefinestyle{deckquery}{
+  language=MongoShell,
+  backgroundcolor=\color{sbnavy},
+  basicstyle=\ttfamily\fontsize{5.2}{5.8}\selectfont\color{sblight},
+  identifierstyle=\color{sblight},
+  keywordstyle=\color{sbteal},
+  keywordstyle=[2]\color{sbsky},
+  stringstyle=\color{sbstring},
+  showstringspaces=false,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  framerule=0pt,
+  aboveskip=2pt,
+  belowskip=2pt
+}
+
+\newcommand{\pill}[2]{%
+  \tikz[baseline=-0.6ex]\node[rounded corners=8pt, fill=#1, text=white, inner xsep=8pt, inner ysep=3.5pt, font=\scriptsize\bfseries]{#2};%
+}
+\newcommand{\ucgoal}[1]{\textcolor{sbteal}{\textbf{Goal:}} #1}
+\newcommand{\visualcard}[2]{%
+  \begin{beamercolorbox}[wd=\linewidth,rounded=true,shadow=true,sep=0.22cm]{block body}
+    \centering
+    \includegraphics[width=\linewidth,height=0.57\textheight,keepaspectratio]{#1}
+  \end{beamercolorbox}
+}
+\newcommand{\plainvisual}[2][0.69\textheight]{%
+  \centering
+  \includegraphics[width=\linewidth,height=#1,keepaspectratio]{#2}
+}
+\newcommand{\livelyvisual}[1]{%
+  \begin{tikzpicture}
+    \node[rounded corners=16pt, fill=oustone, minimum width=\linewidth, minimum height=0.66\textheight, inner sep=0pt] (panel) {};
+    \fill[sbsky, opacity=0.16] ([xshift=0.35cm,yshift=-0.28cm]panel.north west) circle (0.85cm);
+    \fill[sbcoral, opacity=0.14] ([xshift=-0.4cm,yshift=0.35cm]panel.south east) circle (1.0cm);
+    \fill[sbteal, opacity=0.10] ([xshift=4.9cm,yshift=-0.2cm]panel.north west) rectangle ++(1.55cm,-0.16cm);
+    \node[inner sep=0pt] at (panel.center) {\includegraphics[width=0.95\linewidth,height=0.60\textheight,keepaspectratio]{#1}};
+  \end{tikzpicture}%
+}
+\newcommand{\videocard}[2]{%
+  \begin{beamercolorbox}[wd=\linewidth,rounded=true,shadow=true,sep=0.18cm]{block body}
+    \centering
+    \begin{tikzpicture}
+      \node[inner sep=0pt, rounded corners=12pt] (poster) {\includegraphics[width=0.92\linewidth,height=0.51\textheight,keepaspectratio]{#2}};
+      \fill[oustone, opacity=0.34, rounded corners=14pt] ([xshift=0.18cm,yshift=-0.18cm]poster.north west) rectangle ([xshift=-0.18cm,yshift=0.18cm]poster.south east);
+      \fill[white, opacity=0.94] (poster.center) circle (0.64cm);
+      \fill[ougold] ([xshift=-0.10cm,yshift=0.18cm]poster.center) -- ([xshift=-0.10cm,yshift=-0.18cm]poster.center) -- ([xshift=0.22cm,yshift=0cm]poster.center) -- cycle;
+      \node[anchor=south west, fill=white, rounded corners=8pt, inner xsep=10pt, inner ysep=4pt, font=\scriptsize\bfseries, text=oustone] at ([xshift=0.24cm,yshift=0.24cm]poster.south west) {Project walkthrough preview};
+    \end{tikzpicture}
+
+    \vspace{0.55em}
+    \href{run:#1}{\beamerbutton{Open demo video}}
+  \end{beamercolorbox}
+}
+\newcommand{\placeholdercard}[1]{%
+  \begin{beamercolorbox}[wd=\linewidth,rounded=true,shadow=true,sep=0.22cm]{block body}
+    \fbox{%
+      \parbox[c][0.57\textheight][c]{0.96\linewidth}{%
+        \centering
+        \small Screenshot Placeholder\\[0.5em]
+        \scriptsize #1
+      }%
+    }
+  \end{beamercolorbox}
+}
+\setbeamertemplate{title page}{%
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[oustone] (current page.south west) rectangle (current page.north east);
+    \fill[ougold] (current page.north west) rectangle ([xshift=3.0cm,yshift=-0.14cm]current page.north west);
+    \fill[ougold,opacity=0.12] ([xshift=10.8cm,yshift=5.9cm]current page.south west) circle (2.5cm);
+    \fill[sbteal,opacity=0.10] ([xshift=1.0cm,yshift=1.0cm]current page.south west) circle (1.8cm);
+    \fill[oublack,opacity=0.05] ([xshift=12.4cm,yshift=1.5cm]current page.south west) circle (1.3cm);
+    \draw[ouline,line width=0.7pt] ([xshift=0.62cm,yshift=0.78cm]current page.south west) rectangle ([xshift=-0.62cm,yshift=-0.78cm]current page.north east);
+    \IfFileExists{\skillbridgelogopath}{%
+      \node[anchor=north west] at ([xshift=-0.75cm,yshift=0.90cm]current page.north west) {\includegraphics[height=5cm]{\skillbridgelogopath}};
+    }{}
+  \end{tikzpicture}
+  \vspace*{0.72cm}
+  \begin{minipage}[t][0.77\textheight][t]{\textwidth}
+    \IfFileExists{\skillbridgelogopath}{%
+      \vspace*{1.05cm}\par
+    }{%
+      {\color{oublack}\fontsize{21}{25}\selectfont\bfseries\inserttitle\par}
+    }%
+    \vspace{0.45em}
+    {\color{sbmuted}\normalsize\insertsubtitle\par}
+    \vspace{0.35em}
+    {\color{oublack}\normalsize\insertauthor\par}
+    \vspace{0.35em}
+    {\color{sbmuted}\small School of Engineering and Computer Science\par}
+    \vspace{0.35em}
+    {\color{sbmuted}\small\insertdate\par}
+    \vfill
+    \vspace*{2.2cm}
+    \IfFileExists{\oaklandwordmarkpath}{%
+      \begin{center}
+        \includegraphics[width=0.18\linewidth]{\oaklandwordmarkpath}
+      \end{center}
+    }{%
+      \begin{center}
+        {\color{oublack}\large Oakland University}
+      \end{center}
+    }%
+  \end{minipage}
+}
+\title{SkillBridge}
+\subtitle{CSI 4999 Senior Capstone}
+\institute{Oakland University}
+\author{Justin Elia \and Spencer Roeren \and Cordell Stonecipher}
+\date{April 2026}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+\begin{frame}{System At A Glance}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \column{0.30\textwidth}
+    \vspace{0.15em}
+    {\small SkillBridge turns projects, evidence, resumes, and job analysis into one guided career workspace.}
+
+    \vspace{1.1em}
+    \pill{sbteal}{React Frontend}\hspace{0.3em}
+    \pill{sbsky}{FastAPI Backend}\hspace{0.3em}
+    \pill{sbcoral}{MongoDB}
+
+    \vspace{0.75em}
+    \begin{beamercolorbox}[wd=\linewidth,rounded=true,shadow=true,sep=0.14cm]{block body}
+      {\color{oublack}\scriptsize\bfseries Architecture Overview}\par
+      \vspace{0.18em}
+      \includegraphics[width=\linewidth,height=0.22\textheight,keepaspectratio]{images/ArchitectureDiagram.png}
+    \end{beamercolorbox}
+    \column{0.67\textwidth}
+    \plainvisual[0.76\textheight]{images/UseCaseDiagram.png}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Users and Core Flows}
+  {\small SkillBridge supports two clear roles with focused tools for users and admins, while the matching flow turns a job post, user skills, and saved proof into one simple result.}
+
+  \vspace{0.55em}
+  \plainvisual[0.72\textheight]{images/CoreFlowsDIagram.png}
+\end{frame}
+
+\begin{frame}{Database ERD}
+  {\small The database is organized around identity, portfolio evidence, the skill graph, and job-matching outcomes.}
+
+  \vspace{0.5em}
+  \plainvisual[0.72\textheight]{images/ERDDiagram.png}
+\end{frame}
+
+\begin{frame}[fragile,shrink=2]{Dashboard Page}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \column{0.28\textwidth}
+    \vspace{-0.7em}
+    \begin{block}{Dashboard View for Portfolio History and Progress}
+      {\scriptsize
+      \begin{itemize}
+        \item UC 1.1 Manage project entry
+        \item UC 1.4 Dashboard summary
+      \end{itemize}}
+    \end{block}
+    \begin{block}{Mongo Query}
+      \begin{lstlisting}[style=deckquery]
+db.evidence.aggregate([
+  {$match: {user_id: userId}},
+  {$unwind: "$skill_ids"},
+  {$group: {_id: "$skill_ids",
+            evidence_count: {$sum: 1}}}
+])
+      \end{lstlisting}
+    \end{block}
+    \column{0.68\textwidth}
+    \plainvisual[0.73\textheight]{images/FinalDashboard.png}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Evidence Page}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \column{0.28\textwidth}
+    \vspace{-0.25em}
+    \begin{block}{Proof Capture, Extraction, and Save Workflow}
+      {\scriptsize
+      \begin{itemize}
+        \item UC 1.3 Add evidence and associate it
+      \end{itemize}}
+    \end{block}
+    \begin{block}{Mongo Query}
+      \begin{lstlisting}[style=deckquery]
+db.evidence.findOne(
+  {_id: ObjectId("69c487ec4f7976837a6b2402")},
+  {title: 1, type: 1,
+   project_id: 1, skill_ids: 1}
+)
+      \end{lstlisting}
+    \end{block}
+    \column{0.68\textwidth}
+    \plainvisual[0.75\textheight]{images/FinalEvidence.png}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile,shrink=5]{Skills}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \column{0.28\textwidth}
+    \vspace{-0.45em}
+    \begin{block}{Main Profile Skill-Management Page}
+      {\scriptsize
+      \begin{itemize}
+        \item UC 2.1 Add a skill with category and tags
+        \item UC 2.2 Update skill proficiency
+      \end{itemize}}
+    \end{block}
+    \begin{block}{Mongo Query}
+      \begin{lstlisting}[style=deckquery]
+db.resume_skill_confirmations.findOne(
+  {user_id: userId,
+   resume_snapshot_id: null},
+  {confirmed: {$slice: 3},
+   updated_at: 1}
+)
+      \end{lstlisting}
+    \end{block}
+    \column{0.68\textwidth}
+    \visualcard{images/FinalSkill.png}{One page for confirmed skills, proficiency control, and profile-facing skill management.}
+  \end{columns}
+\end{frame}
+
+ \begin{frame}[fragile,shrink=5]{Skill Detail View}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \column{0.28\textwidth}
+    \vspace{-0.45em}
+    \begin{block}{One Skill Tied to Proof and Project Context}
+      {\scriptsize
+      \begin{itemize}
+        \item UC 1.2 Link a skill to a project
+        \item UC 2.3 View skill detail with linked evidence
+        \item UC 2.4 Skill gap analysis
+      \end{itemize}}
+    \end{block}
+    \begin{block}{Mongo Query}
+      \begin{lstlisting}[style=deckquery]
+db.project_skill_links.aggregate([
+  {$match: {skill_id: skillId}},
+  {$lookup: {from: "projects",
+             localField: "project_id",
+             foreignField: "_id",
+             as: "project"}}
+])
+      \end{lstlisting}
+    \end{block}
+    \column{0.68\textwidth}
+    \vspace{2.0em}
+    \begin{columns}[T,totalwidth=\linewidth]
+      \column{0.50\linewidth}
+      \plainvisual[0.70\textheight]{images/FinalDetailView.png}
+      \column{0.50\linewidth}
+      \plainvisual[0.70\textheight]{images/week6_skill_detail.png}
+    \end{columns}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile,shrink=5]{Resume Workflow}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \column{0.28\textwidth}
+    \vspace{-0.45em}
+    \begin{block}{Resume-to-Profile Skill Pipeline}
+      {\scriptsize
+      \begin{itemize}
+        \item UC 3.1 Resume ingestion
+        \item UC 3.2 Skill extraction
+        \item UC 3.3 Confirm / reject / edit extracted skills
+        \item UC 3.4 Persist confirmed skills to the profile
+      \end{itemize}}
+    \end{block}
+    \begin{block}{Mongo Query}
+      \begin{lstlisting}[style=deckquery]
+db.resume_skill_confirmations.findOne(
+  {_id: ObjectId("69a1df28994bc3fc6cd4751c")},
+  {confirmed: 1, rejected: 1, edited: 1}
+)
+      \end{lstlisting}
+    \end{block}
+    \column{0.68\textwidth}
+    \visualcard{../ssdconfirmedextractedskills.png}{The confirmation screen shows extraction review, correction, and final promotion into the user's profile.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile,shrink=5]{Admin Job Review}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \column{0.28\textwidth}
+    \vspace{-0.45em}
+    \begin{block}{Admin moderation and job intelligence}
+      {\scriptsize
+      \begin{itemize}
+        \item UC 4.1 Review and moderate submitted jobs
+        \item UC 4.2 Tag a posting by role
+        \item UC 4.3 Aggregate postings by role
+      \end{itemize}}
+    \end{block}
+    \begin{block}{Mongo Query}
+      \begin{lstlisting}[style=deckquery]
+db.jobs.findOne(
+  {_id: ObjectId("69cd6a8856c9b08e2ae488c4")},
+  {title: 1, company: 1,
+   moderation_status: 1,
+   role_ids: 1}
+)
+      \end{lstlisting}
+    \end{block}
+    \column{0.68\textwidth}
+    \visualcard{images/week6_admin_job_review.png}{One admin page for moderation decisions, role tagging, and reusable job review data.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Taxonomy}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \column{0.28\textwidth}
+    \begin{block}{Alias and relationship maintenance}
+      {\scriptsize
+      \begin{itemize}
+        \item UC 4.4 Maintain taxonomy
+      \end{itemize}}
+    \end{block}
+    \begin{block}{Mongo Query}
+      \begin{lstlisting}[style=deckquery]
+db.skill_relations.aggregate([
+  {$match: {$or: [
+    {from_skill_id: skillId},
+    {to_skill_id: skillId}
+  ]}}
+])
+      \end{lstlisting}
+    \end{block}
+    \column{0.68\textwidth}
+    \visualcard{images/finalTaxonomy.png}{Taxonomy editing page for skill aliases and relationship maintenance.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Jobs Page}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \column{0.28\textwidth}
+    \begin{block}{Job Fit and Resume Customization}
+      {\scriptsize
+      \begin{itemize}
+        \item AF 1 Generate job-match analysis
+        \item AF 2 Generate and save tailored resumes
+      \end{itemize}}
+    \end{block}
+    \begin{block}{Mongo Query}
+      \begin{lstlisting}[style=deckquery]
+db.job_match_runs.find(
+  {user_id: userId}
+).sort({created_at: -1}).limit(3)
+      \end{lstlisting}
+    \end{block}
+    \column{0.68\textwidth}
+    \plainvisual[0.72\textheight]{images/JobMatchDiagram.png}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Analytics and Help Pages}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \column{0.28\textwidth}
+    \begin{block}{Guidance and Support Pages}
+      {\scriptsize
+      \begin{itemize}
+        \item AF 3 Skill analytics, learning paths, career paths
+        \item AF 4 Help requests and admin responses
+      \end{itemize}}
+    \end{block}
+    \begin{block}{Mongo Query}
+      \begin{lstlisting}[style=deckquery]
+db.help_requests.find(
+  {user_id: userId}
+).sort({created_at: -1})
+      \end{lstlisting}
+    \end{block}
+    \column{0.68\textwidth}
+    \plainvisual[0.50\textheight]{images/FinalAnalytics.png}
+
+    \vspace{0.35em}
+    \plainvisual[0.30\textheight]{images/FinalHelp.png}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Project Demo Video}
+  \begin{center}
+    \IfFileExists{videos/final.presentation.demo.mp4}{%
+      \videocard{videos/final.presentation.demo.mp4}{images/finalPresentationVideoPoster.png}
+    }{%
+      \IfFileExists{videos/SkillBridge_Walkthrough.mov}{%
+        \videocard{videos/SkillBridge_Walkthrough.mov}{images/finalPresentationVideoPoster.png}
+      }{%
+        \placeholdercard{Drop the presentation demo at \texttt{reports/videos/final.presentation.demo.mp4} or \texttt{reports/videos/SkillBridge\_Walkthrough.mov} and this slide will embed it automatically.}
+      }%
+    }%
+  \end{center}
+\end{frame}
+
+\begin{frame}{Thank You}
+  \begin{center}
+    \vspace*{1.9cm}
+    {\Huge\bfseries Thank you for your time.}
+
+    \vspace{1.2em}
+    {\LARGE\bfseries Any Questions?}
+  \end{center}
+\end{frame}
+
+\end{document}

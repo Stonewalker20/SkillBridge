@@ -1,0 +1,540 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{lastpage}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{pdflscape}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{CSI 4999 -- Senior Capstone}
+\fancyhead[R]{SkillBridge Midterm Report}
+\fancyfoot[L]{SkillBridge}
+\fancyfoot[C]{Page \thepage\ of \pageref{LastPage}}
+\fancyfoot[R]{Winter 2026}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{}{0em}{}
+
+\newcommand{\placeholder}[1]{
+  \begin{figure}[H]
+    \centering
+    \fbox{\parbox[c][2.0in][c]{0.88\linewidth}{\centering #1}}
+  \end{figure}
+}
+
+\newcommand{\figmafigure}[3][0.9\linewidth]{
+  \begin{figure}[H]
+    \centering
+    \IfFileExists{#2}{
+      \includegraphics[width=#1]{#2}
+    }{
+      \fbox{\parbox[c][2.0in][c]{0.88\linewidth}{\centering Export this figure from Figma and save it at\\ \texttt{#2}}}
+    }
+    \caption{#3}
+  \end{figure}
+}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{0.75in}
+  {\Large Oakland University\par}
+  {\large School of Engineering and Computer Science\par}
+  {\large Computer Science and Engineering Department\par}
+  \vspace{0.4in}
+  {\large CSI 4999: Senior Capstone Project\par}
+  {\large Winter 2026\par}
+  {\large Dr. Hadeel M. Jawad\par}
+  \vspace{0.6in}
+  {\LARGE \textbf{SkillBridge}\par}
+  \vspace{0.2in}
+  {\Large \textbf{Midterm Project Report}\par}
+  \vspace{0.4in}
+  \includegraphics[width=0.28\textwidth]{assets/SkillBridgeLogo.png}\par
+  \vspace{0.45in}
+  \begin{tabular}{rl}
+    \textbf{Group Members:} &
+    Justin Elia \\
+    & Spencer Roeren \\
+    & Cordell Stonecipher \\
+  \end{tabular}
+  \vfill
+  {\large Due Date: March 8, 2026\par}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+\section{Project Description}
+
+\subsection{Project Completion Level}
+SkillBridge is approximately \textbf{55\%--60\% complete} at midterm. The project currently has \textbf{12 implemented use cases} with real data and active database persistence. These use cases cover the core value of the product: collecting evidence, extracting and confirming skills, analyzing job fit, identifying skill gaps, generating tailored resumes, and providing user analytics. Login, logout, sign in, and sign up are implemented but are not counted toward the required feature total.
+
+\subsection{System Overview}
+SkillBridge is a full-stack career intelligence platform that helps users turn resumes, projects, coursework, and work artifacts into a structured, evidence-backed skill profile. The system then compares that profile against target job postings, identifies skill gaps, recommends learning paths, and generates tailored resumes for specific opportunities.
+
+\subsection{Targeted Audience}
+The primary target audience is students, early-career professionals, career changers, and job seekers who want to understand how their skills map to real jobs. A secondary audience is administrators or product owners who need visibility into user activity, moderation workflows, and platform health.
+
+\subsection{Similar Product}
+Products similar to SkillBridge include LinkedIn, Teal, Resume Worded, Handshake, and career readiness platforms that help users optimize resumes and compare their experience to job postings. SkillBridge differs by combining evidence-backed skill confirmation, job-match analysis, local AI tooling, skill trajectory modeling, and tailored resume generation in one product.
+
+\subsection{Source of Revenue}
+Potential revenue sources for SkillBridge include:
+\begin{itemize}[leftmargin=1.25em]
+  \item subscription plans for premium analytics and tailored resume generation
+  \item university or institutional licensing
+  \item employer-facing recruiting and candidate matching dashboards
+  \item premium job intelligence and learning-path recommendations
+\end{itemize}
+
+\subsection{User Types}
+SkillBridge currently includes at least two user types:
+\begin{itemize}[leftmargin=1.25em]
+  \item \textbf{Standard User:} manages evidence, skills, job matches, analytics, resumes, and account settings
+  \item \textbf{Owner/Admin/Team User:} has access to all standard-user features plus the Admin Workspace for moderation, role management, and system oversight
+\end{itemize}
+
+\section{Software Architecture}
+
+\subsection{Subsystems and Features}
+The project currently includes more than the required five subsystems:
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Authentication and Account Management}
+  \begin{itemize}[leftmargin=1.25em]
+    \item user registration and login
+    \item session-based authentication
+    \item profile avatar upload and preset selection
+    \item account preferences and theme customization
+  \end{itemize}
+  \item \textbf{Skills Management}
+  \begin{itemize}[leftmargin=1.25em]
+    \item browse skill catalog
+    \item add custom skills
+    \item confirm extracted skills
+    \item update skill proficiency
+  \end{itemize}
+  \item \textbf{Evidence Management}
+  \begin{itemize}[leftmargin=1.25em]
+    \item paste evidence text
+    \item upload PDF and DOCX evidence
+    \item multi-file analysis
+    \item save and edit evidence
+  \end{itemize}
+  \item \textbf{Dashboard and Analytics}
+  \begin{itemize}[leftmargin=1.25em]
+    \item dashboard summary metrics
+    \item recent activity feed
+    \item top skill categories
+    \item skill trajectory and learning path analytics
+  \end{itemize}
+  \item \textbf{Job Match Analysis}
+  \begin{itemize}[leftmargin=1.25em]
+    \item ingest job posting
+    \item compute matched and missing skills
+    \item semantic alignment and keyword overlap
+    \item gap reasoning and reanalysis
+  \end{itemize}
+  \item \textbf{Tailored Resume Generation}
+  \begin{itemize}[leftmargin=1.25em]
+    \item preview tailored resume
+    \item generate PDF output
+    \item save tailored resumes
+    \item reopen prior resume generations
+  \end{itemize}
+  \item \textbf{Admin Workspace}
+  \begin{itemize}[leftmargin=1.25em]
+    \item system overview metrics
+    \item user role management
+    \item job moderation workflows
+  \end{itemize}
+\end{enumerate}
+
+\subsection{Technology}
+SkillBridge uses the following technology stack:
+\begin{itemize}[leftmargin=1.25em]
+  \item \textbf{IDE / Development Environment:} Visual Studio Code and a local terminal-based workflow
+  \item \textbf{Backend:} FastAPI with Python 3.12
+  \item \textbf{Frontend:} React with Vite and TypeScript
+  \item \textbf{Database:} MongoDB
+  \item \textbf{Version Control:} Git and GitHub
+  \item \textbf{Testing:} Pytest for backend route and contract testing
+  \item \textbf{Local AI Components:} local transformer embeddings, retrieval-augmented grounding, local LLM-backed rewrite fallback pipeline
+\end{itemize}
+
+\subsection{Use Case Diagrams}
+SkillBridge contains multiple users and many use cases, so the use cases should be split into at least two diagrams to keep them readable.
+
+\subsubsection{Diagram A: Standard User Use Cases}
+Include the following:
+\begin{itemize}[leftmargin=1.25em]
+  \item Load Dashboard Summary
+  \item Browse Skills Catalog
+  \item Add Custom Skill
+  \item Update Skill Proficiency
+  \item Analyze Evidence
+  \item Save Evidence
+  \item Confirm Extracted Skills
+  \item Ingest Job Posting
+  \item Analyze Job Match
+  \item Generate Tailored Resume
+  \item View Analytics
+  \item Update Account Settings
+\end{itemize}
+
+\subsubsection{Diagram B: Admin / Owner User Use Cases}
+Include the following:
+\begin{itemize}[leftmargin=1.25em]
+  \item Load Admin Workspace
+  \item View User Metrics
+  \item Update User Role
+  \item View Pending Jobs
+  \item Moderate Job Submission
+\end{itemize}
+
+\figmafigure{docs/figures/use_case_standard_user.png}{Use Case Diagram A: Standard User workflows}
+\figmafigure{docs/figures/use_case_admin_user.png}{Use Case Diagram B: Admin and owner workflows}
+
+\subsection{Use Case vs NoSQL Query (Table 1)}
+\renewcommand{\arraystretch}{1.15}
+\begin{landscape}
+\scriptsize
+\begin{longtable}{@{}p{0.28in}p{1.15in}p{3.3in}p{1.25in}p{1.35in}p{1.9in}@{}}
+\toprule
+\# & \textbf{Use Case Name} & \textbf{MongoDB Query} & \textbf{Collection(s) Used} & \textbf{File Name} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\toprule
+\# & \textbf{Use Case Name} & \textbf{MongoDB Query} & \textbf{Collection(s) Used} & \textbf{File Name} & \textbf{Description} \\
+\midrule
+\endhead
+1 &
+Load Dashboard Summary &
+\texttt{db.resume\_skill\_confirmations.aggregate([} \newline
+\texttt{\{ \$match: \{ user\_id: <user>, resume\_snapshot\_id: null \} \},} \newline
+\texttt{\{ \$unwind: "\$confirmed" \}, \{ \$group: \{ \_id: "\$confirmed.skill\_id" \} \},} \newline
+\texttt{\{ \$count: "n" \} ])} \newline
+\texttt{db.evidence.countDocuments(\{ user\_id: <user> \})} \newline
+\texttt{db.job\_match\_runs.aggregate([ \{ \$match: \{ user\_id: <user> \} \}, \{ \$group: \{ \_id: null, avg: \{ \$avg: "\$analysis.match\_score" \} \} \} ])} &
+\texttt{resume\_skill\_confirmations}, \texttt{evidence}, \texttt{job\_match\_runs}, \texttt{tailored\_resumes} &
+\texttt{Dashboard.tsx}, \texttt{dashboard.py} &
+When the user loads the dashboard, the system displays total skills, evidence, average match score, recent activity, and summary analytics. \\
+\addlinespace
+2 &
+Browse Skills Catalog &
+\texttt{db.skills.find(\{ hidden: \{ \$ne: true \} \},} \newline
+\texttt{\{ name: 1, category: 1, aliases: 1 \}).sort(\{ name: 1 \}).limit(50)} &
+\texttt{skills} &
+\texttt{Skills.tsx}, \texttt{skills.py} &
+When the user opens the Skills page, the system loads visible skills and the user's confirmed skill library. \\
+\addlinespace
+3 &
+Add Custom Skill &
+\texttt{db.skills.insertOne(\{} \newline
+\texttt{ name: <name>, category: <category>, origin: "user",} \newline
+\texttt{ created\_by\_user\_id: <user>, hidden: false, created\_at: new Date() \})} &
+\texttt{skills} &
+\texttt{Skills.tsx}, \texttt{skills.py} &
+On the Skills page, the user can add a custom skill, which is saved as a user-created catalog entry. \\
+\addlinespace
+4 &
+Update Skill Proficiency &
+\texttt{db.resume\_skill\_confirmations.updateOne(} \newline
+\texttt{\{ user\_id: <user>, resume\_snapshot\_id: null, "confirmed.skill\_id": <skill> \},} \newline
+\texttt{\{ \$set: \{ "confirmed.\$.proficiency": <value>, updated\_at: new Date() \} \})} &
+\texttt{resume\_skill\_confirmations} &
+\texttt{Skills.tsx}, \texttt{confirmations.py} &
+On the Skills page, the user can update proficiency for a confirmed skill. \\
+\addlinespace
+5 &
+Analyze Evidence &
+\texttt{db.skills.find(\{\}, \{ name: 1, aliases: 1, category: 1 \})} \newline
+\texttt{// application layer extracts text, scores skill matches, and returns candidates before persistence} &
+\texttt{skills}, \texttt{evidence} &
+\texttt{Evidence.tsx}, \texttt{evidence.py} &
+When the user uploads files or pastes text, the system extracts text and identifies likely skills before saving. \\
+\addlinespace
+6 &
+Save Evidence &
+\texttt{db.evidence.insertOne(\{} \newline
+\texttt{ user\_id: <user>, title: <title>, type: <type>, source: <source>,} \newline
+\texttt{ text\_excerpt: <text>, skill\_ids: [<skill ids>], origin: "user", created\_at: new Date() \})} &
+\texttt{evidence} &
+\texttt{Evidence.tsx}, \texttt{evidence.py} &
+After review, the user saves evidence and links it to the selected extracted skills. \\
+\addlinespace
+7 &
+Confirm Extracted Skills &
+\texttt{db.resume\_skill\_confirmations.updateOne(} \newline
+\texttt{\{ user\_id: <user>, resume\_snapshot\_id: null \},} \newline
+\texttt{\{ \$set: \{ confirmed: [<skill objects>], rejected: [], edited: [], updated\_at: new Date() \},} \newline
+\texttt{  \$setOnInsert: \{ created\_at: new Date() \} \}, \{ upsert: true \})} &
+\texttt{resume\_skill\_confirmations} &
+\texttt{Skills.tsx}, \texttt{confirmations.py} &
+The user confirms extracted skills into a persistent profile that powers analytics and job matching. \\
+\addlinespace
+8 &
+Ingest Job Posting &
+\texttt{db.job\_ingests.insertOne(\{} \newline
+\texttt{ user\_id: <user>, title: <title>, company: <company>, location: <location>,} \newline
+\texttt{ text: <posting>, extracted\_skills: [<skill objects>], keywords: [<keywords>], created\_at: new Date() \})} &
+\texttt{job\_ingests} &
+\texttt{Jobs.tsx}, \texttt{tailor.py} &
+The user submits a new job posting so it can be analyzed and saved in history. \\
+\addlinespace
+9 &
+Analyze Job Match &
+\texttt{db.job\_ingests.findOne(\{ \_id: ObjectId(<job\_id>), user\_id: <user> \})} \newline
+\texttt{db.resume\_skill\_confirmations.findOne(\{ user\_id: <user>, resume\_snapshot\_id: null \})} \newline
+\texttt{db.evidence.find(\{ user\_id: <user> \}).sort(\{ updated\_at: -1 \})} \newline
+\texttt{db.job\_match\_runs.insertOne(\{} \newline
+\texttt{ user\_id: <user>, job\_id: <job>, analysis: <computed analysis>, created\_at: new Date(), updated\_at: new Date() \})} &
+\texttt{job\_ingests}, \texttt{resume\_skill\_confirmations}, \texttt{evidence}, \texttt{job\_match\_runs} &
+\texttt{Jobs.tsx}, \texttt{tailor.py} &
+The system computes matched skills, missing skills, semantic alignment, keyword overlap, and job gap reasoning. \\
+\addlinespace
+10 &
+Generate Tailored Resume &
+\texttt{db.tailored\_resumes.insertOne(\{} \newline
+\texttt{ user\_id: <user>, job\_id: <job>, resume\_snapshot\_id: <snapshot>,} \newline
+\texttt{ selected\_skill\_ids: [<ids>], sections: [<section docs>], plain\_text: <text>, created\_at: new Date() \})} &
+\texttt{tailored\_resumes} &
+\texttt{Jobs.tsx}, \texttt{TailoredResumes.tsx}, \texttt{tailor.py} &
+The system generates and stores a tailored resume for the selected job posting. \\
+\addlinespace
+11 &
+View Skill Analytics &
+\texttt{db.resume\_skill\_confirmations.findOne(\{ user\_id: <user>, resume\_snapshot\_id: null \})} \newline
+\texttt{db.evidence.find(\{ user\_id: <user> \})} \newline
+\texttt{db.role\_skill\_weights.find(\{\})} \newline
+\texttt{db.skill\_relations.find(\{\})} &
+\texttt{resume\_skill\_confirmations}, \texttt{evidence}, \texttt{role\_skill\_weights}, \texttt{skill\_relations} &
+\texttt{SkillAnalytics.tsx}, \texttt{taxonomy.py} &
+When the user opens Analytics, the system shows trajectory, clusters, learning paths, and personal vector insights. \\
+\addlinespace
+12 &
+Moderate Job Submission &
+\texttt{db.jobs.updateOne(\{ \_id: ObjectId(<job\_id>) \},} \newline
+\texttt{\{ \$set: \{ moderation\_status: <status>, moderation\_reason: <reason>, moderated\_at: new Date() \} \})} &
+\texttt{jobs} &
+\texttt{Admin.tsx}, \texttt{admin.py} &
+An admin or owner user can approve or reject submitted jobs in the Admin Workspace. \\
+\bottomrule
+\end{longtable}
+\normalsize
+\end{landscape}
+
+\subsection{System Sequence Diagrams (SSD)}
+The report should include one SSD per subsystem or group member. Recommended SSDs:
+\begin{itemize}[leftmargin=1.25em]
+  \item Analyze Job Match
+  \item Confirm Extracted Skills
+  \item Analyze Evidence
+  \item Generate Tailored Resume
+  \item Moderate Job Submission
+\end{itemize}
+
+\figmafigure{docs/figures/ssd_analyze_job_match.png}{SSD: Analyze Job Match}
+\figmafigure{docs/figures/ssd_confirm_extracted_skills.png}{SSD: Confirm Extracted Skills}
+\figmafigure{docs/figures/ssd_analyze_evidence.png}{SSD: Analyze Evidence}
+\figmafigure{docs/figures/ssd_generate_tailored_resume.png}{SSD: Generate Tailored Resume}
+\figmafigure{docs/figures/ssd_moderate_job_submission.png}{SSD: Moderate Job Submission}
+
+\subsection{Activity Diagram}
+Use the \textbf{Analyze Job Match} use case for the activity diagram because it spans multiple subsystems and shows clear flow across frontend, backend, analytics, and persistence.
+
+\figmafigure{docs/figures/activity_analyze_job_match.png}{Activity Diagram: Analyze Job Match}
+
+\section{User Interface Design}
+
+\subsection{Wireframes}
+Initial wireframes focused on the dashboard, skills page, evidence page, and job-match page. These wireframes were used to establish page flow, navigation, and feature grouping before data and styling were added.
+
+\placeholder{Insert wireframe screenshots here}
+
+\subsection{Mockups}
+The wireframes evolved into higher-fidelity mockups and then into the implemented frontend. The current project includes mockup-quality interfaces with real data, including:
+\begin{itemize}[leftmargin=1.25em]
+  \item Dashboard
+  \item Skills
+  \item Evidence
+  \item Job Match
+  \item Tailored Resumes
+  \item Admin Workspace
+\end{itemize}
+
+\placeholder{Insert professional mockups with data here}
+
+\subsection{Responsive Design}
+SkillBridge is a web application and includes responsive design for large and small screens. Two pages that should be shown in both desktop and mobile form are:
+\begin{itemize}[leftmargin=1.25em]
+  \item Evidence page
+  \item Job Match page
+\end{itemize}
+Responsive layouts use stacked cards, scrollable sections, compact controls, and adaptive page grids.
+
+\placeholder{Insert mobile-responsive screenshots here}
+
+\subsection{HCI Rules Discussion}
+Three HCI rules clearly applied in SkillBridge are:
+
+\subsubsection{Visibility of System Status}
+The interface shows loading states, score cards, progress indicators, extracted-skill counts, and recent activity so the user understands what the system is doing.
+
+\subsubsection{Consistency and Standards}
+The project uses consistent cards, action buttons, iconography, color treatments, and sidebar navigation across pages.
+
+\subsubsection{User Control and Freedom}
+Users can edit evidence, remove incorrect skills from analysis, reanalyze jobs, choose avatar presets, update header style, clear recent activity, and select different resume-generation sources.
+
+\placeholder{Insert HCI screenshots here}
+
+\subsection{Final Screenshots}
+The final screenshots section should include the actual working pages with real data and visible user interactions.
+
+\placeholder{Insert final screenshots of implemented pages here}
+
+\section{Database Design}
+
+\subsection{Tables / Collections}
+SkillBridge uses MongoDB collections as its primary persistence layer. The key collections currently include:
+\begin{itemize}[leftmargin=1.25em]
+  \item \texttt{users}
+  \item \texttt{sessions}
+  \item \texttt{skills}
+  \item \texttt{resume\_skill\_confirmations}
+  \item \texttt{evidence}
+  \item \texttt{projects}
+  \item \texttt{job\_ingests}
+  \item \texttt{job\_match\_runs}
+  \item \texttt{tailored\_resumes}
+  \item \texttt{role\_skill\_weights}
+  \item \texttt{skill\_relations}
+  \item \texttt{learning\_path\_progress}
+\end{itemize}
+
+\subsection{ERD}
+The ERD should show the user as the central entity connected to evidence, confirmed skills, job-match runs, tailored resumes, sessions, and role-based access data. The main table or collection requirement is satisfied through the skills catalog, which contains more than 30 entries, while supporting collections contain roughly 10 or more records each for testing and demonstration.
+
+\placeholder{Insert ERD here}
+\placeholder{Insert database table / collection screenshots here}
+
+\section{Sample Code Individual Code Explanation}
+
+\subsection{Cordell Stonecipher}
+\textbf{Name: Cordell Stonecipher}
+
+\subsubsection{Selected Function}
+Analyze Job Match in \texttt{backend/app/routers/tailor.py}
+
+\subsubsection{Explanation}
+This function coordinates the most important workflow in SkillBridge. It loads the stored job posting, the user's confirmed skills, the user's evidence, retrieved context, and semantic embeddings. It then computes matched skills, missing skills, required coverage, preferred coverage, semantic alignment, personal vector alignment, and gap reasoning. The result is saved to history so the user can revisit the job later.
+
+\subsubsection{Required Inserts}
+\begin{itemize}[leftmargin=1.25em]
+  \item code screenshot
+  \item one-to-two page written explanation
+  \item flowchart
+\end{itemize}
+
+\subsection{Justin Elia}
+\textbf{Name: Justin Elia}
+
+\subsubsection{Selected Function}
+Confirm Extracted Skills in \texttt{backend/app/routers/confirmations.py}
+
+\subsubsection{Explanation}
+This function takes reviewed extracted skills and converts them into persistent confirmed user skills. It supports confirming skills, rejecting skills, and updating the user's skill profile for later analytics and job matching.
+
+\subsubsection{Required Inserts}
+\begin{itemize}[leftmargin=1.25em]
+  \item code screenshot
+  \item one-to-two page written explanation
+  \item flowchart
+\end{itemize}
+
+\subsection{Spencer Roeren}
+\textbf{Name: Spencer Roeren}
+
+\subsubsection{Selected Function}
+Analyze Evidence workflow in \texttt{frontend/src/app/pages/Evidence.tsx}
+
+\subsubsection{Explanation}
+This workflow drives the evidence experience in the frontend. It handles paste input, file upload, extracted-skill review, evidence saving, and follow-up user interactions.
+
+\subsubsection{Required Inserts}
+\begin{itemize}[leftmargin=1.25em]
+  \item code screenshot
+  \item one-to-two page written explanation
+  \item flowchart
+\end{itemize}
+
+\section{Future Update}
+Planned future updates for SkillBridge include:
+\begin{itemize}[leftmargin=1.25em]
+  \item refining job-match reasoning and score transparency
+  \item improving local model speed and extraction accuracy
+  \item expanding learning resources and trajectory recommendations
+  \item increasing admin tooling and reporting features
+  \item polishing mobile responsiveness and presentation quality
+\end{itemize}
+
+\section{Appendix A: System Vision Document}
+\subsection{Problem Statement}
+Job seekers often have fragmented evidence of their skills and limited visibility into how their background aligns with specific jobs.
+
+\subsection{Vision}
+SkillBridge will help users turn evidence into structured skills, compare their profile to jobs, identify career gaps, and generate targeted resumes using local intelligence.
+
+\subsection{Objectives}
+\begin{itemize}[leftmargin=1.25em]
+  \item centralize user evidence and skill confirmation
+  \item provide explainable job-match analysis
+  \item support learning paths and career trajectory planning
+  \item generate tailored resumes from real user evidence
+\end{itemize}
+
+\section{Appendix B: Work Breakdown Structure}
+\begin{enumerate}[leftmargin=1.5em]
+  \item Project setup and repository initialization
+  \item Database design and sample data preparation
+  \item Authentication and user-role implementation
+  \item Skills and confirmations subsystem
+  \item Evidence ingestion and extraction subsystem
+  \item Dashboard and analytics subsystem
+  \item Job Match subsystem
+  \item Tailored Resume subsystem
+  \item Admin subsystem
+  \item Testing, CI, and deployment preparation
+  \item Midterm report, slides, and presentation preparation
+\end{enumerate}
+
+\section{References}
+\begin{enumerate}[leftmargin=1.5em]
+  \item CSI 4999 course textbook and lecture materials
+  \item LinkedIn, \url{https://www.linkedin.com}
+  \item Teal, \url{https://www.tealhq.com}
+  \item Resume Worded, \url{https://resumeworded.com}
+  \item Handshake, \url{https://joinhandshake.com}
+  \item FastAPI documentation, \url{https://fastapi.tiangolo.com}
+  \item React documentation, \url{https://react.dev}
+  \item MongoDB documentation, \url{https://www.mongodb.com/docs}
+\end{enumerate}
+
+\end{document}

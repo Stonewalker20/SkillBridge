@@ -1,0 +1,75 @@
+\documentclass{article}
+\usepackage[paperwidth=12in,paperheight=7in,margin=0.2in]{geometry}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\pagestyle{empty}
+
+\begin{document}
+\centering
+\begin{tikzpicture}[
+  actor/.style={
+    draw,
+    rounded corners=4pt,
+    minimum width=1.55in,
+    minimum height=0.6in,
+    align=center,
+    font=\bfseries
+  },
+  uc/.style={
+    draw,
+    rounded corners=16pt,
+    minimum width=3.15in,
+    minimum height=1.0in,
+    text width=2.75in,
+    align=center,
+    font=\bfseries\small,
+    fill=blue!8
+  },
+  adminuc/.style={
+    uc,
+    fill=red!8
+  },
+  taxonomyuc/.style={
+    uc,
+    fill=green!10
+  },
+  link/.style={
+    line width=0.9pt,
+    -{Latex[length=2.5mm]}
+  }
+]
+
+\node[font=\bfseries\LARGE, text=blue!55!black] at (0,4.0) {PR6 Use Case Diagram};
+\node[font=\large, text=black!60] at (0,3.5) {Week 6 highlighted use cases};
+
+\draw[rounded corners=10pt, line width=1.0pt, draw=blue!45!black, fill=black!2]
+  (-4.9,-2.7) rectangle (4.9,2.9);
+\node[anchor=west, font=\bfseries\large, text=blue!55!black] at (-4.55,2.5) {SkillBridge System};
+
+\node[actor] (student) at (-6.55,1.1) {Student\\User};
+\node[actor] (admin) at (6.55,0.0) {Admin\\User};
+
+\node[uc] (uc23) at (-0.2,1.35) {UC 2.3\\View Skill Detail Page\\with Linked Projects and Evidence};
+\node[adminuc] (uc42) at (0.85,0.0) {UC 4.2\\Tag a Posting by Role};
+\node[taxonomyuc] (uc44) at (-0.2,-1.45) {UC 4.4\\Maintain Taxonomy:\\Skill Aliases and Relationships};
+
+\draw[link, blue!70!black] (student.east) -- (uc23.west);
+\draw[link, red!70!black] (admin.west) -- (uc42.east);
+\draw[link, green!45!black] (admin.west) |- (uc44.east);
+
+\node[
+  draw,
+  rounded corners=6pt,
+  fill=white,
+  align=left,
+  font=\small,
+  anchor=south east
+] at (4.45,-2.35) {
+  \textbf{Legend}\\[2pt]
+  Blue: student portfolio workflow\\
+  Red: admin job workflow\\
+  Green: admin taxonomy workflow
+};
+
+\end{tikzpicture}
+\end{document}
