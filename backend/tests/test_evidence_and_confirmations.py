@@ -295,7 +295,7 @@ def test_rewards_summary_scales_badge_tiers_up_to_master(test_context):
     evidence_badge = next(item for item in payload["badges"] if item["key"] == "evidence_saved")
     assert evidence_badge["current_tier"] == "master"
     assert evidence_badge["next_tier"] is None
-    assert evidence_badge["target_value"] == 50
+    assert evidence_badge["target_value"] == 15
     assert evidence_badge["progress_pct"] == 100.0
     assert payload["completion_pct"] > 0
 

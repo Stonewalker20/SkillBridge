@@ -5,7 +5,6 @@ import {
   Image as ImageIcon,
   LayoutDashboard,
   LifeBuoy,
-  PlayCircle,
   ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";

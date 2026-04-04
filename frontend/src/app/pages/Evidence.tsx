@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type Evidence, type EvidenceAnalysis, type RewardsSummary } from "../services/api";
+import { api, type Evidence as EvidenceItem, type EvidenceAnalysis, type RewardsSummary } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
 import { Card } from "../components/ui/card";
@@ -68,7 +68,7 @@ export function Evidence() {
   const { activeHeaderTheme } = useHeaderTheme();
   const { preferences } = useAccountPreferences();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [items, setItems] = useState<Evidence[]>([]);
+  const [items, setItems] = useState<EvidenceItem[]>([]);
   const [skillNameById, setSkillNameById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [rewards, setRewards] = useState<RewardsSummary | null>(null);
