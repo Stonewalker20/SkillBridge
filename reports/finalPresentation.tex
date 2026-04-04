@@ -45,6 +45,7 @@
 
 \newcommand{\oaklandwordmarkpath}{images/Oakland_University_logo.png}
 \newcommand{\oaklandlogopath}{images/oakland_university_logo-freelogovectors.net_.png}
+\newcommand{\skillbridgelogopath}{images/newskillbridgelogo.png}
 \newcommand{\oaklandbrandmark}{%
   \IfFileExists{\oaklandlogopath}{%
     \includegraphics[height=0.52cm]{\oaklandlogopath}%
@@ -62,6 +63,13 @@
     \node[text=white, font=\fontsize{26}{26}\selectfont\bfseries] (mark) {OU};
     \node[text=white!82, font=\fontsize{7.5}{7.5}\selectfont\bfseries] at ([yshift=-10pt]mark.south) {OAKLAND UNIVERSITY};
   \end{tikzpicture}%
+}
+\newcommand{\skillbridgecornerlogo}{%
+  \IfFileExists{\skillbridgelogopath}{%
+    \includegraphics[height=5.62cm]{\skillbridgelogopath}%
+  }{%
+    {\color{white}\scriptsize\bfseries SkillBridge}%
+  }%
 }
 
 \setbeamertemplate{background canvas}{%
@@ -152,10 +160,19 @@
     \node[inner sep=0pt] at (panel.center) {\includegraphics[width=0.95\linewidth,height=0.60\textheight,keepaspectratio]{#1}};
   \end{tikzpicture}%
 }
-\newcommand{\videocard}[1]{%
-  \begin{beamercolorbox}[wd=\linewidth,rounded=true,shadow=true,sep=0.24cm]{block body}
+\newcommand{\videocard}[2]{%
+  \begin{beamercolorbox}[wd=\linewidth,rounded=true,shadow=true,sep=0.18cm]{block body}
     \centering
-    \movie[width=0.92\linewidth,height=0.58\textheight,poster,showcontrols]{}{#1}
+    \begin{tikzpicture}
+      \node[inner sep=0pt, rounded corners=12pt] (poster) {\includegraphics[width=0.92\linewidth,height=0.51\textheight,keepaspectratio]{#2}};
+      \fill[oustone, opacity=0.34, rounded corners=14pt] ([xshift=0.18cm,yshift=-0.18cm]poster.north west) rectangle ([xshift=-0.18cm,yshift=0.18cm]poster.south east);
+      \fill[white, opacity=0.94] (poster.center) circle (0.64cm);
+      \fill[ougold] ([xshift=-0.10cm,yshift=0.18cm]poster.center) -- ([xshift=-0.10cm,yshift=-0.18cm]poster.center) -- ([xshift=0.22cm,yshift=0cm]poster.center) -- cycle;
+      \node[anchor=south west, fill=white, rounded corners=8pt, inner xsep=10pt, inner ysep=4pt, font=\scriptsize\bfseries, text=oustone] at ([xshift=0.24cm,yshift=0.24cm]poster.south west) {Project walkthrough preview};
+    \end{tikzpicture}
+
+    \vspace{0.55em}
+    \href{run:#1}{\beamerbutton{Open demo video}}
   \end{beamercolorbox}
 }
 \newcommand{\placeholdercard}[1]{%
@@ -177,22 +194,30 @@
     \fill[sbteal,opacity=0.10] ([xshift=1.0cm,yshift=1.0cm]current page.south west) circle (1.8cm);
     \fill[oublack,opacity=0.05] ([xshift=12.4cm,yshift=1.5cm]current page.south west) circle (1.3cm);
     \draw[ouline,line width=0.7pt] ([xshift=0.62cm,yshift=0.78cm]current page.south west) rectangle ([xshift=-0.62cm,yshift=-0.78cm]current page.north east);
+    \IfFileExists{\skillbridgelogopath}{%
+      \node[anchor=north west] at ([xshift=-0.75cm,yshift=0.90cm]current page.north west) {\includegraphics[height=5cm]{\skillbridgelogopath}};
+    }{}
   \end{tikzpicture}
   \vspace*{0.72cm}
   \begin{minipage}[t][0.77\textheight][t]{\textwidth}
-    {\color{oublack}\fontsize{21}{25}\selectfont\bfseries\inserttitle\par}
+    \IfFileExists{\skillbridgelogopath}{%
+      \vspace*{1.05cm}\par
+    }{%
+      {\color{oublack}\fontsize{21}{25}\selectfont\bfseries\inserttitle\par}
+    }%
     \vspace{0.45em}
     {\color{sbmuted}\normalsize\insertsubtitle\par}
-    \vspace{0.95em}
+    \vspace{0.35em}
     {\color{oublack}\normalsize\insertauthor\par}
-    \vspace{0.45em}
-    {\color{sbmuted}\small School of Engineering and Computer Science\\Computer Science and Engineering Department\par}
-    \vspace{0.3em}
+    \vspace{0.35em}
+    {\color{sbmuted}\small School of Engineering and Computer Science\par}
+    \vspace{0.35em}
     {\color{sbmuted}\small\insertdate\par}
     \vfill
+    \vspace*{2.2cm}
     \IfFileExists{\oaklandwordmarkpath}{%
       \begin{center}
-        \includegraphics[width=0.24\linewidth]{\oaklandwordmarkpath}
+        \includegraphics[width=0.18\linewidth]{\oaklandwordmarkpath}
       \end{center}
     }{%
       \begin{center}
@@ -201,11 +226,11 @@
     }%
   \end{minipage}
 }
-\title{SkillBridge Final Presentation}
-\subtitle{CSI 4999 Senior Capstone Project}
+\title{SkillBridge}
+\subtitle{CSI 4999 Senior Capstone}
 \institute{Oakland University}
 \author{Justin Elia \and Spencer Roeren \and Cordell Stonecipher}
-\date{Winter 2026}
+\date{April 2026}
 
 \begin{document}
 
@@ -223,96 +248,42 @@
     \pill{sbteal}{React Frontend}\hspace{0.3em}
     \pill{sbsky}{FastAPI Backend}\hspace{0.3em}
     \pill{sbcoral}{MongoDB}
+
+    \vspace{0.75em}
+    \begin{beamercolorbox}[wd=\linewidth,rounded=true,shadow=true,sep=0.14cm]{block body}
+      {\color{oublack}\scriptsize\bfseries Architecture Overview}\par
+      \vspace{0.18em}
+      \includegraphics[width=\linewidth,height=0.22\textheight,keepaspectratio]{images/ArchitectureDiagram.png}
+    \end{beamercolorbox}
     \column{0.67\textwidth}
-    \plainvisual[0.76\textheight]{images/skillbridge_full_use_case_diagram.png}
+    \plainvisual[0.76\textheight]{images/UseCaseDiagram.png}
   \end{columns}
 \end{frame}
 
 \begin{frame}{Users and Core Flows}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \column{0.49\textwidth}
-    {\small\bfseries User Types}\\[-0.15em]
-    \begin{columns}[T,totalwidth=\linewidth]
-      \column{0.49\linewidth}
-      \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio,trim=34 22 34 22,clip]{../use_case_standard_user.png}
-      \column{0.49\linewidth}
-      \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio,trim=34 22 34 22,clip]{../use_case_admin_user.png}
-    \end{columns}
-    \column{0.49\textwidth}
-    {\small\bfseries Core Pipeline}\\[-0.15em]
-    \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio,trim=24 28 24 28,clip]{../job_match_analysis_pipeline_flowchart.png}
-  \end{columns}
+  {\small SkillBridge supports two clear roles with focused tools for users and admins, while the matching flow turns a job post, user skills, and saved proof into one simple result.}
+
+  \vspace{0.55em}
+  \plainvisual[0.72\textheight]{images/CoreFlowsDIagram.png}
 \end{frame}
 
 \begin{frame}{Database ERD}
-  \centering
-  \resizebox{0.97\textwidth}{!}{%
-  \begin{tikzpicture}[
-    x=1cm,y=1cm,
-    panel/.style={rounded corners=18pt, draw=ouline, line width=0.8pt, fill=white, fill opacity=0.88, text opacity=1},
-    label/.style={font=\scriptsize\bfseries, text=ougray},
-    box/.style={rounded corners=10pt, draw=white, line width=0.7pt, text=white, minimum width=2.55cm, minimum height=0.92cm, font=\scriptsize\bfseries, align=center},
-    link/.style={draw=sbnavy!82, line width=1.05pt, -stealth},
-    softlink/.style={draw=sbnavy!58, line width=0.95pt, -stealth},
-    note/.style={font=\scriptsize\color{sbmuted}, align=center}
-  ]
-    \node[panel, fill=sbsky!10] at (2.7,3.85) [minimum width=4.10cm, minimum height=4.20cm] {};
-    \node[label] at (2.7,5.55) {Identity + Support};
-    \node[panel, fill=sbteal!8] at (8.4,3.85) [minimum width=9.10cm, minimum height=4.20cm] {};
-    \node[label] at (8.4,5.55) {Portfolio + Skill Graph};
-    \node[panel, fill=sbgold!10] at (14.7,2.55) [minimum width=5.30cm, minimum height=6.90cm] {};
-    \node[label] at (14.7,5.55) {Resume + Matching};
+  {\small The database is organized around identity, portfolio evidence, the skill graph, and job-matching outcomes.}
 
-    \node[box, fill=oublack] (users) at (8.4,7.0) {USERS};
-
-    \node[box, fill=sbsky!85!oublack] (sessions) at (2.7,4.8) {SESSIONS};
-    \node[box, fill=sbviolet!75!oublack] (help) at (2.7,2.85) {HELP\\REQUESTS};
-
-    \node[box, fill=sbcoral!88!black] (projects) at (5.7,4.8) {PROJECTS};
-    \node[box, fill=sbcoral] (links) at (8.4,4.8) {PROJECT\_SKILL\\LINKS};
-    \node[box, fill=sbteal] (skills) at (11.1,4.8) {SKILLS};
-    \node[box, fill=sbteal!80!black] (evidence) at (5.7,2.85) {EVIDENCE};
-    \node[box, fill=sbviolet] (confirm) at (11.1,2.85) {RESUME\_SKILL\\CONFIRMATIONS};
-
-    \node[box, fill=sbsky!65!sbviolet] (resume) at (14.6,4.8) {RESUME\\SNAPSHOTS};
-    \node[box, fill=sbcoral!82!sbviolet] (jobs) at (14.6,2.85) {JOB\_INGESTS\\+ JOBS};
-    \node[box, fill=sbgold!85!black] (matchruns) at (14.2,0.90) {JOB\_MATCH\\RUNS};
-    \node[box, fill=sbgold!70!sbteal] (tailored) at (17.6,0.90) {TAILORED\\RESUMES};
-
-    \draw[link] (users.south) -- (sessions.north);
-    \draw[link] (users.south) -- (projects.north);
-    \draw[link] (users.south) -- (evidence.north);
-    \draw[link] (users.south) -- (confirm.north);
-    \draw[link] (users.south) -- (resume.north);
-    \draw[link] (users.south) -- (jobs.north);
-    \draw[softlink] (users.south) -- (help.north);
-
-    \draw[link] (projects.east) -- (links.west);
-    \draw[link] (links.east) -- (skills.west);
-    \draw[link] (evidence.east) -| (skills.south west);
-    \draw[link] (confirm.west) -| (skills.south east);
-
-    \draw[link] (resume.south) -- (matchruns.north);
-    \draw[link] (jobs.south) -- (matchruns.north);
-    \draw[link] (jobs.south) -- (tailored.north);
-    \draw[link] (matchruns.east) -- (tailored.west);
-
-    \node[note] at (9.4,-0.35) {Users supply proof, resumes, and jobs; skills connect the portfolio side to matching outcomes.};
-  \end{tikzpicture}
-  }
+  \vspace{0.5em}
+  \plainvisual[0.72\textheight]{images/ERDDiagram.png}
 \end{frame}
 
 \begin{frame}[fragile,shrink=2]{Dashboard Page}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
     \vspace{-0.7em}
-    \begin{block}{Page Coverage}
+    \begin{block}{Dashboard View for Portfolio History and Progress}
       {\scriptsize
       \begin{itemize}
-        \item UC 1.1 Create / manage project entry
+        \item UC 1.1 Manage project entry
         \item UC 1.4 Dashboard summary
-      \end{itemize}
-      Dashboard view for portfolio history and progress.}
+      \end{itemize}}
     \end{block}
     \begin{block}{Mongo Query}
       \begin{lstlisting}[style=deckquery]
@@ -325,7 +296,7 @@ db.evidence.aggregate([
       \end{lstlisting}
     \end{block}
     \column{0.68\textwidth}
-    \plainvisual[0.73\textheight]{images/Dashboard.png}
+    \plainvisual[0.73\textheight]{images/FinalDashboard.png}
   \end{columns}
 \end{frame}
 
@@ -333,12 +304,11 @@ db.evidence.aggregate([
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
     \vspace{-0.25em}
-    \begin{block}{Page Coverage}
+    \begin{block}{Proof Capture, Extraction, and Save Workflow}
       {\scriptsize
       \begin{itemize}
         \item UC 1.3 Add evidence and associate it
-      \end{itemize}
-      Proof capture, extraction, and save workflow.}
+      \end{itemize}}
     \end{block}
     \begin{block}{Mongo Query}
       \begin{lstlisting}[style=deckquery]
@@ -350,7 +320,7 @@ db.evidence.findOne(
       \end{lstlisting}
     \end{block}
     \column{0.68\textwidth}
-    \plainvisual[0.75\textheight]{images/pr5_add_evidence_frontend.png.png.png}
+    \plainvisual[0.75\textheight]{images/FinalEvidence.png}
   \end{columns}
 \end{frame}
 
@@ -358,14 +328,12 @@ db.evidence.findOne(
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
     \vspace{-0.45em}
-    \begin{block}{Page Coverage}
+    \begin{block}{Main Profile Skill-Management Page}
       {\scriptsize
       \begin{itemize}
         \item UC 2.1 Add a skill with category and tags
         \item UC 2.2 Update skill proficiency
-        \item UC 2.4 Skill gap analysis
-      \end{itemize}
-      Main profile skill-management page.}
+      \end{itemize}}
     \end{block}
     \begin{block}{Mongo Query}
       \begin{lstlisting}[style=deckquery]
@@ -378,21 +346,21 @@ db.resume_skill_confirmations.findOne(
       \end{lstlisting}
     \end{block}
     \column{0.68\textwidth}
-    \visualcard{images/Skills.png}{One page for confirmed skills, proficiency control, and profile-facing skill management.}
+    \visualcard{images/FinalSkill.png}{One page for confirmed skills, proficiency control, and profile-facing skill management.}
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile,shrink=5]{Skill Detail View}
+ \begin{frame}[fragile,shrink=5]{Skill Detail View}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
     \vspace{-0.45em}
-    \begin{block}{Page Coverage}
+    \begin{block}{One Skill Tied to Proof and Project Context}
       {\scriptsize
       \begin{itemize}
         \item UC 1.2 Link a skill to a project
         \item UC 2.3 View skill detail with linked evidence
-      \end{itemize}
-      One skill tied to proof and project context.}
+        \item UC 2.4 Skill gap analysis
+      \end{itemize}}
     \end{block}
     \begin{block}{Mongo Query}
       \begin{lstlisting}[style=deckquery]
@@ -406,7 +374,13 @@ db.project_skill_links.aggregate([
       \end{lstlisting}
     \end{block}
     \column{0.68\textwidth}
-    \visualcard{images/week6_skill_detail.png}{Expanded skill detail page connecting one skill to proof and project context.}
+    \vspace{2.0em}
+    \begin{columns}[T,totalwidth=\linewidth]
+      \column{0.50\linewidth}
+      \plainvisual[0.70\textheight]{images/FinalDetailView.png}
+      \column{0.50\linewidth}
+      \plainvisual[0.70\textheight]{images/week6_skill_detail.png}
+    \end{columns}
   \end{columns}
 \end{frame}
 
@@ -414,15 +388,14 @@ db.project_skill_links.aggregate([
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
     \vspace{-0.45em}
-    \begin{block}{Page Coverage}
+    \begin{block}{Resume-to-Profile Skill Pipeline}
       {\scriptsize
       \begin{itemize}
         \item UC 3.1 Resume ingestion
         \item UC 3.2 Skill extraction
         \item UC 3.3 Confirm / reject / edit extracted skills
         \item UC 3.4 Persist confirmed skills to the profile
-      \end{itemize}
-      Resume-to-profile skill pipeline.}
+      \end{itemize}}
     \end{block}
     \begin{block}{Mongo Query}
       \begin{lstlisting}[style=deckquery]
@@ -484,20 +457,19 @@ db.skill_relations.aggregate([
       \end{lstlisting}
     \end{block}
     \column{0.68\textwidth}
-    \visualcard{images/week6_skill_relations.png}{Taxonomy editing page for skill aliases and relationship maintenance.}
+    \visualcard{images/finalTaxonomy.png}{Taxonomy editing page for skill aliases and relationship maintenance.}
   \end{columns}
 \end{frame}
 
 \begin{frame}[fragile]{Jobs Page}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
-    \begin{block}{Page Coverage}
+    \begin{block}{Job Fit and Resume Customization}
       {\scriptsize
       \begin{itemize}
         \item AF 1 Generate job-match analysis
         \item AF 2 Generate and save tailored resumes
-      \end{itemize}
-      Job fit and resume customization page.}
+      \end{itemize}}
     \end{block}
     \begin{block}{Mongo Query}
       \begin{lstlisting}[style=deckquery]
@@ -507,20 +479,19 @@ db.job_match_runs.find(
       \end{lstlisting}
     \end{block}
     \column{0.68\textwidth}
-    \livelyvisual{../ssdanalyzejobmatch.png}
+    \plainvisual[0.72\textheight]{images/JobMatchDiagram.png}
   \end{columns}
 \end{frame}
 
 \begin{frame}[fragile]{Analytics and Help Pages}
   \begin{columns}[T,totalwidth=\textwidth]
     \column{0.28\textwidth}
-    \begin{block}{Page Coverage}
+    \begin{block}{Guidance and Support Pages}
       {\scriptsize
       \begin{itemize}
         \item AF 3 Skill analytics, learning paths, career paths
         \item AF 4 Help requests and admin responses
-      \end{itemize}
-      Guidance and support pages.}
+      \end{itemize}}
     \end{block}
     \begin{block}{Mongo Query}
       \begin{lstlisting}[style=deckquery]
@@ -530,34 +501,35 @@ db.help_requests.find(
       \end{lstlisting}
     \end{block}
     \column{0.68\textwidth}
-    \placeholdercard{Insert current Skill Analytics screenshot and Help page screenshot side by side or as a stitched export.}
+    \plainvisual[0.50\textheight]{images/FinalAnalytics.png}
+
+    \vspace{0.35em}
+    \plainvisual[0.30\textheight]{images/FinalHelp.png}
   \end{columns}
 \end{frame}
 
 \begin{frame}{Project Demo Video}
   \begin{center}
-    \IfFileExists{videos/final_presentation_demo.mp4}{%
-      \videocard{videos/final_presentation_demo.mp4}
+    \IfFileExists{videos/final.presentation.demo.mp4}{%
+      \videocard{videos/final.presentation.demo.mp4}{images/finalPresentationVideoPoster.png}
     }{%
-      \placeholdercard{Drop the presentation demo at \texttt{reports/videos/final\_presentation\_demo.mp4} and this slide will embed it automatically.}
+      \IfFileExists{videos/SkillBridge_Walkthrough.mov}{%
+        \videocard{videos/SkillBridge_Walkthrough.mov}{images/finalPresentationVideoPoster.png}
+      }{%
+        \placeholdercard{Drop the presentation demo at \texttt{reports/videos/final.presentation.demo.mp4} or \texttt{reports/videos/SkillBridge\_Walkthrough.mov} and this slide will embed it automatically.}
+      }%
     }%
   \end{center}
 \end{frame}
 
 \begin{frame}{Thank You}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \column{0.62\textwidth}
-    {\Large\bfseries Thank you for your time.}
+  \begin{center}
+    \vspace*{1.9cm}
+    {\Huge\bfseries Thank you for your time.}
 
-    \vspace{0.9em}
-    {\small
-    This presentation covered the final SkillBridge product, including 20 implemented use cases, the Mongo-backed data model, and the full user-to-admin workflow across skills, evidence, resumes, jobs, analytics, and help.}
-    \column{0.34\textwidth}
-    \begin{center}
-      \vspace{1.4em}
-      {\Huge \textbf{Any Questions?}}
-    \end{center}
-  \end{columns}
+    \vspace{1.2em}
+    {\LARGE\bfseries Any Questions?}
+  \end{center}
 \end{frame}
 
 \end{document}

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from app.utils.mongo import ref_values, to_object_id
+
+LOGGER = logging.getLogger(__name__)
 
 REWARD_COUNTER_KEYS = (
     "evidence_saved",
@@ -32,7 +35,7 @@ REWARD_BADGES: list[dict[str, object]] = [
         "counter_key": "evidence_saved",
         "title": "Proof Builder",
         "description": "Save evidence consistently so your profile is grounded in visible proof of work.",
-        "tier_targets": [1, 3, 6, 10, 20, 35, 50],
+        "tier_targets": [1, 2, 3, 5, 8, 11, 15],
     },
     {
         "key": "profile_skills_confirmed",
@@ -64,7 +67,7 @@ REWARD_BADGES: list[dict[str, object]] = [
         "counter_key": "job_matches_run",
         "title": "Match Navigator",
         "description": "Run grounded job matches repeatedly to sharpen fit feedback and gap analysis over time.",
-        "tier_targets": [1, 3, 5, 10, 20, 35, 50],
+        "tier_targets": [1, 3, 5, 10, 20, 35, 100],
     },
     {
         "key": "tailored_resumes_generated",
@@ -72,7 +75,7 @@ REWARD_BADGES: list[dict[str, object]] = [
         "counter_key": "tailored_resumes_generated",
         "title": "Tailor Forge",
         "description": "Generate tailored resumes so analysis turns into polished, submission-ready artifacts.",
-        "tier_targets": [1, 2, 4, 8, 15, 25, 40],
+        "tier_targets": [1, 2, 4, 8, 15, 25, 100],
     },
 ]
 
@@ -425,3 +428,31 @@ async def sync_reward_counter(db, user_id: str, counter_key: str, value: int) ->
     counters = normalize_reward_counters((current or {}).get("counters"))
     counters[counter_key] = _safe_int(value)
     return await _save_reward_state(db, user_id, counters)
+
+
+async def safe_increment_reward_counter(db, user_id: str, counter_key: str, amount: int = 1) -> dict | None:
+    try:
+        return await increment_reward_counter(db, user_id, counter_key, amount)
+    except Exception as exc:
+        LOGGER.warning(
+            "Failed to increment reward counter %s for user %s: %s",
+            counter_key,
+            user_id,
+            exc,
+            exc_info=True,
+        )
+        return None
+
+
+async def safe_sync_reward_counter(db, user_id: str, counter_key: str, value: int) -> dict | None:
+    try:
+        return await sync_reward_counter(db, user_id, counter_key, value)
+    except Exception as exc:
+        LOGGER.warning(
+            "Failed to sync reward counter %s for user %s: %s",
+            counter_key,
+            user_id,
+            exc,
+            exc_info=True,
+        )
+        return None

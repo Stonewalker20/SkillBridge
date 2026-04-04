@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type Evidence as EvidenceRecord, type EvidenceAnalysis, type RewardsSummary } from "../services/api";
+import { api, type Evidence, type EvidenceAnalysis, type RewardsSummary } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
 import { Card } from "../components/ui/card";
@@ -15,6 +15,7 @@ import { Plus, ExternalLink, FileText, Upload, ScanSearch, Pencil, Trash2 } from
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router";
 import { useHeaderTheme } from "../lib/headerTheme";
+import { useAccountPreferences } from "../context/AccountPreferencesContext";
 
 const EVIDENCE_TYPES = [
   { value: "project", label: "Project" },
@@ -53,12 +54,21 @@ function summarizeEvidenceText(text: string, maxLength: number = 280) {
   return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
 }
 
+function normalizeEvidenceCardText(text: string) {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function isGitHubUrl(value: string) {
+  return /^https?:\/\/(www\.)?(github\.com|gist\.github\.com)\//i.test(String(value || "").trim());
+}
+
 export function Evidence() {
   const { user } = useAuth();
   const { recordActivity } = useActivity();
   const { activeHeaderTheme } = useHeaderTheme();
+  const { preferences } = useAccountPreferences();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [items, setItems] = useState<EvidenceRecord[]>([]);
+  const [items, setItems] = useState<Evidence[]>([]);
   const [skillNameById, setSkillNameById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [rewards, setRewards] = useState<RewardsSummary | null>(null);
@@ -81,6 +91,7 @@ export function Evidence() {
   const [selectedSkillIdsByAnalysis, setSelectedSkillIdsByAnalysis] = useState<AnalysisSelectionMap>({});
   const [expandedAnalysisTextIds, setExpandedAnalysisTextIds] = useState<string[]>([]);
   const [analysisTextVisibleChars, setAnalysisTextVisibleChars] = useState<Record<string, number>>({});
+  const [expandedEvidenceIds, setExpandedEvidenceIds] = useState<string[]>([]);
   const [isDraftTextExpanded, setIsDraftTextExpanded] = useState(false);
 
   const loadEvidence = useCallback(async () => {
@@ -231,8 +242,9 @@ export function Evidence() {
   };
 
   const handleAnalyze = async () => {
-    if (!draft.text.trim() && files.length === 0) {
-      toast.error("Add evidence text or upload one or more PDF/DOCX/TXT files first");
+    const githubUrl = isGitHubUrl(draft.url);
+    if (!draft.text.trim() && files.length === 0 && !githubUrl) {
+      toast.error("Add evidence text, upload one or more files, or paste a GitHub link first");
       return;
     }
 
@@ -306,6 +318,12 @@ export function Evidence() {
       ...prev,
       [analysisId]: FULL_TEXT_CHUNK_SIZE,
     }));
+  };
+
+  const toggleEvidenceText = (evidenceId: string) => {
+    setExpandedEvidenceIds((prev) =>
+      prev.includes(evidenceId) ? prev.filter((id) => id !== evidenceId) : [...prev, evidenceId]
+    );
   };
 
   const ensureSkillId = async (skill: EvidenceAnalysis["extracted_skills"][number]) => {
@@ -496,7 +514,7 @@ export function Evidence() {
         </div>
       </div>
 
-      {rewards?.nextAchievement ? (
+      {preferences.showNextAchievementCard && rewards?.nextAchievement ? (
         <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -564,7 +582,7 @@ export function Evidence() {
               <DialogHeader className="border-b bg-slate-50 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/80">
                 <DialogTitle>{draft.id ? "Edit Evidence" : "Add Evidence"}</DialogTitle>
                 <DialogDescription>
-                  Paste text or upload one or more files. SkillBridge will extract likely skills, including AI-inferred new skill candidates, then you decide what to save.
+                  Paste text, upload one or more files, or add a GitHub link. SkillBridge will extract likely skills, including AI-inferred new skill candidates, then you decide what to save.
                 </DialogDescription>
               </DialogHeader>
 
@@ -621,8 +639,11 @@ export function Evidence() {
                       if (draft.id) syncEditAnalysisFromDraft(nextDraft);
                       else setAnalysisItems([]);
                     }}
-                    placeholder="https://..."
+                    placeholder="https://github.com/owner/repo or https://..."
                   />
+                  <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                    GitHub repository and file links can be saved as evidence on their own. Other URLs still work as supporting source links.
+                  </p>
                 </div>
 
                 <div className="space-y-4">
@@ -855,66 +876,94 @@ export function Evidence() {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {filteredItems.map((item) => {
             const externalUrl = item.source && /^https?:\/\//i.test(item.source) ? item.source : "";
-            const summary = summarizeEvidenceText(item.text_excerpt || item.description || "");
+            const fullText = normalizeEvidenceCardText(item.text_excerpt || item.description || "");
+            const isExpanded = expandedEvidenceIds.includes(item.id);
+            const hasMoreText = fullText.length > 140;
+            const summary = !fullText ? "" : summarizeEvidenceText(fullText, 120);
             return (
-              <Card key={item.id} className="group overflow-hidden border-slate-200 p-0 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950">
-                <div className={`border-b px-4 py-3.5 dark:border-slate-800 ${activeHeaderTheme.softPanelClass}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-sm dark:bg-slate-900">
-                          <FileText className={`h-4 w-4 ${activeHeaderTheme.accentTextClass}`} />
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="truncate text-base font-semibold text-gray-900 dark:text-slate-100">{item.title}</h3>
-                          <div className="mt-1 flex flex-wrap gap-2">
-                            {item.type ? <Badge variant="outline" className="capitalize">{item.type}</Badge> : null}
-                            {(item.skill_ids || []).length ? <Badge variant="secondary">{item.skill_ids?.length} extracted skills</Badge> : null}
+              <Card key={item.id} className="group aspect-square overflow-hidden border-slate-200 p-0 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950">
+                <div className="relative flex h-full flex-col">
+                  <div className={`border-b px-3 py-2.5 dark:border-slate-800 ${activeHeaderTheme.softPanelClass}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm dark:bg-slate-900">
+                            <FileText className={`h-3.5 w-3.5 ${activeHeaderTheme.accentTextClass}`} />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="line-clamp-2 break-words text-sm font-semibold text-gray-900 dark:text-slate-100">{item.title}</h3>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {item.type ? <Badge variant="outline" className="h-5 px-1.5 text-[10px] capitalize">{item.type}</Badge> : null}
+                              {(item.skill_ids || []).length ? <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{item.skill_ids?.length} skills</Badge> : null}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {externalUrl ? (
-                      <a href={externalUrl} target="_blank" rel="noreferrer" className={`text-gray-500 transition-opacity hover:opacity-80 dark:text-slate-400 ${activeHeaderTheme.accentTextClass}`}>
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    ) : null}
+                      {externalUrl ? (
+                        <a href={externalUrl} target="_blank" rel="noreferrer" className={`text-gray-500 transition-opacity hover:opacity-80 dark:text-slate-400 ${activeHeaderTheme.accentTextClass}`}>
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
 
-                <div className="px-4 py-3.5">
-                  <div className="min-w-0">
-                    <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50/90 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:bg-slate-900/80 dark:text-slate-400">
-                      <span className="truncate">Source: {item.source || "manual-entry"}</span>
-                      {summary ? <span className="hidden shrink-0 md:inline">Hover to preview</span> : null}
-                    </div>
-                    {summary ? (
-                      <div className="max-h-28 overflow-hidden opacity-100 transition-all duration-200 ease-out md:max-h-0 md:opacity-0 md:group-focus-within:mt-3 md:group-focus-within:max-h-28 md:group-focus-within:opacity-100 md:group-hover:mt-3 md:group-hover:max-h-28 md:group-hover:opacity-100">
-                        <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5 text-sm leading-5 text-gray-600 shadow-sm dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-300">
-                          {summary}
-                        </div>
+                  <div className="flex min-h-0 flex-1 flex-col px-3 py-2.5 pb-14">
+                    <div className="min-w-0">
+                      <div className="rounded-lg bg-slate-50/90 px-2.5 py-2 text-[10px] uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-900/80 dark:text-slate-400">
+                        <span className="line-clamp-2 break-all">Source: {item.source || "manual-entry"}</span>
                       </div>
-                    ) : null}
+                      {summary ? (
+                        <div className="mt-2.5 min-h-0">
+                          <div
+                            className={`rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-2 text-xs leading-4.5 text-gray-600 shadow-sm dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-300 ${
+                              isExpanded ? "h-[7.5rem] overflow-y-auto" : "line-clamp-3 overflow-hidden"
+                            }`}
+                          >
+                            {isExpanded ? fullText : summary}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-2.5 rounded-lg border border-dashed border-slate-200/80 bg-white/60 px-2.5 py-2 text-xs text-slate-400 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-500">
+                          No text preview available.
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="mt-3 flex justify-end gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
-                      <Pencil className="mr-2 h-4 w-4" />
+                  {hasMoreText ? (
+                    <div className="pointer-events-none absolute bottom-3 left-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleEvidenceText(item.id)}
+                        className={`pointer-events-auto h-8 rounded-md border border-slate-200 bg-white/95 px-2.5 text-[11px] font-medium shadow-sm transition-all dark:border-slate-700 dark:bg-slate-900/95 ${
+                          isExpanded
+                            ? `${activeHeaderTheme.accentTextClass}`
+                            : `opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 ${activeHeaderTheme.accentTextClass}`
+                        }`}
+                      >
+                        {isExpanded ? "Collapse text" : "Expand text"}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="absolute bottom-3 right-3 flex flex-wrap justify-end gap-1.5">
+                    <Button variant="outline" size="sm" className="h-8 min-w-[4.5rem] px-2 text-xs" onClick={() => openEditDialog(item)}>
+                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
                       Edit
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
+                      className="h-8 min-w-[5.25rem] px-2 text-xs text-red-600 hover:text-red-700"
                       onClick={() => handleDelete(item)}
                       disabled={deletingId === item.id}
-                      className="text-red-600 hover:text-red-700"
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      {deletingId === item.id ? "Deleting..." : "Delete"}
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      {deletingId === item.id ? "Deleting" : "Delete"}
                     </Button>
                   </div>
                 </div>

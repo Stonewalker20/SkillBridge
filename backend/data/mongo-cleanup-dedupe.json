@@ -1,0 +1,93 @@
+{
+  "mode": "apply",
+  "uri": "mongodb://localhost:27017",
+  "db": "skillbridge",
+  "started_at": "2026-04-01T18:32:55.972423+00:00",
+  "pre_audit": {
+    "collections": {
+      "evidence": 37,
+      "projects": 35,
+      "portfolio_items": 7,
+      "job_ingests": 49,
+      "jobs": 108,
+      "job_match_runs": 65,
+      "tailored_resumes": 42,
+      "resume_skill_confirmations": 3,
+      "resume_snapshots": 61,
+      "learning_path_progress": 3
+    },
+    "portfolio_items_in_evidence": 7,
+    "legacy_portfolio_items": 7,
+    "projects_with_embedded_skill_ids": 0,
+    "jobs_with_job_ingest_id": 98,
+    "stale_skill_refs": {
+      "evidence.skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "portfolio_items.skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "jobs.required_skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "tailored_resumes.selected_skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "job_ingests.extracted_skills.skill_id": {
+        "docs": 0,
+        "refs": 0
+      }
+    }
+  },
+  "backup_dir": "data/mongo-backups/cleanup-20260401-dedupe",
+  "changes": {
+    "job_duplicate_groups_removed": 49,
+    "job_duplicate_docs_removed": 49,
+    "jobs_docs_changed": 10
+  },
+  "post_audit": {
+    "collections": {
+      "evidence": 37,
+      "projects": 35,
+      "portfolio_items": 7,
+      "job_ingests": 49,
+      "jobs": 59,
+      "job_match_runs": 65,
+      "tailored_resumes": 42,
+      "resume_skill_confirmations": 3,
+      "resume_snapshots": 61,
+      "learning_path_progress": 3
+    },
+    "portfolio_items_in_evidence": 7,
+    "legacy_portfolio_items": 7,
+    "projects_with_embedded_skill_ids": 0,
+    "jobs_with_job_ingest_id": 49,
+    "stale_skill_refs": {
+      "evidence.skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "portfolio_items.skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "jobs.required_skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "tailored_resumes.selected_skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "job_ingests.extracted_skills.skill_id": {
+        "docs": 0,
+        "refs": 0
+      }
+    }
+  },
+  "finished_at": "2026-04-01T18:32:56.117843+00:00"
+}

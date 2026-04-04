@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
-import { ArrowRight, BarChart3, FolderOpen, Layers3, Target } from "lucide-react";
+import { ArrowRight, BarChart3, BookOpen, FolderOpen, Layers3, RefreshCw, ShieldCheck, Sparkles, Target, TrendingUp } from "lucide-react";
 import {
   api,
   type CareerPathDetail,
@@ -115,31 +115,50 @@ export function SkillAnalytics() {
   const [selectedCareerPathDetail, setSelectedCareerPathDetail] = useState<CareerPathDetail | null>(null);
   const [updatingProgressSkill, setUpdatingProgressSkill] = useState<string | null>(null);
   const [progressImpact, setProgressImpact] = useState<{ roleName: string; delta: number } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadAnalytics = useCallback(async (options?: { background?: boolean }) => {
+    const background = Boolean(options?.background);
+    if (background) setRefreshing(true);
+    else setState((current) => ({ ...current, loading: true }));
+    try {
+      const [skills, evidence, confirmation, trajectory, learningProgress] = await Promise.all([
+        loadAllSkills(),
+        api.listEvidence({ origin: "user" }).catch(() => [] as Evidence[]),
+        api.getProfileConfirmation().catch(() => null as ConfirmationOut | null),
+        api.getSkillTrajectory().catch(() => null as SkillTrajectoryOut | null),
+        api.listLearningPathProgress().catch(() => [] as LearningPathProgress[]),
+      ]);
+      setState({ loading: false, skills, evidence, confirmation, trajectory, learningProgress });
+    } catch (error) {
+      console.error("Failed to load skill analytics:", error);
+      setState((current) =>
+        background
+          ? { ...current, loading: false }
+          : { loading: false, skills: [], evidence: [], confirmation: null, trajectory: null, learningProgress: [] }
+      );
+    } finally {
+      if (background) setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try {
-        const [skills, evidence, confirmation, trajectory, learningProgress] = await Promise.all([
-          loadAllSkills(),
-          api.listEvidence({ origin: "user" }).catch(() => [] as Evidence[]),
-          api.getProfileConfirmation().catch(() => null as ConfirmationOut | null),
-          api.getSkillTrajectory().catch(() => null as SkillTrajectoryOut | null),
-          api.listLearningPathProgress().catch(() => [] as LearningPathProgress[]),
-        ]);
-        if (!active) return;
-        setState({ loading: false, skills, evidence, confirmation, trajectory, learningProgress });
-      } catch (error) {
-        console.error("Failed to load skill analytics:", error);
-        if (!active) return;
-        setState({ loading: false, skills: [], evidence: [], confirmation: null, trajectory: null, learningProgress: [] });
+    void loadAnalytics();
+  }, [loadAnalytics]);
+
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadAnalytics({ background: true });
       }
     };
-    load();
+    window.addEventListener("focus", refreshIfVisible);
+    document.addEventListener("visibilitychange", refreshIfVisible);
     return () => {
-      active = false;
+      window.removeEventListener("focus", refreshIfVisible);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
     };
-  }, []);
+  }, [loadAnalytics]);
 
   useEffect(() => {
     const firstSkill = state.trajectory?.learning_path?.[0]?.target_skills?.[0] ?? null;
@@ -169,7 +188,7 @@ export function SkillAnalytics() {
     return () => {
       active = false;
     };
-  }, [selectedLearningSkill, state.learningProgress]);
+  }, [selectedLearningSkill, state.learningProgress, state.trajectory]);
 
   useEffect(() => {
     let active = true;
@@ -185,7 +204,7 @@ export function SkillAnalytics() {
     return () => {
       active = false;
     };
-  }, [selectedCareerPathId]);
+  }, [selectedCareerPathId, state.trajectory]);
 
   const analytics = useMemo(() => {
     const skillsById = new Map(state.skills.map((skill) => [String(skill.id || "").trim(), skill]));
@@ -275,6 +294,62 @@ export function SkillAnalytics() {
     };
   }, [state]);
 
+  const highlights = useMemo(() => {
+    const topEvidenceSkill = analytics.topEvidenceSkills[0];
+    const topEvidenceType = analytics.evidenceTypes[0];
+    const topCareerPath = analytics.careerPaths[0];
+    const topLearningStep = analytics.learningPath[0];
+    const proofPct = analytics.confirmedCount > 0 ? Math.round((analytics.evidenceBackedConfirmed / analytics.confirmedCount) * 100) : 0;
+    const topEvidenceMax = analytics.topEvidenceSkills[0]?.count ?? 0;
+    const topEvidencePct = topEvidenceMax > 0 && topEvidenceSkill ? Math.round((topEvidenceSkill.count / topEvidenceMax) * 100) : 0;
+    const evidenceTypeMax = analytics.evidenceTypes[0]?.value ?? 0;
+    const topEvidenceTypePct = evidenceTypeMax > 0 && topEvidenceType ? Math.round((topEvidenceType.value / evidenceTypeMax) * 100) : 0;
+    const topLearningPct = topLearningStep ? Math.min(100, Math.max(24, Math.round((topLearningStep.target_skills.length / 5) * 100))) : 0;
+
+    return [
+      {
+        label: "Proof-backed",
+        value: `${analytics.evidenceBackedConfirmed}/${analytics.confirmedCount}`,
+        note: analytics.confirmedCount ? `${proofPct}% of confirmed skills have evidence.` : "Add a few confirmed skills.",
+        icon: ShieldCheck,
+        toneClass: "bg-[#0F766E]",
+        barPct: proofPct,
+      },
+      {
+        label: "Top evidence",
+        value: topEvidenceSkill?.name || "None yet",
+        note: topEvidenceSkill ? `${topEvidenceSkill.count} linked evidence item${topEvidenceSkill.count === 1 ? "" : "s"}.` : "Your strongest evidence signal will show here.",
+        icon: BookOpen,
+        toneClass: "bg-[#1E3A8A]",
+        barPct: topEvidencePct,
+      },
+      {
+        label: "Best role fit",
+        value: topCareerPath?.role_name || "Waiting",
+        note: topCareerPath ? `${Math.round(topCareerPath.score)}% match with your current data.` : "Analyze jobs to unlock role matches.",
+        icon: TrendingUp,
+        toneClass: "bg-[#7C3AED]",
+        barPct: Math.round(topCareerPath?.score ?? 0),
+      },
+      {
+        label: "Next move",
+        value: topLearningStep?.title || "No path yet",
+        note: topLearningStep ? topLearningStep.evidence_action : "Confirm more skills to build a path.",
+        icon: Sparkles,
+        toneClass: "bg-[#F59E0B]",
+        barPct: topLearningPct,
+      },
+      {
+        label: "Main evidence type",
+        value: topEvidenceType?.name || "No evidence",
+        note: topEvidenceType ? `${topEvidenceType.value} item${topEvidenceType.value === 1 ? "" : "s"}.` : "Upload or paste evidence to start.",
+        icon: Target,
+        toneClass: "bg-slate-700",
+        barPct: topEvidenceTypePct,
+      },
+    ];
+  }, [analytics]);
+
   const handleProgressUpdate = async (skillName: string, status: LearningPathProgress["status"]) => {
     setUpdatingProgressSkill(skillName);
     try {
@@ -316,25 +391,68 @@ export function SkillAnalytics() {
 
   return (
     <div className="space-y-6">
-      <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
-        <div className="px-6 py-6 md:px-8 md:py-7">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-                <BarChart3 className="h-3.5 w-3.5" />
-                Skill Analytics
-              </div>
-              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">A compact view of proof, gaps, and direction.</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                Scan what is confirmed, what is backed by evidence, and where the next useful signal lives.
-              </p>
+      <div className={`relative overflow-hidden rounded-[2rem] border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.55),_transparent_38%),linear-gradient(135deg,rgba(15,23,42,0.04),rgba(14,116,144,0.06),rgba(245,158,11,0.06))] dark:bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.08),_transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.12),rgba(14,116,144,0.18),rgba(245,158,11,0.12))]" />
+        <div className="relative grid gap-6 px-6 py-7 md:px-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-300">
+              <BarChart3 className="h-3.5 w-3.5" />
+              Skill Analytics
             </div>
-            <Button asChild variant="outline" className="border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/70">
-              <Link to="/app/skills">
-                Review skills
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+            <h1 className="mt-4 max-w-xl text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 md:text-4xl">
+              Your skills, shown like a live signal board.
+            </h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600 dark:text-slate-300 md:text-base">
+              See what is proven, what still needs proof, and which direction the data is pushing you toward next.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Badge variant="secondary" className="bg-white/90 text-slate-700 shadow-sm dark:bg-slate-950/70 dark:text-slate-200">
+                {analytics.confirmedCount} confirmed
+              </Badge>
+              <Badge variant="secondary" className="bg-white/90 text-slate-700 shadow-sm dark:bg-slate-950/70 dark:text-slate-200">
+                {analytics.evidenceBackedConfirmed} with proof
+              </Badge>
+              <Badge variant="secondary" className="bg-white/90 text-slate-700 shadow-sm dark:bg-slate-950/70 dark:text-slate-200">
+                {analytics.unsupportedConfirmed} need support
+              </Badge>
+            </div>
+            <div className="mt-6">
+              <Button asChild variant="outline" className="border-slate-200 bg-white/80 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-950/60">
+                <Link to="/app/skills">
+                  Review skills
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {highlights.map((item, index) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={`${item.label}:${index}`}
+                  className="rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-700/60 dark:bg-slate-950/60"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{item.label}</div>
+                      <div className="mt-2 break-words text-lg font-semibold text-slate-900 dark:text-slate-100">{item.value}</div>
+                      <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{item.note}</p>
+                    </div>
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl shadow-lg ${item.toneClass}`}>
+                      <Icon className="h-4.5 w-4.5 text-white" />
+                    </div>
+                  </div>
+                  <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                    <div
+                      className={`h-full rounded-full transition-[width] duration-300 ${item.toneClass}`}
+                      style={{ width: `${Math.max(0, Math.min(100, item.barPct))}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -371,6 +489,17 @@ export function SkillAnalytics() {
       </div>
 
       <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 rounded-full border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-900/70"
+          onClick={() => void loadAnalytics({ background: true })}
+          disabled={refreshing}
+        >
+          <RefreshCw className={`mr-2 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          {refreshing ? "Refreshing" : "Refresh"}
+        </Button>
         {[
           ["#overview", "Overview"],
           ["#support", "Support"],
@@ -384,7 +513,7 @@ export function SkillAnalytics() {
       </div>
 
       <div id="overview" className="grid grid-cols-1 gap-6 scroll-mt-24">
-        <AnalyticsSection title="Evidence Mix" description="What is supporting the profile today.">
+        <AnalyticsSection title="Evidence Mix" description="What is feeding the engine right now.">
           {analytics.evidenceTypes.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">No evidence added yet.</div>
           ) : (
@@ -432,7 +561,7 @@ export function SkillAnalytics() {
       </div>
 
       <div id="support" className="grid grid-cols-1 gap-6 xl:grid-cols-2 scroll-mt-24">
-        <AnalyticsSection title="Confirmed Categories" description="Distribution of your confirmed skills by category.">
+        <AnalyticsSection title="Confirmed Categories" description="Where your strongest signals cluster.">
           {analytics.topCategories.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">No confirmed categories yet.</div>
           ) : (
@@ -448,7 +577,7 @@ export function SkillAnalytics() {
           )}
         </AnalyticsSection>
 
-        <AnalyticsSection title="Proficiency Spread" description="How confirmed skills are distributed across levels.">
+        <AnalyticsSection title="Proficiency Spread" description="How strength is stacked across levels.">
           {analytics.proficiencyData.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">No confirmed skill proficiency data yet.</div>
           ) : (
@@ -486,7 +615,7 @@ export function SkillAnalytics() {
       </div>
 
       <div id="trajectory" className="grid grid-cols-1 gap-6 xl:grid-cols-[0.92fr_1.08fr] scroll-mt-24">
-        <AnalyticsSection title="Skill Clusters" description="The strongest clusters currently shaping direction." compact>
+        <AnalyticsSection title="Skill Clusters" description="Patterns that keep repeating." compact>
           {analytics.trajectoryClusters.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">Confirm more skills to generate cluster-level signals.</div>
           ) : (
@@ -517,7 +646,7 @@ export function SkillAnalytics() {
           )}
         </AnalyticsSection>
 
-        <AnalyticsSection title="Career Paths" description="Role fits based on skill coverage, proof, and semantic alignment." compact>
+        <AnalyticsSection title="Career Paths" description="Roles the data likes most." compact>
           {analytics.careerPaths.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">Add roles and analyze jobs to unlock career path predictions.</div>
           ) : (
@@ -615,7 +744,7 @@ export function SkillAnalytics() {
       <AnalyticsSection
         id="learning"
         title="Learning Path"
-        description="A staged plan from proof-gaps to higher-confidence role readiness."
+        description="A simple next-step plan from gaps to stronger proof."
         compact
         className="scroll-mt-24"
       >
@@ -648,8 +777,8 @@ export function SkillAnalytics() {
                         badgeClassName={
                           selectedLearningSkill === step.target_skills[0]
                             ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                            : "dark:bg-slate-900 dark:text-slate-200"
-                        }
+                          : "dark:bg-slate-900 dark:text-slate-200"
+                      }
                       />
                       <p className="text-xs leading-5 text-slate-700 dark:text-slate-300">{step.evidence_action}</p>
                     </div>
@@ -671,8 +800,8 @@ export function SkillAnalytics() {
                 <>
                   <p className="mt-1.5 text-sm leading-6 text-slate-600 dark:text-slate-300">
                     {selectedLearningSkillDetail.confirmed
-                      ? "Already confirmed. Focus on stronger proof and project depth."
-                      : "Not yet confirmed. Treat this as a targeted gap with a clear next action."}
+                      ? "Confirmed already. Add sharper proof and more depth."
+                      : "Not confirmed yet. Treat it like a focused gap with one clear next move."}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Award, Lock, Mail, Settings2, Sparkles, Trash2, User, Wand2 } from "lucide-react";
+import { Award, Lock, Mail, Settings2, Trash2, User, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -18,13 +18,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
 import { api, type BillingPlan } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
@@ -73,12 +66,10 @@ export function Account() {
 
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [savingAI, setSavingAI] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [startingBilling, setStartingBilling] = useState(false);
   const [openingBillingPortal, setOpeningBillingPortal] = useState(false);
   const [usingDevFallback, setUsingDevFallback] = useState(false);
-  const [aiSettings, setAiSettings] = useState<any>(null);
   const [billingStatus, setBillingStatus] = useState<any>(null);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
 
@@ -115,8 +106,6 @@ export function Account() {
         setBillingStatus(billing);
         setBillingMessage(billing?.message ?? null);
         setSelectedPlan(me?.subscription_plan || billing?.current_plan || billing?.plans?.find((plan: BillingPlan) => plan.recommended)?.key || "pro");
-        const hasAccess = ["owner", "admin", "team"].includes(String(me?.role ?? "").toLowerCase()) || String(me?.subscription_status ?? "").toLowerCase() === "active";
-        setAiSettings(hasAccess ? await api.getAIPreferences().catch(() => null) : null);
       } catch (e: any) {
         toast.error(e?.message || "Failed to load account");
       } finally {
@@ -180,8 +169,6 @@ export function Account() {
       if (session.status === "already_active") {
         toast.success("Subscription already active");
         await refreshBillingState();
-        const settings = await api.getAIPreferences().catch(() => null);
-        setAiSettings(settings);
         await refreshUser();
         return;
       }
@@ -233,8 +220,6 @@ export function Account() {
         subscription_status: updated.subscription_status || "active",
         message: "Development fallback activated.",
       }));
-      const settings = await api.getAIPreferences().catch(() => null);
-      setAiSettings(settings);
       await refreshUser();
       recordActivity({
         id: `account:subscription:${Date.now()}`,
@@ -275,30 +260,6 @@ export function Account() {
       toast.error(e?.message || "Failed to update email");
     } finally {
       setSavingProfile(false);
-    }
-  };
-
-  const handleSaveAISettings = async () => {
-    if (!aiSettings?.preferences) return;
-    setSavingAI(true);
-    try {
-      const updated = await api.updateAIPreferences({
-        inference_mode: aiSettings.preferences.inference_mode,
-        embedding_model: aiSettings.preferences.embedding_model,
-        zero_shot_model: aiSettings.preferences.zero_shot_model,
-      });
-      setAiSettings(updated);
-      recordActivity({
-        id: `account:ai:${Date.now()}`,
-        type: "account",
-        action: "updated",
-        name: "AI model settings updated",
-      });
-      toast.success("AI settings updated");
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to update AI settings");
-    } finally {
-      setSavingAI(false);
     }
   };
 
@@ -532,121 +493,6 @@ export function Account() {
           <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
             <div className="mb-5 flex items-center gap-3">
               <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
-                <Sparkles className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">AI Settings</h3>
-                <p className="text-sm text-slate-600 dark:text-slate-300">Choose how your account runs future semantic analysis and evidence skill extraction.</p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-              {hasSubscriptionAccess ? (
-                aiSettings ? (
-                <>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Inference Mode</p>
-                      <Select
-                        value={aiSettings?.preferences?.inference_mode ?? "auto"}
-                        onValueChange={(value) =>
-                          setAiSettings((current: any) =>
-                            current ? { ...current, preferences: { ...current.preferences, inference_mode: value } } : current
-                          )
-                        }
-                      >
-                        <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
-                          <SelectValue placeholder="Select inference mode" />
-                        </SelectTrigger>
-                        <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
-                          {(aiSettings?.preferences?.available_inference_modes ?? []).map((mode: string) => (
-                            <SelectItem key={mode} value={mode}>
-                              {mode}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Embedding Model</p>
-                      <Select
-                        value={aiSettings?.preferences?.embedding_model ?? ""}
-                        onValueChange={(value) =>
-                          setAiSettings((current: any) =>
-                            current ? { ...current, preferences: { ...current.preferences, embedding_model: value } } : current
-                          )
-                        }
-                      >
-                        <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
-                          <SelectValue placeholder="Select embedding model" />
-                        </SelectTrigger>
-                        <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
-                          {(aiSettings?.preferences?.available_embedding_models ?? []).map((model: string) => (
-                            <SelectItem key={model} value={model}>
-                              {model}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Zero-Shot Model</p>
-                      <Select
-                        value={aiSettings?.preferences?.zero_shot_model ?? ""}
-                        onValueChange={(value) =>
-                          setAiSettings((current: any) =>
-                            current ? { ...current, preferences: { ...current.preferences, zero_shot_model: value } } : current
-                          )
-                        }
-                      >
-                        <SelectTrigger className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
-                          <SelectValue placeholder="Select zero-shot model" />
-                        </SelectTrigger>
-                        <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
-                          {(aiSettings?.preferences?.available_zero_shot_models ?? []).map((model: string) => (
-                            <SelectItem key={model} value={model}>
-                              {model}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Runtime</p>
-                      <p className="mt-2 font-medium text-slate-900 dark:text-slate-100">{aiSettings?.provider_mode ?? "Unavailable"}</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-                    <p>Switch to `local-fallback` if you want faster, lighter analysis without transformer loading.</p>
-                    <Button onClick={handleSaveAISettings} disabled={savingAI} className={activeHeaderTheme.buttonClass}>
-                      {savingAI ? "Saving..." : "Save AI Settings"}
-                    </Button>
-                  </div>
-                </>
-                ) : (
-                  <p className="text-sm text-gray-600 dark:text-slate-300">AI settings are unavailable right now.</p>
-                )
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-sm text-slate-600 dark:text-slate-300">
-                    AI settings unlock after your subscription is active. That keeps the core workspace gated until billing is live.
-                  </p>
-                  <Button onClick={() => handleStartCheckout(selectedPlanMeta?.key)} disabled={startingBilling} className={activeHeaderTheme.buttonClass}>
-                    {startingBilling ? "Starting checkout..." : `Checkout ${selectedPlanMeta?.label ?? "plan"}`}
-                  </Button>
-                  {billingStatus?.dev_fallback_available ? (
-                    <Button variant="outline" onClick={() => handleUseDevFallback(selectedPlanMeta?.key)} disabled={usingDevFallback}>
-                      {usingDevFallback ? "Applying fallback..." : "Use dev fallback"}
-                    </Button>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          </Card>
-
-          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-            <div className="mb-5 flex items-center gap-3">
-              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
                 <Lock className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
               <div>
@@ -682,21 +528,27 @@ export function Account() {
                 <Wand2 className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Personalization</h3>
-                <p className="text-sm text-slate-600 dark:text-slate-300">Theme colors, avatar presets, dashboard panels, and navigation defaults now live on their own page.</p>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Workspace Settings</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">Personalization, AI controls, and achievements each live on their own account page now.</p>
               </div>
             </div>
 
             <div className={`rounded-2xl border p-5 ${activeHeaderTheme.softPanelClass}`}>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Open workspace personalization</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Open dedicated account settings</p>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                Use the dedicated page to adjust appearance, upload a profile photo, and tune how the app behaves day to day.
+                Use dedicated pages to adjust appearance, upload a profile photo, tune AI behavior, and review achievement unlocks.
               </p>
               <div className="mt-4 flex flex-wrap gap-3">
                 <Button asChild className={activeHeaderTheme.buttonClass}>
                   <Link to="/app/account/personalization">
                     <Settings2 className="h-4 w-4" />
                     Manage Personalization
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/app/account/ai">
+                    <Settings2 className="h-4 w-4" />
+                    Manage AI Settings
                   </Link>
                 </Button>
                 <Button asChild variant="outline">

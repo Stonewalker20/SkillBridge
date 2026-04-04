@@ -82,6 +82,17 @@ def test_skill_crud_and_taxonomy_routes(test_context):
     assert any(edge["edge_type"] == "evidence_cooccurrence" for edge in payload["edges"])
 
     deleted = client.delete(f"/skills/{skill_id}", headers=headers)
+    assert deleted.status_code == 403
+    deleted_ml = client.delete(f"/skills/{mlops_id}", headers=headers)
+    assert deleted_ml.status_code == 403
+
+    db["users"].docs[0]["role"] = "admin"
+
+    admin_skill_list = client.get("/admin/skills", headers=headers)
+    assert admin_skill_list.status_code == 200
+    assert any(entry["id"] == skill_id for entry in admin_skill_list.json())
+
+    deleted = client.delete(f"/skills/{skill_id}", headers=headers)
     assert deleted.status_code == 200
     deleted_ml = client.delete(f"/skills/{mlops_id}", headers=headers)
     assert deleted_ml.status_code == 200
@@ -158,6 +169,66 @@ def test_skill_trajectory_returns_clustered_career_paths(test_context):
     skill_detail = client.get("/taxonomy/learning-path/skill/ML", headers=headers)
     assert skill_detail.status_code == 200
     assert skill_detail.json()["skill_name"] == "ML"
+
+
+def test_skill_trajectory_includes_multiple_roles_from_object_role_refs(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    db = test_context["db"]
+
+    analytics_role_id = ObjectId()
+    db["roles"].docs.append(
+        {
+            "_id": analytics_role_id,
+            "name": "Analytics Engineer",
+            "description": "Build reporting pipelines and analytics models.",
+            "created_at": now_utc(),
+            "updated_at": now_utc(),
+        }
+    )
+    db["role_skill_weights"].docs = []
+    db["jobs"].docs = [
+        {
+            "_id": ObjectId(),
+            "title": "ML Engineer Job",
+            "moderation_status": "approved",
+            "role_ids": [ObjectId(test_context["role_id"])],
+            "required_skill_ids": [ObjectId(test_context["skill_python"]), ObjectId(test_context["skill_ml"])],
+            "created_at": now_utc(),
+            "updated_at": now_utc(),
+        },
+        {
+            "_id": ObjectId(),
+            "title": "Analytics Engineer Job",
+            "moderation_status": "approved",
+            "role_ids": [analytics_role_id],
+            "required_skill_ids": [ObjectId(test_context["skill_python"])],
+            "created_at": now_utc(),
+            "updated_at": now_utc(),
+        },
+    ]
+
+    client.post(
+        "/skills/confirmations/",
+        headers=headers,
+        json={
+            "resume_snapshot_id": None,
+            "confirmed": [
+                {"skill_id": test_context["skill_python"], "proficiency": 4},
+                {"skill_id": test_context["skill_ml"], "proficiency": 4},
+            ],
+            "rejected": [],
+            "edited": [],
+        },
+    )
+
+    response = client.get("/taxonomy/trajectory", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    role_names = {entry["role_name"] for entry in payload["career_paths"]}
+    assert "ML Engineer" in role_names
+    assert "Analytics Engineer" in role_names
+    assert len(payload["career_paths"]) >= 2
 
 
 def test_create_skill_does_not_auto_add_short_initialism_aliases(test_context):

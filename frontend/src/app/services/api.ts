@@ -151,6 +151,24 @@ function manualProficiencyOf(entry: any): number {
   return clampProficiency(entry?.manual_proficiency ?? entry?.manualProficiency ?? entry?.proficiency ?? 0);
 }
 
+function sanitizeRejectedSkills(entries: unknown): RejectedSkill[] {
+  return asArray<any>(entries)
+    .map((entry) => ({
+      skill_id: String(entry?.skill_id ?? "").trim(),
+      skill_name: String(entry?.skill_name ?? "").trim(),
+    }))
+    .filter((entry) => entry.skill_id);
+}
+
+function sanitizeEditedSkills(entries: unknown): EditedSkill[] {
+  return asArray<any>(entries)
+    .map((entry) => ({
+      from_text: String(entry?.from_text ?? "").trim(),
+      to_skill_id: String(entry?.to_skill_id ?? "").trim(),
+    }))
+    .filter((entry) => entry.to_skill_id);
+}
+
 function normalizeEvidence(raw: any): Evidence {
   return {
     id: String(raw?.id ?? raw?._id ?? "").trim(),
@@ -187,9 +205,26 @@ export type AuthUser = {
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
   stripe_checkout_session_id?: string | null;
+  help_unread_response_count: number;
+  is_new_user: boolean;
+  onboarding: UserOnboardingState | null;
 };
 export type AuthOut = { token: string; user: AuthUser };
 export type UserPatch = { email?: string; username?: string; avatar_preset?: string | null };
+export type UserOnboardingState = {
+  started_at?: string | null;
+  last_step?: string | null;
+  completed_steps: string[];
+  completed_at?: string | null;
+  dismissed_at?: string | null;
+};
+export type UserOnboardingPatch = {
+  started_at?: string | null;
+  last_step?: string | null;
+  completed_steps?: string[];
+  completed_at?: string | null;
+  dismissed_at?: string | null;
+};
 export type PasswordResetResponse = {
   ok: boolean;
   message: string;
@@ -305,7 +340,7 @@ const REWARD_BADGES: Array<{
     counterKey: "evidence_saved",
     title: "Proof Builder",
     description: "Save evidence consistently so your profile is grounded in visible proof of work.",
-    tierTargets: [1, 3, 6, 10, 20, 35, 50],
+    tierTargets: [1, 2, 3, 5, 8, 11, 15],
   },
   {
     key: "profile_skills_confirmed",
@@ -337,7 +372,7 @@ const REWARD_BADGES: Array<{
     counterKey: "job_matches_run",
     title: "Match Navigator",
     description: "Run grounded job matches repeatedly to sharpen fit feedback and gap analysis over time.",
-    tierTargets: [1, 3, 5, 10, 20, 35, 50],
+    tierTargets: [1, 3, 5, 10, 20, 35, 100],
   },
   {
     key: "tailored_resumes_generated",
@@ -345,7 +380,7 @@ const REWARD_BADGES: Array<{
     counterKey: "tailored_resumes_generated",
     title: "Tailor Forge",
     description: "Generate tailored resumes so analysis turns into polished, submission-ready artifacts.",
-    tierTargets: [1, 2, 4, 8, 15, 25, 40],
+    tierTargets: [1, 2, 4, 8, 15, 25, 100],
   },
 ];
 
@@ -365,6 +400,46 @@ function normalizeAuthUser(raw: any): AuthUser {
     stripe_customer_id: raw?.stripe_customer_id ? String(raw.stripe_customer_id).trim() : null,
     stripe_subscription_id: raw?.stripe_subscription_id ? String(raw.stripe_subscription_id).trim() : null,
     stripe_checkout_session_id: raw?.stripe_checkout_session_id ? String(raw.stripe_checkout_session_id).trim() : null,
+    help_unread_response_count: Number(raw?.help_unread_response_count ?? 0) || 0,
+    is_new_user: Boolean(raw?.is_new_user),
+    onboarding: normalizeOnboardingState(raw?.onboarding),
+  };
+}
+
+function normalizeOnboardingState(raw: any): UserOnboardingState | null {
+  if (!raw || typeof raw !== "object") return null;
+  return {
+    started_at: raw?.started_at ? String(raw.started_at) : null,
+    last_step: raw?.last_step ? String(raw.last_step).trim() : null,
+    completed_steps: asArray<string>(raw?.completed_steps).map((value) => String(value || "").trim()).filter(Boolean),
+    completed_at: raw?.completed_at ? String(raw.completed_at) : null,
+    dismissed_at: raw?.dismissed_at ? String(raw.dismissed_at) : null,
+  };
+}
+
+function normalizeHelpRequest(raw: any): HelpRequest {
+  return {
+    id: String(raw?.id ?? raw?._id ?? "").trim(),
+    user_id: String(raw?.user_id ?? "").trim(),
+    category: String(raw?.category ?? "").trim(),
+    subject: String(raw?.subject ?? "").trim(),
+    message: String(raw?.message ?? "").trim(),
+    page: raw?.page ? String(raw.page).trim() : null,
+    status: String(raw?.status ?? "open").trim() || "open",
+    admin_response: raw?.admin_response ? String(raw.admin_response).trim() : null,
+    user_has_unread_response: Boolean(raw?.user_has_unread_response),
+    admin_responded_at: raw?.admin_responded_at ? String(raw.admin_responded_at) : null,
+    user_acknowledged_response_at: raw?.user_acknowledged_response_at ? String(raw.user_acknowledged_response_at) : null,
+    created_at: raw?.created_at ? String(raw.created_at) : null,
+    updated_at: raw?.updated_at ? String(raw.updated_at) : null,
+  };
+}
+
+function normalizeAdminHelpRequest(raw: any): AdminHelpRequest {
+  return {
+    ...normalizeHelpRequest(raw),
+    user_email: raw?.user_email ? String(raw.user_email).trim() : null,
+    username: raw?.username ? String(raw.username).trim() : null,
   };
 }
 
@@ -905,12 +980,62 @@ export type AdminJob = {
   location: string;
   source: string;
   description_excerpt: string;
+  description_full?: string | null;
   moderation_status: string;
   moderation_reason?: string | null;
+  submitted_by_user_id?: string | null;
   role_ids: string[];
   required_skills: string[];
   created_at?: string;
   updated_at?: string;
+};
+
+export type AdminSkill = {
+  id: string;
+  name: string;
+  category: string;
+  aliases: string[];
+  tags: string[];
+  origin: string;
+  hidden: boolean;
+  created_by_user_id?: string | null;
+  evidence_count: number;
+  project_link_count: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type HelpRequest = {
+  id: string;
+  user_id: string;
+  category: string;
+  subject: string;
+  message: string;
+  page?: string | null;
+  status: string;
+  admin_response?: string | null;
+  user_has_unread_response: boolean;
+  admin_responded_at?: string | null;
+  user_acknowledged_response_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type HelpRequestPayload = {
+  category: string;
+  subject: string;
+  message: string;
+  page?: string | null;
+};
+
+export type AdminHelpRequest = HelpRequest & {
+  user_email?: string | null;
+  username?: string | null;
+};
+
+export type AdminHelpRequestPatch = {
+  status: string;
+  admin_response?: string | null;
 };
 
 export type AdminMlflowRun = {
@@ -1081,6 +1206,9 @@ export const api = {
     return out ? normalizeAuthUser(out) : null;
   },
   patchMe: async (payload: UserPatch) => normalizeAuthUser(await request<AuthUser>("/auth/me", "PATCH", payload)),
+  getMyOnboarding: async () => normalizeOnboardingState(await request<UserOnboardingState>("/auth/me/onboarding", "GET")) ?? { completed_steps: [] },
+  updateMyOnboarding: async (payload: UserOnboardingPatch) =>
+    normalizeOnboardingState(await request<UserOnboardingState>("/auth/me/onboarding", "PATCH", payload)) ?? { completed_steps: [] },
   activateSubscription: async (plan?: string | null) =>
     normalizeAuthUser(await request<AuthUser>("/auth/me/subscription", "POST", plan ? { plan } : {})),
   getBillingStatus: async () => request<BillingStatus>("/billing/status", "GET"),
@@ -1106,6 +1234,12 @@ export const api = {
       clearToken();
     }
   },
+  submitHelpRequest: async (payload: HelpRequestPayload) =>
+    normalizeHelpRequest(await request<HelpRequest>("/help/requests", "POST", payload)),
+  listMyHelpRequests: async () =>
+    asArray(await request<HelpRequest[]>("/help/requests/mine", "GET")).map(normalizeHelpRequest),
+  acknowledgeHelpRequestResponse: async (requestId: string) =>
+    normalizeHelpRequest(await request<HelpRequest>(`/help/requests/${requestId}/acknowledge`, "POST")),
 
   submitResumeText: (payload: { user_id?: string; text: string }) =>
     request<{ snapshot_id: string; preview: string }>("/ingest/resume/text", "POST", payload),
@@ -1218,8 +1352,8 @@ export const api = {
     return api.upsertConfirmation({
       resume_snapshot_id: resumeSnapshotId,
       confirmed: Array.from(confirmed.values()),
-      rejected: asArray(current?.rejected),
-      edited: asArray(current?.edited),
+      rejected: sanitizeRejectedSkills(current?.rejected),
+      edited: sanitizeEditedSkills(current?.edited),
     });
   },
 
@@ -1235,8 +1369,8 @@ export const api = {
     return api.upsertConfirmation({
       resume_snapshot_id: resumeSnapshotId,
       confirmed,
-      rejected: asArray(current?.rejected),
-      edited: asArray(current?.edited),
+      rejected: sanitizeRejectedSkills(current?.rejected).filter((entry) => entry.skill_id !== skillId),
+      edited: sanitizeEditedSkills(current?.edited).filter((entry) => entry.to_skill_id !== skillId),
     });
   },
 
@@ -1260,8 +1394,8 @@ export const api = {
     return api.upsertConfirmation({
       resume_snapshot_id: resumeSnapshotId,
       confirmed: Array.from(confirmed.values()),
-      rejected: asArray(current?.rejected),
-      edited: asArray(current?.edited),
+      rejected: sanitizeRejectedSkills(current?.rejected),
+      edited: sanitizeEditedSkills(current?.edited),
     });
   },
 
@@ -1353,8 +1487,8 @@ export const api = {
     return api.upsertConfirmation({
       resume_snapshot_id: null,
       confirmed: Array.from(confirmed.values()),
-      rejected: asArray(current?.rejected),
-      edited: asArray(current?.edited),
+      rejected: sanitizeRejectedSkills(current?.rejected),
+      edited: sanitizeEditedSkills(current?.edited),
     });
   },
 
@@ -1501,6 +1635,20 @@ export const api = {
   },
   moderateAdminJob: (jobId: string, payload: { moderation_status: string; moderation_reason?: string | null }) =>
     request<AdminJob>(`/admin/jobs/${jobId}/moderation`, "PATCH", payload),
+  listAdminSkills: (params?: { q?: string; include_hidden?: boolean; limit?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.q) search.set("q", params.q);
+    if (params?.include_hidden != null) search.set("include_hidden", String(params.include_hidden));
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    const suffix = search.size ? `?${search.toString()}` : "";
+    return request<AdminSkill[]>("/admin/skills" + suffix, "GET");
+  },
+  listAdminHelpRequests: async (status?: string) => {
+    const suffix = status ? `?status=${encodeURIComponent(status)}` : "";
+    return asArray(await request<AdminHelpRequest[]>("/admin/help-requests" + suffix, "GET")).map(normalizeAdminHelpRequest);
+  },
+  updateAdminHelpRequest: async (requestId: string, payload: AdminHelpRequestPatch) =>
+    normalizeAdminHelpRequest(await request<AdminHelpRequest>(`/admin/help-requests/${requestId}`, "PATCH", payload)),
   getAdminMlflowOverview: () => request<AdminMlflowOverview>("/admin/mlflow/overview", "GET"),
   listAdminMlflowExperimentRuns: (experimentId: string, limit = 25) =>
     request<AdminMlflowRun[]>(

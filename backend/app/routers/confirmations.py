@@ -18,7 +18,7 @@ from app.models.confirmations import (
     RejectedSkill,
 )
 from app.utils.mongo import oid_str, ref_values
-from app.utils.rewards import sync_reward_counter
+from app.utils.rewards import safe_sync_reward_counter
 
 router = APIRouter()
 
@@ -56,6 +56,24 @@ async def find_skill_by_id_ref(db, skill_id: str, field_name: str) -> dict:
             return skill
 
     raise HTTPException(status_code=404, detail=f"Skill not found: {sid}")
+
+
+async def maybe_find_skill_by_id_ref(db, skill_id: str) -> dict | None:
+    sid = str(skill_id or "").strip()
+    if not sid:
+        return None
+
+    queries = [{"_id": sid}]
+    try:
+        queries.insert(0, {"_id": ObjectId(sid)})
+    except Exception:
+        pass
+
+    for query in queries:
+        skill = await db["skills"].find_one(query, {"name": 1, "skill_name": 1})
+        if skill:
+            return skill
+    return None
 
 
 def clamp_proficiency(v: int) -> int:
@@ -134,17 +152,19 @@ async def serialize_confirmation_doc(db, doc: dict, user_refs: list[object], res
         ],
         rejected=[
             RejectedSkill(
-                skill_id=oid_str(r["skill_id"]),
+                skill_id=oid_str(r.get("skill_id")),
                 skill_name=r.get("skill_name", ""),
             )
             for r in doc.get("rejected", [])
+            if oid_str(r.get("skill_id"))
         ],
         edited=[
             EditedSkill(
                 from_text=e.get("from_text", ""),
-                to_skill_id=oid_str(e["to_skill_id"]),
+                to_skill_id=oid_str(e.get("to_skill_id")),
             )
             for e in doc.get("edited", [])
+            if oid_str(e.get("to_skill_id"))
         ],
         created_at=doc.get("created_at"),
         updated_at=doc.get("updated_at"),
@@ -268,7 +288,9 @@ async def upsert_confirmation(payload: ConfirmationIn, user=Depends(require_user
         sid = (getattr(r, "skill_id", None) or "").strip()
         if not sid:
             continue
-        skill = await find_skill_by_id_ref(db, sid, "rejected.skill_id")
+        skill = await maybe_find_skill_by_id_ref(db, sid)
+        if not skill:
+            continue
 
         skill_name = (skill.get("name") or skill.get("skill_name") or "Unknown").strip()
         canonical_skill_id = skill.get("_id")
@@ -282,7 +304,9 @@ async def upsert_confirmation(payload: ConfirmationIn, user=Depends(require_user
         to_id = (getattr(e, "to_skill_id", None) or "").strip()
         if not to_id:
             continue
-        skill = await find_skill_by_id_ref(db, to_id, "edited.to_skill_id")
+        skill = await maybe_find_skill_by_id_ref(db, to_id)
+        if not skill:
+            continue
 
         edited_docs.append(
             {"from_text": getattr(e, "from_text", "") or "", "to_skill_id": skill["_id"]}
@@ -334,7 +358,7 @@ async def upsert_confirmation(payload: ConfirmationIn, user=Depends(require_user
     if not d:
         raise HTTPException(status_code=500, detail="Failed to read confirmation document")
     if snapshot_oid is None:
-        await sync_reward_counter(db, oid_str(user_oid), "profile_skills_confirmed", len(confirmed_docs))
+        await safe_sync_reward_counter(db, oid_str(user_oid), "profile_skills_confirmed", len(confirmed_docs))
 
     return await serialize_confirmation_doc(db, d, user_refs)
 

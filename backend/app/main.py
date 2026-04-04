@@ -19,6 +19,7 @@ from app.routers.taxonomy import router as taxonomy_router
 from app.routers.tailor import router as tailor_router
 from app.routers.portfolio import router as portfolio_router
 from app.routers.auth import router as auth_router
+from app.routers.help import router as help_router
 from app.routers.billing import router as billing_router
 from app.routers.admin import router as admin_router
 from app.routers.rewards import router as rewards_router
@@ -44,6 +45,18 @@ async def ensure_indexes():
     await db["billing_events"].create_index("event_id", unique=True)
     await db["request_rate_limits"].create_index("expires_at", expireAfterSeconds=0)
     await db["audit_events"].create_index([("created_at", -1), ("actor_id", 1), ("action", 1)])
+    await db["jobs"].create_index("job_ingest_id", unique=True, sparse=True)
+    await db["jobs"].create_index("moderation_status")
+    await db["jobs"].create_index([("submitted_by_user_id", 1), ("created_at", -1)])
+    await db["jobs"].create_index("role_ids")
+    await db["project_skill_links"].create_index([("project_id", 1), ("skill_id", 1)], unique=True)
+    await db["project_skill_links"].create_index("project_id")
+    await db["learning_path_progress"].create_index([("user_id", 1), ("skill_name", 1)], unique=True)
+    await db["skill_relations"].create_index([("from_skill_id", 1), ("to_skill_id", 1), ("relation_type", 1)], unique=True)
+    await db["evidence"].create_index([("user_id", 1), ("origin", 1), ("updated_at", -1)])
+    await db["evidence"].create_index([("user_id", 1), ("structured_evidence", 1), ("updated_at", -1)])
+    await db["help_requests"].create_index([("user_id", 1), ("created_at", -1)])
+    await db["help_requests"].create_index([("status", 1), ("created_at", -1)])
 
 def ensure_local_media_dirs():
     # User-uploaded avatars are served as local static files. The directory must
@@ -117,5 +130,6 @@ app.include_router(tailor_router, prefix="/tailor", tags=["tailor"], dependencie
 app.include_router(portfolio_router, prefix="/portfolio", tags=["portfolio"], dependencies=subscription_gate)
 app.include_router(rewards_router, prefix="/rewards", tags=["rewards"])
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
+app.include_router(help_router, prefix="/help", tags=["help"])
 app.include_router(billing_router, prefix="/billing", tags=["billing"])
 app.include_router(admin_router, prefix="/admin", tags=["admin"], dependencies=subscription_gate)

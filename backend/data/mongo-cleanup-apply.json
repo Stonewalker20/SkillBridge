@@ -1,0 +1,107 @@
+{
+  "mode": "apply",
+  "uri": "mongodb://localhost:27017",
+  "db": "skillbridge",
+  "started_at": "2026-04-01T18:20:21.669302+00:00",
+  "pre_audit": {
+    "collections": {
+      "evidence": 30,
+      "projects": 35,
+      "portfolio_items": 7,
+      "job_ingests": 49,
+      "jobs": 108,
+      "job_match_runs": 65,
+      "tailored_resumes": 42,
+      "resume_skill_confirmations": 3,
+      "resume_snapshots": 61,
+      "learning_path_progress": 3
+    },
+    "portfolio_items_in_evidence": 0,
+    "legacy_portfolio_items": 7,
+    "projects_with_embedded_skill_ids": 1,
+    "jobs_with_job_ingest_id": 98,
+    "stale_skill_refs": {
+      "evidence.skill_ids": {
+        "docs": 18,
+        "refs": 18
+      },
+      "portfolio_items.skill_ids": {
+        "docs": 6,
+        "refs": 17
+      },
+      "jobs.required_skill_ids": {
+        "docs": 73,
+        "refs": 1784
+      },
+      "tailored_resumes.selected_skill_ids": {
+        "docs": 26,
+        "refs": 209
+      },
+      "job_ingests.extracted_skills.skill_id": {
+        "docs": 35,
+        "refs": 889
+      }
+    }
+  },
+  "backup_dir": "data/mongo-backups/cleanup-20260401",
+  "changes": {
+    "evidence_skill_ids_normalized": 18,
+    "evidence_project_ids_normalized": 17,
+    "evidence_docs_changed": 19,
+    "portfolio_items_to_reconcile": 7,
+    "portfolio_item_skill_ids_normalized": 7,
+    "portfolio_item_docs_changed": 7,
+    "projects_with_embedded_skill_ids": 1,
+    "projects_to_unset_skill_ids": 1,
+    "job_ingest_skill_rows_normalized": 49,
+    "job_ingest_docs_changed": 49,
+    "job_role_ids_normalized": 9,
+    "jobs_required_skill_ids_normalized": 3,
+    "jobs_docs_changed": 108,
+    "jobs_synced_required_skills": 70,
+    "jobs_synced_required_skill_ids": 98,
+    "tailored_resume_docs_changed": 42,
+    "confirmation_docs_changed": 1
+  },
+  "post_audit": {
+    "collections": {
+      "evidence": 37,
+      "projects": 35,
+      "portfolio_items": 7,
+      "job_ingests": 49,
+      "jobs": 108,
+      "job_match_runs": 65,
+      "tailored_resumes": 42,
+      "resume_skill_confirmations": 3,
+      "resume_snapshots": 61,
+      "learning_path_progress": 3
+    },
+    "portfolio_items_in_evidence": 7,
+    "legacy_portfolio_items": 7,
+    "projects_with_embedded_skill_ids": 0,
+    "jobs_with_job_ingest_id": 98,
+    "stale_skill_refs": {
+      "evidence.skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "portfolio_items.skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "jobs.required_skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "tailored_resumes.selected_skill_ids": {
+        "docs": 0,
+        "refs": 0
+      },
+      "job_ingests.extracted_skills.skill_id": {
+        "docs": 0,
+        "refs": 0
+      }
+    }
+  },
+  "finished_at": "2026-04-01T18:20:21.925667+00:00"
+}

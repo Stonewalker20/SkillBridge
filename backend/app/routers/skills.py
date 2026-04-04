@@ -8,7 +8,7 @@ from app.models.skill import SkillIn, SkillOut, SkillUpdate
 from app.utils.ai import cosine_similarity, embed_texts, normalize_ai_preferences
 from app.utils.skill_catalog import expand_alias_variants, merge_skill_docs, normalize_skill_text
 from app.utils.mongo import oid_str, ref_values
-from app.core.auth import require_user
+from app.core.auth import require_admin_user, require_user
 from bson import ObjectId
 from datetime import datetime, timezone
 
@@ -236,32 +236,65 @@ async def create_skill(payload: SkillIn, user=Depends(require_user)):
     return serialize_skill({"_id": res.inserted_id, **doc}, user.get("_id"))
 
 @router.delete("/{skill_id}")
-async def delete_skill(skill_id: str, user=Depends(require_user)):
+async def delete_skill(skill_id: str, _user=Depends(require_admin_user)):
     db = get_db()
     try:
         oid = ObjectId(skill_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid skill_id")
 
-    existing = await db["skills"].find_one({"_id": oid}, {"created_by_user_id": 1, "origin": 1, "name": 1})
+    existing = await db["skills"].find_one({"_id": oid}, {"name": 1})
     if not existing:
         raise HTTPException(status_code=404, detail="Skill not found")
-    if oid_str(existing.get("created_by_user_id")) != oid_str(user["_id"]):
-        raise HTTPException(status_code=403, detail="Default skills cannot be deleted")
 
     result = await db["skills"].delete_one({"_id": oid})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Skill not found")
 
     await db["resume_skill_confirmations"].update_many(
-        {"user_id": {"$in": ref_values(user["_id"])}},
-        {"$pull": {"confirmed": {"skill_id": {"$in": ref_values(oid)}}, "rejected": {"skill_id": {"$in": ref_values(oid)}}}},
+        {},
+        {
+            "$pull": {
+                "confirmed": {"skill_id": {"$in": ref_values(oid)}},
+                "rejected": {"skill_id": {"$in": ref_values(oid)}},
+                "edited": {"to_skill_id": {"$in": ref_values(oid)}},
+            }
+        },
     )
     await db["evidence"].update_many(
-        {"user_id": {"$in": ref_values(user["_id"])}},
+        {},
         {"$pull": {"skill_ids": {"$in": ref_values(oid)}}},
     )
-    await db["project_skill_links"].delete_many({"skill_id": oid})
+    await db["project_skill_links"].delete_many({"skill_id": {"$in": ref_values(oid)}})
+    await db["jobs"].update_many(
+        {},
+        {
+            "$pull": {
+                "required_skill_ids": {"$in": ref_values(oid)},
+                "required_skills": str(existing.get("name") or "").strip(),
+            }
+        },
+    )
+    await db["job_ingests"].update_many(
+        {},
+        {"$pull": {"extracted_skills": {"skill_id": {"$in": ref_values(oid)}}}},
+    )
+    await db["tailored_resumes"].update_many(
+        {},
+        {"$pull": {"selected_skill_ids": {"$in": ref_values(oid)}}},
+    )
+    await db["role_skill_weights"].update_many(
+        {},
+        {"$pull": {"weights": {"skill_id": {"$in": ref_values(oid)}}}},
+    )
+    await db["skill_relations"].delete_many(
+        {
+            "$or": [
+                {"from_skill_id": {"$in": ref_values(oid)}},
+                {"to_skill_id": {"$in": ref_values(oid)}},
+            ]
+        }
+    )
 
     return {"ok": True}
 

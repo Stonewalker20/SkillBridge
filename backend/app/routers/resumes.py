@@ -12,7 +12,7 @@ from app.models.resume import ResumeSnapshotIn, ResumeSnapshotOut, ResumeSnapsho
 from app.utils.ai import normalize_ai_preferences
 from app.utils.rag import sync_rag_document
 from app.utils.mongo import oid_str, ref_values
-from app.utils.rewards import increment_reward_counter
+from app.utils.rewards import safe_increment_reward_counter
 from pypdf import PdfReader
 from docx import Document
 import io
@@ -91,7 +91,7 @@ async def ingest_resume_text(payload: ResumeSnapshotIn, user=Depends(require_use
         preferences=ai_preferences,
         metadata={"source_type": "paste"},
     )
-    await increment_reward_counter(db, oid_str(user["_id"]), "resume_snapshots_uploaded")
+    await safe_increment_reward_counter(db, oid_str(user["_id"]), "resume_snapshots_uploaded")
     preview = raw_text[:200] + ("..." if len(raw_text) > 200 else "")
     return {"snapshot_id": str(res.inserted_id), "preview": preview}
 
@@ -130,7 +130,7 @@ async def ingest_resume_pdf(user_id: str = Form(...), file: UploadFile = File(..
         preferences=ai_preferences,
         metadata={"source_type": "pdf", "filename": file.filename},
     )
-    await increment_reward_counter(db, oid_str(user["_id"]), "resume_snapshots_uploaded")
+    await safe_increment_reward_counter(db, oid_str(user["_id"]), "resume_snapshots_uploaded")
     preview = raw_text[:200] + ("..." if len(raw_text) > 200 else "")
     return {"snapshot_id": str(res.inserted_id), "preview": preview}
 
@@ -173,7 +173,7 @@ async def ingest_resume_docx(user_id: str = Form(...), file: UploadFile = File(.
         preferences=ai_preferences,
         metadata={"source_type": "docx", "filename": file.filename},
     )
-    await increment_reward_counter(db, oid_str(user["_id"]), "resume_snapshots_uploaded")
+    await safe_increment_reward_counter(db, oid_str(user["_id"]), "resume_snapshots_uploaded")
     preview = raw_text[:200] + ("..." if len(raw_text) > 200 else "")
     return {"snapshot_id": str(res.inserted_id), "preview": preview}
 

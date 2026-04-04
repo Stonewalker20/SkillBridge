@@ -42,6 +42,7 @@ def test_openapi_includes_expected_route_surface():
         "/admin/summary",
         "/admin/users",
         "/admin/users/{user_id}",
+        "/admin/skills",
         "/admin/jobs",
         "/admin/jobs/{job_id}/moderation",
         "/admin/mlflow/overview",
