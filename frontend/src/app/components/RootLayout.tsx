@@ -11,7 +11,8 @@ import {
   X,
   LogOut,
   Moon,
-  Sun
+  Sun,
+  LifeBuoy
 } from "lucide-react";
 import { cn } from "./ui/utils";
 import { Button } from "./ui/button";
@@ -23,16 +24,24 @@ import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { getHeaderThemePageClass, useHeaderTheme } from "../lib/headerTheme";
 import { avatarPresetClass } from "../lib/avatarPresets";
-import { useAccountPreferences } from "../context/AccountPreferencesContext";
+import { useAccountPreferences, type SidebarItemValue } from "../context/AccountPreferencesContext";
 import { SubscriptionGate } from "./SubscriptionGate";
+import { GetStartedAgent } from "./GetStartedAgent";
+
+type SidebarNavigationKey = Exclude<SidebarItemValue, "quickActions" | "admin">;
 
 const baseNavigation = [
-  { name: "Dashboard", href: "/app", icon: LayoutDashboard },
-  { name: "Skills", href: "/app/skills", icon: Target },
-  { name: "Analytics", href: "/app/analytics/skills", icon: BarChart3 },
-  { name: "Evidence", href: "/app/evidence", icon: FolderOpen },
-  { name: "Job Match", href: "/app/jobs", icon: Briefcase },
-];
+  { key: "dashboard", name: "Dashboard", href: "/app", icon: LayoutDashboard },
+  { key: "skills", name: "Skills", href: "/app/skills", icon: Target },
+  { key: "analytics", name: "Analytics", href: "/app/analytics/skills", icon: BarChart3 },
+  { key: "evidence", name: "Evidence", href: "/app/evidence", icon: FolderOpen },
+  { key: "jobs", name: "Job Match", href: "/app/jobs", icon: Briefcase },
+] as const satisfies ReadonlyArray<{
+  key: SidebarNavigationKey;
+  name: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+}>;
 
 export function RootLayout() {
   const location = useLocation();
@@ -51,14 +60,14 @@ export function RootLayout() {
   const displayName = user?.username || user?.email?.split("@")[0] || "Account";
   const isAdminUser = ["owner", "admin", "team"].includes(String(user?.role ?? "").toLowerCase());
   const hasPlatformAccess = isAdminUser || String(user?.subscription_status ?? "").toLowerCase() === "active";
-  const isAccountPage =
-    location.pathname === "/app/account" ||
-    location.pathname.startsWith("/app/account/personalization") ||
-    location.pathname.startsWith("/app/account/achievements");
+  const isAccountPage = location.pathname === "/app/account" || location.pathname.startsWith("/app/account/");
   const isSubscriptionLocked = !hasPlatformAccess;
-  const navigation = hasPlatformAccess
-    ? [...baseNavigation, { name: "Admin", href: "/app/admin", icon: Shield }]
-    : [];
+  const navigation = [
+    ...baseNavigation.filter((item) => preferences.sidebarItems.includes(item.key)),
+    ...(hasPlatformAccess && preferences.sidebarItems.includes("admin")
+      ? [{ key: "admin", name: "Admin", href: "/app/admin", icon: Shield }]
+      : []),
+  ];
   const initials = (() => {
     const parts = String(displayName).trim().split(/[\s._-]+/).filter(Boolean);
     const a = parts[0]?.[0] ?? "S";
@@ -80,7 +89,9 @@ export function RootLayout() {
   };
 
   const isDark = mounted && resolvedTheme === "dark";
-  const isCompactSidebar = preferences.sidebarDensity === "compact";
+  const isCompactSidebar = true;
+  const quickActionsVisible = preferences.sidebarItems.includes("quickActions");
+  const unreadHelpCount = Math.max(0, Number(user?.help_unread_response_count ?? 0) || 0);
 
   let currentPageTitle = "Page";
   if (isSubscriptionLocked && !isAccountPage) {
@@ -89,8 +100,12 @@ export function RootLayout() {
     currentPageTitle = "Account";
   } else if (location.pathname.startsWith("/app/account/personalization")) {
     currentPageTitle = "Personalization";
+  } else if (location.pathname.startsWith("/app/account/ai")) {
+    currentPageTitle = "AI Settings";
   } else if (location.pathname.startsWith("/app/account/achievements")) {
     currentPageTitle = "Achievements";
+  } else if (location.pathname.startsWith("/app/account/help")) {
+    currentPageTitle = "Help";
   } else if (location.pathname.startsWith("/app/admin/mlflow")) {
     currentPageTitle = "Admin MLflow";
   } else if (location.pathname === "/app/admin") {
@@ -199,7 +214,7 @@ export function RootLayout() {
                 ctaLabel="Manage billing"
               />
             </div>
-          ) : preferences.showQuickActions ? (
+          ) : quickActionsVisible ? (
             <div className={cn("mt-auto border-t border-slate-200/80 dark:border-slate-800/80", isCompactSidebar ? "pt-3" : "pt-[clamp(0.5rem,0.25rem+0.65vh,1rem)]")}>
               <p className={cn("text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400", isCompactSidebar ? "px-3" : "px-[clamp(0.8rem,0.55rem+0.65vh,1rem)]")}>Quick Actions</p>
               <div className={cn(isCompactSidebar ? "mt-2 space-y-1.5" : "mt-[clamp(0.3rem,0.15rem+0.45vh,0.55rem)] space-y-[clamp(0.15rem,0.08rem+0.2vh,0.3rem)]")}>
@@ -312,6 +327,21 @@ export function RootLayout() {
             </div>
             
             <div className="flex items-center gap-2 sm:gap-4">
+              <Button
+                asChild
+                variant="ghost"
+                className="relative h-11 rounded-full border border-slate-200/80 bg-white/80 px-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/70"
+              >
+                <Link to="/app/account/help" aria-label="Open help requests" title="Help requests">
+                  <LifeBuoy className="h-4 w-4" />
+                  <span className="text-sm font-medium">Help</span>
+                  {unreadHelpCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 rounded-full bg-rose-500 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white">
+                      {unreadHelpCount}
+                    </span>
+                  ) : null}
+                </Link>
+              </Button>
               <Button asChild variant="ghost" className="relative h-11 w-11 rounded-full border border-slate-200/80 bg-white/80 p-0 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
                 <Link to="/app/account" aria-label="Open account settings" title="Account Settings">
                   <Avatar>
@@ -344,6 +374,7 @@ export function RootLayout() {
             )}
           </div>
         </main>
+        <GetStartedAgent />
       </div>
     </div>
   );

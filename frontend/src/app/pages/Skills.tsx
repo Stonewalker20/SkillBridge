@@ -1,6 +1,6 @@
 // frontend/src/app/pages/Skills.tsx
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type Skill, type ConfirmationOut } from "../services/api";
+import { api, type Skill, type ConfirmationOut, type Evidence } from "../services/api";
 import { useActivity } from "../context/ActivityContext";
 import { useAuth } from "../context/AuthContext";
 import { Card } from "../components/ui/card";
@@ -10,7 +10,7 @@ import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Label } from "../components/ui/label";
-import { AlertCircle, Plus, Sparkles, Trash2 } from "lucide-react";
+import { AlertCircle, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router";
 import { useHeaderTheme } from "../lib/headerTheme";
@@ -38,13 +38,31 @@ function skillCategoryList(skill: Skill): string[] {
   return single ? [single] : [];
 }
 
+function evidenceTypeLabel(value?: string): string {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "Evidence";
+  return normalized
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function evidenceTitle(entry: Pick<Evidence, "title" | "source" | "type">): string {
+  const title = String(entry.title || "").trim();
+  if (title) return title;
+  const source = String(entry.source || "").trim();
+  if (source) return source;
+  return `${evidenceTypeLabel(entry.type)} evidence`;
+}
+
 export function Skills() {
   const { user } = useAuth();
   const { recordActivity } = useActivity();
   const { activeHeaderTheme } = useHeaderTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [evidenceSkillIds, setEvidenceSkillIds] = useState<string[]>([]);
+  const [evidenceItems, setEvidenceItems] = useState<Evidence[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -54,10 +72,6 @@ export function Skills() {
   // Confirmation state (profile context)
   const [confirmation, setConfirmation] = useState<ConfirmationOut | null>(null);
   const [busySkillId, setBusySkillId] = useState<string>("");
-  const [deletingSkillId, setDeletingSkillId] = useState<string>("");
-  const [isManageOpen, setIsManageOpen] = useState(false);
-  const [selectedCustomSkillIds, setSelectedCustomSkillIds] = useState<string[]>([]);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Add Skill dialog state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -87,16 +101,11 @@ export function Skills() {
 
   const refreshEvidenceSkills = useCallback(async () => {
     if (!user?.id) {
-      setEvidenceSkillIds([]);
+      setEvidenceItems([]);
       return;
     }
     const rows = await api.listEvidence({ user_id: user.id, origin: "user" });
-    const ids = Array.from(
-      new Set(
-        rows.flatMap((row) => (Array.isArray(row.skill_ids) ? row.skill_ids : [])).map((value) => String(value || "").trim()).filter(Boolean)
-      )
-    );
-    setEvidenceSkillIds(ids);
+    setEvidenceItems(rows);
   }, [user?.id]);
 
   useEffect(() => {
@@ -136,7 +145,18 @@ export function Skills() {
     return m;
   }, [confirmation]);
 
-  const evidenceSkillIdSet = useMemo(() => new Set(evidenceSkillIds), [evidenceSkillIds]);
+  const evidenceBySkillId = useMemo(() => {
+    const map = new Map<string, Evidence[]>();
+    for (const item of evidenceItems) {
+      for (const skillId of Array.isArray(item.skill_ids) ? item.skill_ids.map((value) => String(value || "").trim()).filter(Boolean) : []) {
+        const existing = map.get(skillId) ?? [];
+        existing.push(item);
+        map.set(skillId, existing);
+      }
+    }
+    return map;
+  }, [evidenceItems]);
+  const evidenceSkillIdSet = useMemo(() => new Set(evidenceBySkillId.keys()), [evidenceBySkillId]);
   const visibleSkillIdSet = useMemo(
     () => new Set(skills.map((skill) => String(skill.id || "").trim()).filter(Boolean)),
     [skills]
@@ -214,16 +234,6 @@ export function Skills() {
       setPage(totalPages);
     }
   }, [page, totalPages]);
-
-  const customSkills = useMemo(
-    () => skills.filter((skill) => skill.can_delete).sort((a, b) => a.name.localeCompare(b.name)),
-    [skills]
-  );
-
-  const selectedCustomSkills = useMemo(
-    () => customSkills.filter((skill) => selectedCustomSkillIds.includes(skill.id)),
-    [customSkills, selectedCustomSkillIds]
-  );
 
   const handleToggleConfirm = async (skillId: string) => {
     const id = (skillId ?? "").trim();
@@ -348,75 +358,6 @@ export function Skills() {
     }
   };
 
-  const handleDeleteCustomSkill = async (skill: Skill) => {
-    if (!skill.can_delete) return;
-    if (!window.confirm(`Delete custom skill "${skill.name}"? This cannot be undone.`)) return;
-    const targetIds = skillVariantIds(skill);
-
-    try {
-      setDeletingSkillId(skill.id);
-      for (const targetId of targetIds) {
-        await api.deleteSkill(targetId);
-      }
-      setSkills((prev) => prev.filter((item) => item.id !== skill.id));
-      setSelectedCustomSkillIds((prev) => prev.filter((id) => id !== skill.id));
-      await Promise.all([refreshConfirmation(), refreshEvidenceSkills()]);
-      recordActivity({
-        id: `skills:delete:${skill.id}`,
-        type: "skills",
-        action: "deleted",
-        name: skill.name,
-      });
-      toast.success("Custom skill deleted");
-    } catch (e: any) {
-      console.error(e);
-      toast.error(`Failed to delete skill: ${errMsg(e)}`);
-    } finally {
-      setDeletingSkillId("");
-    }
-  };
-
-  const toggleSelectedCustomSkill = (skillId: string, checked: boolean) => {
-    setSelectedCustomSkillIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(skillId);
-      else next.delete(skillId);
-      return Array.from(next);
-    });
-  };
-
-  const handleBulkDeleteSelected = async () => {
-    if (!selectedCustomSkills.length) {
-      toast.error("Select at least one custom skill");
-      return;
-    }
-    const count = selectedCustomSkills.length;
-    if (!window.confirm(`Delete ${count} custom skill${count === 1 ? "" : "s"}? This cannot be undone.`)) return;
-
-    try {
-      setBulkDeleting(true);
-      for (const skill of selectedCustomSkills) {
-        for (const targetId of skillVariantIds(skill)) {
-          await api.deleteSkill(targetId);
-        }
-        recordActivity({
-          id: `skills:delete:${skill.id}`,
-          type: "skills",
-          action: "deleted",
-          name: skill.name,
-        });
-      }
-      await Promise.all([refreshSkills(), refreshConfirmation(), refreshEvidenceSkills()]);
-      setSelectedCustomSkillIds([]);
-      toast.success(`${count} custom skill${count === 1 ? "" : "s"} deleted`);
-    } catch (e: any) {
-      console.error(e);
-      toast.error(`Failed to delete selected skills: ${errMsg(e)}`);
-    } finally {
-      setBulkDeleting(false);
-    }
-  };
-
   if (loading) {
     return <div className="flex items-center justify-center h-full">Loading skills...</div>;
   }
@@ -452,93 +393,6 @@ export function Skills() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-          <Dialog open={isManageOpen} onOpenChange={setIsManageOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="h-10 rounded-xl px-4 text-sm font-medium whitespace-nowrap">
-                Manage Custom Skills
-              </Button>
-            </DialogTrigger>
-
-            <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden p-0 dark:border-slate-800 dark:bg-slate-950">
-              <div className="flex h-full max-h-[85vh] flex-col">
-                <DialogHeader className="border-b px-6 py-4 dark:border-slate-800">
-                  <DialogTitle>Manage Custom Skills</DialogTitle>
-                </DialogHeader>
-
-                <div className="flex items-center justify-between gap-3 border-b px-6 py-3 dark:border-slate-800">
-                  <p className="text-sm text-gray-600 dark:text-slate-300">
-                    Delete skills you created through evidence or the add-skill flow.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setSelectedCustomSkillIds(customSkills.map((skill) => skill.id))}
-                      disabled={!customSkills.length || bulkDeleting}
-                    >
-                      Select All
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setSelectedCustomSkillIds([])}
-                      disabled={!selectedCustomSkillIds.length || bulkDeleting}
-                    >
-                      Clear
-                    </Button>
-                    <Button
-                      className="bg-red-600 text-white hover:bg-red-700"
-                      onClick={handleBulkDeleteSelected}
-                      disabled={!selectedCustomSkills.length || bulkDeleting}
-                    >
-                      {bulkDeleting ? "Deleting..." : `Delete Selected (${selectedCustomSkills.length})`}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto px-6 py-4">
-                  {customSkills.length === 0 ? (
-                    <p className="text-sm text-gray-500 dark:text-slate-400">No custom skills to manage.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {customSkills.map((skill) => {
-                        const checked = selectedCustomSkillIds.includes(skill.id);
-                        const confirmed = confirmedMap.has(skill.id);
-                        const evidenceBacked = evidenceSkillIdSet.has(skill.id);
-
-                        return (
-                          <label
-                            key={skill.id}
-                            className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:bg-gray-50 dark:border-slate-800 dark:hover:bg-slate-900/80"
-                          >
-                            <input
-                              type="checkbox"
-                              className="mt-1"
-                              checked={checked}
-                              onChange={(e) => toggleSelectedCustomSkill(skill.id, e.target.checked)}
-                              disabled={bulkDeleting}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-900 dark:text-slate-100">{skill.name}</span>
-                                {skill.category ? <Badge variant="secondary" className="dark:bg-slate-800 dark:text-slate-200">{skill.category}</Badge> : null}
-                              </div>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {confirmed ? <Badge className="bg-green-50 text-green-700">Confirmed</Badge> : null}
-                                {evidenceBacked ? <Badge className="bg-blue-50 text-blue-700">Used in evidence</Badge> : null}
-                                {!confirmed && !evidenceBacked ? (
-                                  <Badge className="bg-amber-50 text-amber-700">Orphaned</Badge>
-                                ) : null}
-                              </div>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
           <Dialog
             open={isAddOpen}
             onOpenChange={(open) => {
@@ -656,12 +510,19 @@ export function Skills() {
 
       {/* Skills Grid */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {pagedSkills.map((skill) => {
-          const variantIds = skillVariantIds(skill);
-          const variantEntries = variantIds.map((variantId) => confirmedMap.get(variantId)).filter(Boolean);
-          const confirmed = variantEntries.length > 0;
-          const confirmationEntry = confirmed
-            ? {
+	        {pagedSkills.map((skill) => {
+	          const variantIds = skillVariantIds(skill);
+	          const variantEntries = variantIds.map((variantId) => confirmedMap.get(variantId)).filter(Boolean);
+          const supportingEvidence = Array.from(
+            new Map(
+              variantIds
+                .flatMap((variantId) => evidenceBySkillId.get(variantId) ?? [])
+                .map((item) => [item.id, item] as const)
+            ).values()
+          );
+	          const confirmed = variantEntries.length > 0;
+	          const confirmationEntry = confirmed
+	            ? {
                 proficiency: Math.max(...variantEntries.map((entry) => entry!.proficiency)),
                 manualProficiency: Math.max(...variantEntries.map((entry) => entry!.manualProficiency)),
                 autoProficiency: Math.max(...variantEntries.map((entry) => entry!.autoProficiency)),
@@ -669,13 +530,21 @@ export function Skills() {
               }
             : null;
 
-          const effectiveProficiency = confirmed
-            ? Math.max(1, Math.min(5, confirmationEntry!.proficiency ?? confirmationEntry!.manualProficiency ?? 1))
-            : 0;
-          const categoryList = skillCategoryList(skill);
+	          const effectiveProficiency = confirmed
+	            ? Math.max(1, Math.min(5, confirmationEntry!.proficiency ?? confirmationEntry!.manualProficiency ?? 1))
+	            : 0;
+	          const categoryList = skillCategoryList(skill);
+          const hasSupportingEvidence = supportingEvidence.length > 0;
+          const hiddenEvidenceCount = Math.max(0, supportingEvidence.length - 3);
+          const aliases = Array.isArray(skill.aliases) ? skill.aliases.filter(Boolean) : [];
+          const evidenceSummary = hasSupportingEvidence
+            ? `${supportingEvidence.length} evidence item${supportingEvidence.length === 1 ? "" : "s"} currently support this skill's proficiency.`
+            : confirmed
+              ? "No saved evidence currently supports this proficiency score. This rating is based on confirmation only."
+              : "No saved evidence currently supports this skill yet.";
 
-          return (
-            <Card key={skill.id} className="group p-3.5 transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900/80">
+	          return (
+	            <Card key={skill.id} className="group relative overflow-visible p-3.5 transition-shadow hover:z-20 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/80">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="flex-1">
                   <h3 className="text-base font-semibold leading-tight text-gray-900 dark:text-slate-100">{skill.name}</h3>
@@ -683,33 +552,18 @@ export function Skills() {
                 </div>
 
                 <div className="shrink-0">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      className={
-                        confirmed
-                          ? "h-8 rounded-lg px-2.5 text-xs bg-gray-200 text-gray-700 hover:bg-gray-300"
-                          : `h-8 rounded-lg px-2.5 text-xs ${activeHeaderTheme.buttonClass}`
-                      }
-                      onClick={() => handleToggleConfirm(skill.id)}
-                      disabled={busySkillId === skill.id}
-                    >
-                      {busySkillId === skill.id ? "Working..." : confirmed ? "Unconfirm" : "Confirm"}
-                    </Button>
-                    {skill.can_delete ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDeleteCustomSkill(skill)}
-                        disabled={deletingSkillId === skill.id}
-                        className="h-8 w-8 shrink-0 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
-                        aria-label={`Delete ${skill.name}`}
-                        title={`Delete ${skill.name}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    ) : null}
-                  </div>
+                  <Button
+                    size="sm"
+                    className={
+                      confirmed
+                        ? "h-8 rounded-lg px-2.5 text-xs bg-gray-200 text-gray-700 hover:bg-gray-300"
+                        : `h-8 rounded-lg px-2.5 text-xs ${activeHeaderTheme.buttonClass}`
+                    }
+                    onClick={() => handleToggleConfirm(skill.id)}
+                    disabled={busySkillId === skill.id}
+                  >
+                    {busySkillId === skill.id ? "Working..." : confirmed ? "Unconfirm" : "Confirm"}
+                  </Button>
                 </div>
               </div>
 
@@ -746,24 +600,63 @@ export function Skills() {
                         />
                       );
                     })}
-                  </div>
-                </div>
-                <div className="max-h-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-focus-within:mt-2 group-focus-within:max-h-16 group-focus-within:opacity-100 group-hover:mt-2 group-hover:max-h-16 group-hover:opacity-100">
-                  {confirmed && confirmationEntry && confirmationEntry.evidenceCount > 0 ? (
-                    <div className="text-[11px] leading-snug text-gray-500 dark:text-slate-400">
-                      {confirmationEntry.evidenceCount} evidence item{confirmationEntry.evidenceCount === 1 ? "" : "s"} support this skill.
-                      {confirmationEntry.autoProficiency > confirmationEntry.manualProficiency
-                        ? ` Auto-raised from ${confirmationEntry.manualProficiency} to ${confirmationEntry.autoProficiency}.`
-                        : ""}
+	                  </div>
+	                </div>
+	                <div className="pointer-events-none absolute inset-x-3.5 top-full z-30 mt-2 opacity-0 transition-opacity duration-200 ease-out group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                    <div className="rounded-xl border border-slate-200/80 bg-slate-50/95 p-3 shadow-xl backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-gray-500 dark:text-slate-400">
+                            Evidence Support
+                          </div>
+                          <div className="mt-1 text-[11px] leading-snug text-gray-600 dark:text-slate-300">
+                            {evidenceSummary}
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="shrink-0 dark:border-slate-700 dark:text-slate-200">
+                          {supportingEvidence.length} linked
+                        </Badge>
+                      </div>
+                      {hasSupportingEvidence ? (
+                        <div className="mt-3 space-y-2">
+                          {supportingEvidence.slice(0, 3).map((item) => (
+                            <div
+                              key={`${skill.id}:evidence:${item.id}`}
+                              className="rounded-lg border border-slate-200 bg-white/90 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/80"
+                            >
+                              <div className="text-[11px] font-medium text-slate-900 dark:text-slate-100">
+                                {evidenceTitle(item)}
+                              </div>
+                              <div className="mt-1 line-clamp-2 text-[11px] text-gray-500 dark:text-slate-400">
+                                {[evidenceTypeLabel(item.type), String(item.source || "").trim()].filter(Boolean).join(" • ")}
+                              </div>
+                            </div>
+                          ))}
+                          {hiddenEvidenceCount > 0 ? (
+                            <div className="text-[11px] text-gray-500 dark:text-slate-400">
+                              +{hiddenEvidenceCount} more linked evidence item{hiddenEvidenceCount === 1 ? "" : "s"}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white/70 px-3 py-2 text-[11px] text-gray-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
+                          No evidence is currently supporting this skill's proficiency score.
+                        </div>
+                      )}
+                      {confirmed && confirmationEntry && confirmationEntry.autoProficiency > confirmationEntry.manualProficiency ? (
+                        <div className="mt-3 text-[11px] leading-snug text-gray-600 dark:text-slate-300">
+                          Auto-raised from {confirmationEntry.manualProficiency} to {confirmationEntry.autoProficiency} based on evidence support.
+                        </div>
+                      ) : null}
+                      {aliases.length > 0 ? (
+                        <div className="mt-3 line-clamp-2 text-[11px] text-gray-500 dark:text-slate-400">
+                          Also known as: {aliases.join(", ")}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : Array.isArray(skill.aliases) && skill.aliases.length > 0 ? (
-                    <div className="line-clamp-2 text-[11px] text-gray-500 dark:text-slate-400">
-                      Also known as: {skill.aliases.join(", ")}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </Card>
+	                </div>
+	              </div>
+	            </Card>
           );
         })}
       </div>

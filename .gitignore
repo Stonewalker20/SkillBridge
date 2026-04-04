@@ -17,6 +17,7 @@ backend/ml_sandbox/artifacts/
 backend/ml_sandbox/datasets/generated/
 backend/tests/.tmp_avatars/
 backend/data/uploads/
+backend/backend/data/uploads/
 /data/
 
 # Envs
@@ -51,3 +52,16 @@ progressReports.out
 progressReports.pdf
 progressReports.toc
 reports/.latex-build/
+reports/.pptx-export/
+reports/*.aux
+reports/*.fdb_latexmk
+reports/*.fls
+reports/*.listing
+reports/*.log
+reports/*.nav
+reports/*.out
+reports/*.snm
+reports/*.synctex.gz
+reports/*.toc
+reports/*.vrb
+reports/~$*.pptx

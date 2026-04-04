@@ -7,6 +7,7 @@ from bson import ObjectId
 from app.core.db import get_db
 from app.core.auth import require_user
 from app.utils.mongo import oid_str, ref_values
+from app.utils.portfolio_records import load_legacy_portfolio_docs
 
 router = APIRouter()
 
@@ -169,6 +170,23 @@ async def dashboard_summary(
         .find({"user_id": {"$in": user_refs}, "origin": "user"}, {"type": 1, "skill_ids": 1, "structured_evidence": 1})
         .to_list(length=2000)
     )
+    legacy_portfolio_items = await load_legacy_portfolio_docs(db, user_oid)
+    known_portfolio_keys = {
+        oid_str(item.get("legacy_portfolio_item_id")) or oid_str(item.get("_id"))
+        for item in evidence_items
+        if item.get("structured_evidence") is True
+    }
+    for item in legacy_portfolio_items:
+        if oid_str(item.get("_id")) in known_portfolio_keys:
+            continue
+        evidence_items.append(
+            {
+                "_id": item.get("_id"),
+                "type": item.get("type", "other"),
+                "skill_ids": item.get("skill_ids", []),
+                "structured_evidence": True,
+            }
+        )
     recent_match_runs = await (
         db["job_match_runs"]
         .find({"user_id": {"$in": user_refs}}, {"analysis": 1, "created_at": 1})

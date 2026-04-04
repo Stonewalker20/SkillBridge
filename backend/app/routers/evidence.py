@@ -9,7 +9,7 @@ from app.core.db import get_db
 from app.models.evidence import EvidenceIn, EvidenceOut, EvidencePatch
 from app.utils.ai import extract_skill_candidates, embed_texts, cosine_similarity, normalize_ai_preferences
 from app.utils.rag import delete_rag_document, sync_rag_document
-from app.utils.rewards import increment_reward_counter
+from app.utils.rewards import safe_increment_reward_counter
 from app.utils.security import AI_RATE_LIMITS, build_rate_limit_identifier, enforce_rate_limit
 from app.utils.skill_catalog import (
     build_canonical_skill_index,
@@ -18,13 +18,16 @@ from app.utils.skill_catalog import (
     normalize_skill_text,
     should_use_strict_exact_match,
 )
-from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
+from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id, try_object_id
 import io
 import os
 import re
+import logging
 from hashlib import sha1
+from urllib.parse import urlparse
 
 router = APIRouter()
+LOGGER = logging.getLogger(__name__)
 
 TEST_SKILL_PATTERN = re.compile(r"\b(test|demo|sample|mock|dummy|placeholder)\b", re.IGNORECASE)
 BAD_SKILL_PATTERN = re.compile(r"(^\d+(\.\d+)?$)|(^\d{4}$)|(^[a-z]{1,2}$)|(\.$)", re.IGNORECASE)
@@ -103,6 +106,75 @@ def infer_source(url: str | None, filename: str | None) -> str:
     if filename and filename.strip():
         return filename.strip()
     return "manual-entry"
+
+
+def is_github_url(value: str | None) -> bool:
+    parsed = urlparse(str(value or "").strip())
+    host = parsed.netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host == "github.com" or host.endswith(".github.com")
+
+
+def github_evidence_title(url: str | None) -> str:
+    parsed = urlparse(str(url or "").strip())
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) >= 2:
+        owner = parts[0].strip()
+        repo = parts[1].strip()
+        repo = repo[:-4] if repo.endswith(".git") else repo
+        if owner and repo:
+            return f"{owner}/{repo}"
+    if parts:
+        return parts[0].strip()
+    return "GitHub Evidence"
+
+
+def github_evidence_excerpt(url: str | None) -> str:
+    title = github_evidence_title(url)
+    return f"GitHub link: {title}" if title else "GitHub link"
+
+
+def normalize_skill_ids(skill_ids: list[str] | None) -> list[object]:
+    normalized: list[object] = []
+    for sid in skill_ids or []:
+        oid = try_object_id(sid)
+        if oid is None or oid in normalized:
+            continue
+        if oid not in normalized:
+            normalized.append(oid)
+    return normalized
+
+
+async def safe_sync_rag_document(
+    db,
+    *,
+    user_id: str,
+    source_type: str,
+    source_id: str,
+    title: str,
+    text: str,
+    preferences: dict | None = None,
+    metadata: dict | None = None,
+) -> None:
+    try:
+        await sync_rag_document(
+            db,
+            user_id=user_id,
+            source_type=source_type,
+            source_id=source_id,
+            title=title,
+            text=text,
+            preferences=preferences,
+            metadata=metadata,
+        )
+    except Exception as exc:
+        LOGGER.warning(
+            "Failed to sync rag document for evidence %s: %s",
+            source_id,
+            exc,
+            exc_info=True,
+        )
 
 
 def _candidate_tokens(value: str) -> set[str]:
@@ -377,6 +449,19 @@ async def analyze_evidence(
                 0,
             )
         )
+    elif url and is_github_url(url):
+        resolved_title = (title or "").strip() or github_evidence_title(url)
+        items.append(
+            build_analysis_item(
+                resolved_title,
+                type,
+                infer_source(url, None),
+                github_evidence_excerpt(url),
+                None,
+                [],
+                0,
+            )
+        )
 
     for index, upload in enumerate(upload_list, start=len(items)):
         filename = upload.filename or "upload"
@@ -459,9 +544,7 @@ async def create_evidence(payload: EvidenceIn, user=Depends(require_user)):
     db = get_db()
     ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
 
-    skill_ids = []
-    for sid in payload.skill_ids or []:
-        skill_ids.append(to_object_id(sid))
+    skill_ids = normalize_skill_ids(payload.skill_ids)
 
     doc = {
         "user_email": payload.user_email,
@@ -481,7 +564,7 @@ async def create_evidence(payload: EvidenceIn, user=Depends(require_user)):
     res = await db["evidence"].insert_one(doc)
     # Keep the retrieval index in sync with the persisted evidence text so job match
     # and tailoring can ground future generations on this exact document.
-    await sync_rag_document(
+    await safe_sync_rag_document(
         db,
         user_id=oid_str(user["_id"]),
         source_type="evidence",
@@ -491,7 +574,7 @@ async def create_evidence(payload: EvidenceIn, user=Depends(require_user)):
         preferences=ai_preferences,
         metadata={"evidence_type": doc.get("type", "other"), "origin": doc.get("origin", "user")},
     )
-    await increment_reward_counter(db, oid_str(user["_id"]), "evidence_saved")
+    await safe_increment_reward_counter(db, oid_str(user["_id"]), "evidence_saved")
 
     return EvidenceOut(
         **serialize_evidence({"_id": res.inserted_id, **doc}),
@@ -520,7 +603,12 @@ async def patch_evidence(evidence_id: str, payload: EvidencePatch, user=Depends(
         raise HTTPException(status_code=400, detail="No fields provided to update")
 
     if "skill_ids" in updates:
-        updates["skill_ids"] = [to_object_id(sid) for sid in updates["skill_ids"]]
+        raw_skill_ids = updates.get("skill_ids") or []
+        normalized_skill_ids = normalize_skill_ids(raw_skill_ids)
+        if raw_skill_ids and not normalized_skill_ids:
+            updates.pop("skill_ids", None)
+        else:
+            updates["skill_ids"] = normalized_skill_ids
     if "project_id" in updates:
         updates["project_id"] = to_object_id(updates["project_id"]) if updates["project_id"] else None
 
@@ -533,7 +621,7 @@ async def patch_evidence(evidence_id: str, payload: EvidencePatch, user=Depends(
 
     # Evidence edits must immediately change retrieval results; re-indexing here keeps
     # the derived rag_chunks collection aligned with the canonical evidence record.
-    await sync_rag_document(
+    await safe_sync_rag_document(
         db,
         user_id=oid_str(user["_id"]),
         source_type="evidence",

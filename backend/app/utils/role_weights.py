@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 
 from bson import ObjectId
 
+from app.utils.mongo import oid_str, ref_values
+
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -25,7 +27,7 @@ async def refresh_role_weights(db, role_id: str) -> list[dict]:
     role_doc = await db["roles"].find_one({"_id": role_oid}, {"name": 1})
 
     jobs = await db["jobs"].find(
-        {"moderation_status": "approved", "role_ids": role_id},
+        {"moderation_status": "approved", "role_ids": {"$in": ref_values(role_id)}},
         {"required_skill_ids": 1},
     ).to_list(length=2000)
 
@@ -36,9 +38,9 @@ async def refresh_role_weights(db, role_id: str) -> list[dict]:
         counts: dict[str, int] = {}
         for job in jobs:
             job_skill_ids = {
-                str(skill_id).strip()
+                oid_str(skill_id)
                 for skill_id in (job.get("required_skill_ids") or [])
-                if str(skill_id).strip()
+                if oid_str(skill_id)
             }
             for skill_id in job_skill_ids:
                 counts[skill_id] = counts.get(skill_id, 0) + 1

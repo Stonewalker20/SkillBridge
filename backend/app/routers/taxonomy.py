@@ -13,6 +13,7 @@ from app.core.auth import require_user
 from app.core.db import get_db
 from app.utils.learning_resources import recommended_resources, recommended_resources_for_many
 from app.utils.mongo import oid_str
+from app.utils.role_weights import refresh_role_weights
 from app.utils.ai import cosine_similarity, embed_texts
 from app.utils.skill_catalog import expand_alias_variants, unique_casefolded, normalize_skill_text
 from app.models.taxonomy import (
@@ -341,35 +342,7 @@ async def _load_role_weights(db, role_id: str) -> list[dict]:
     stored = await db["role_skill_weights"].find_one({"role_id": role_oid}, {"weights": 1})
     if stored and isinstance(stored.get("weights"), list) and stored.get("weights"):
         return list(stored.get("weights") or [])
-
-    jobs = await db["jobs"].find(
-        {"moderation_status": "approved", "role_ids": role_id},
-        {"required_skill_ids": 1},
-    ).to_list(length=1000)
-    total = len(jobs)
-    if total <= 0:
-        return []
-
-    counts: dict[str, int] = {}
-    for job in jobs:
-        job_skill_ids = {
-            str(skill_id).strip()
-            for skill_id in (job.get("required_skill_ids") or [])
-            if str(skill_id).strip()
-        }
-        for skill_id in job_skill_ids:
-            counts[skill_id] = counts.get(skill_id, 0) + 1
-
-    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
-    skill_docs = await _load_skill_docs(db, [skill_id for skill_id, _count in ranked])
-    return [
-        {
-            "skill_id": skill_id,
-            "skill_name": str((skill_docs.get(skill_id) or {}).get("name") or ""),
-            "weight": count / total,
-        }
-        for skill_id, count in ranked
-    ]
+    return await refresh_role_weights(db, role_id)
 
 # UC 4.4 – Maintain taxonomy: manage skill aliases
 @router.put("/aliases/{skill_id}")
@@ -419,6 +392,22 @@ async def create_relation(payload: SkillRelationIn):
         "relation_type": payload.relation_type,
         "created_at": now_utc(),
     }
+    existing = await db["skill_relations"].find_one(
+        {
+            "from_skill_id": from_oid,
+            "to_skill_id": to_oid,
+            "relation_type": payload.relation_type,
+        }
+    )
+    if existing:
+        return {
+            "id": oid_str(existing["_id"]),
+            "from_skill_id": payload.from_skill_id,
+            "to_skill_id": payload.to_skill_id,
+            "relation_type": payload.relation_type,
+            "created_at": existing.get("created_at"),
+        }
+
     res = await db["skill_relations"].insert_one(doc)
     return {
         "id": oid_str(res.inserted_id),

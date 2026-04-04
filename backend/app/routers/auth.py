@@ -26,13 +26,15 @@ from app.models.auth import (
     AuthOut,
     UserOut,
     UserPatch,
+    UserOnboardingOut,
+    UserOnboardingPatchIn,
     PasswordChangeIn,
     PasswordResetRequestIn,
     PasswordResetConfirmIn,
     PasswordResetOut,
     SubscriptionActivateIn,
 )
-from app.utils.mongo import oid_str
+from app.utils.mongo import oid_str, unique_strings
 from app.utils.media_storage import avatar_storage_key_from_user, get_avatar_storage_provider
 from app.utils.security import AUTH_RATE_LIMITS, build_rate_limit_identifier, enforce_rate_limit
 from app.core.config import settings
@@ -61,9 +63,27 @@ SUBSCRIPTION_PLAN_KEYS = {"starter", "pro", "elite"}
 PASSWORD_RESET_COLLECTION = "password_reset_tokens"
 
 
+def serialize_onboarding_state(user: dict) -> tuple[UserOnboardingOut | None, bool]:
+    raw = user.get("onboarding")
+    if not isinstance(raw, dict):
+        return None, True
+
+    completed_steps = unique_strings(raw.get("completed_steps"))
+    state = UserOnboardingOut(
+        started_at=normalize_exp(raw.get("started_at")),
+        last_step=str(raw.get("last_step") or "").strip() or None,
+        completed_steps=completed_steps,
+        completed_at=normalize_exp(raw.get("completed_at")),
+        dismissed_at=normalize_exp(raw.get("dismissed_at")),
+    )
+    is_new_user = state.completed_at is None and state.dismissed_at is None
+    return state, is_new_user
+
+
 def serialize_user_out(user: dict) -> UserOut:
     subscription_status = str(user.get("subscription_status") or SUBSCRIPTION_DEFAULT_STATUS).strip().lower() or SUBSCRIPTION_DEFAULT_STATUS
     subscription_plan = str(user.get("subscription_plan") or "").strip() or None
+    onboarding, is_new_user = serialize_onboarding_state(user)
     if has_subscription_access(user):
         subscription_status = "active"
         subscription_plan = subscription_plan or "admin"
@@ -84,6 +104,9 @@ def serialize_user_out(user: dict) -> UserOut:
         stripe_customer_id=str(user.get("stripe_customer_id") or "").strip() or None,
         stripe_subscription_id=str(user.get("stripe_subscription_id") or "").strip() or None,
         stripe_checkout_session_id=str(user.get("stripe_checkout_session_id") or "").strip() or None,
+        help_unread_response_count=max(0, int(user.get("help_unread_response_count") or 0)),
+        is_new_user=is_new_user,
+        onboarding=onboarding,
     )
 
 
@@ -193,7 +216,9 @@ async def register(payload: RegisterIn, request: Request):
         "stripe_customer_id": None,
         "stripe_subscription_id": None,
         "stripe_checkout_session_id": None,
+        "help_unread_response_count": 0,
         "avatar_storage_key": None,
+        "onboarding": {"completed_steps": []},
         "created_at": now_utc(),
     }
 
@@ -324,6 +349,12 @@ async def me(user=Depends(require_user)):
     return serialize_user_out(user)
 
 
+@router.get("/me/onboarding", response_model=UserOnboardingOut)
+async def get_my_onboarding_state(user=Depends(require_user)):
+    onboarding, _is_new_user = serialize_onboarding_state(user)
+    return onboarding or UserOnboardingOut(completed_steps=[])
+
+
 @router.patch("/me", response_model=UserOut)
 async def patch_me(payload: UserPatch, user=Depends(require_user)):
     db = get_db()
@@ -351,6 +382,30 @@ async def patch_me(payload: UserPatch, user=Depends(require_user)):
         raise HTTPException(status_code=404, detail="User not found")
 
     return serialize_user_out(updated)
+
+
+@router.patch("/me/onboarding", response_model=UserOnboardingOut)
+async def patch_my_onboarding_state(payload: UserOnboardingPatchIn, user=Depends(require_user)):
+    db = get_db()
+    raw_updates = payload.model_dump(exclude_none=True)
+    current_state = user.get("onboarding") if isinstance(user.get("onboarding"), dict) else {}
+    next_state = dict(current_state)
+    for key, value in raw_updates.items():
+        next_state[key] = value
+    if "completed_steps" in raw_updates:
+        next_state["completed_steps"] = unique_strings(raw_updates.get("completed_steps"))
+    if next_state.get("completed_at") and not next_state.get("started_at"):
+        next_state["started_at"] = next_state["completed_at"]
+    next_state["last_step"] = str(next_state.get("last_step") or "").strip() or None
+    await db["users"].update_one(
+        {"_id": user["_id"]},
+        {"$set": {"onboarding": next_state, "updated_at": now_utc()}},
+    )
+    updated = await db["users"].find_one({"_id": user["_id"]})
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+    onboarding, _is_new_user = serialize_onboarding_state(updated)
+    return onboarding or UserOnboardingOut(completed_steps=[])
 
 
 @router.post("/me/subscription", response_model=UserOut)

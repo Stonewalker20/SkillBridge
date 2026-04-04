@@ -143,7 +143,7 @@ def test_resume_ingest_promote_dashboard_and_tailor_endpoints(test_context, monk
     assert "gap_reasoning_summary" in match.json()
     assert "gap_insights" in match.json()
     assert "personal_skill_vector_score" in match.json()
-    assert any(item["label"] == "Personal skill vector" for item in match.json()["score_breakdown"])
+    assert any(item["label"] == "Overall profile match" for item in match.json()["score_breakdown"])
 
     user_vector = client.get("/tailor/user-vector", headers=headers)
     assert user_vector.status_code == 200

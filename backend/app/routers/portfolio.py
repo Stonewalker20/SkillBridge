@@ -9,7 +9,12 @@ from bson import ObjectId
 from app.core.db import get_db
 from app.core.auth import require_user
 from app.models.portfolio import PortfolioItemIn, PortfolioItemOut, PortfolioItemPatch
-from app.utils.mongo import oid_str, ref_query, to_object_id, ref_values
+from app.utils.mongo import canonical_object_refs, oid_str, ref_query, to_object_id, ref_values
+from app.utils.portfolio_records import (
+    load_legacy_portfolio_docs,
+    portfolio_dedupe_key,
+    serialize_portfolio_doc,
+)
 
 router = APIRouter()
 
@@ -49,26 +54,6 @@ def _portfolio_item_to_evidence_doc(payload: PortfolioItemIn, user_oid: ObjectId
     }
 
 
-def _serialize_portfolio_item(doc: dict) -> dict:
-    return {
-        "id": oid_str(doc["_id"]),
-        "user_id": oid_str(doc["user_id"]),
-        "type": doc.get("portfolio_item_type", doc.get("type", "other")),
-        "title": doc.get("title", ""),
-        "org": doc.get("org"),
-        "date_start": doc.get("date_start"),
-        "date_end": doc.get("date_end"),
-        "summary": doc.get("summary"),
-        "bullets": doc.get("bullets", []),
-        "links": doc.get("links", []),
-        "skill_ids": [oid_str(x) for x in doc.get("skill_ids", [])],
-        "tags": doc.get("tags", []),
-        "visibility": doc.get("visibility", "private"),
-        "priority": doc.get("priority", 0),
-        "created_at": doc.get("created_at"),
-        "updated_at": doc.get("updated_at"),
-    }
-
 @router.post("/items", response_model=PortfolioItemOut)
 async def create_portfolio_item(payload: PortfolioItemIn, user=Depends(require_user)):
     db = get_db()
@@ -76,7 +61,7 @@ async def create_portfolio_item(payload: PortfolioItemIn, user=Depends(require_u
         raise HTTPException(status_code=403, detail="user_id must match authenticated user")
     doc = _portfolio_item_to_evidence_doc(payload, user["_id"])
     res = await db["evidence"].insert_one(doc)
-    return _serialize_portfolio_item({"_id": res.inserted_id, **doc})
+    return serialize_portfolio_doc({"_id": res.inserted_id, **doc})
 
 @router.get("/items", response_model=list[PortfolioItemOut])
 async def list_portfolio_items(
@@ -96,9 +81,19 @@ async def list_portfolio_items(
         q["visibility"] = visibility
 
     q["structured_evidence"] = True
-    cursor = db["evidence"].find(q).sort("priority", -1).sort("updated_at", -1)
-    docs = await cursor.to_list(length=500)
-    return [_serialize_portfolio_item(d) for d in docs]
+    docs = await db["evidence"].find(q).sort("priority", -1).sort("updated_at", -1).to_list(length=500)
+    legacy_docs = await load_legacy_portfolio_docs(db, effective_user_id)
+    known_keys = {portfolio_dedupe_key(doc) for doc in docs}
+    for legacy in legacy_docs:
+        if type and str(legacy.get("type") or "").strip() != type:
+            continue
+        if visibility and str(legacy.get("visibility") or "").strip() != visibility:
+            continue
+        if portfolio_dedupe_key(legacy) in known_keys:
+            continue
+        docs.append(legacy)
+    docs.sort(key=lambda doc: (int(doc.get("priority") or 0), doc.get("updated_at") or doc.get("created_at") or now_utc()), reverse=True)
+    return [serialize_portfolio_doc(d) for d in docs]
 
 @router.patch("/items/{item_id}", response_model=PortfolioItemOut)
 async def patch_portfolio_item(item_id: str, payload: PortfolioItemPatch, user=Depends(require_user)):
@@ -112,7 +107,7 @@ async def patch_portfolio_item(item_id: str, payload: PortfolioItemPatch, user=D
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     if "skill_ids" in updates:
-        updates["skill_ids"] = [to_object_id(sid) for sid in updates["skill_ids"]]
+        updates["skill_ids"] = canonical_object_refs(updates["skill_ids"])
     if "summary" in updates or "bullets" in updates or "title" in updates:
         summary = str(updates.get("summary") or "").strip()
         bullets = [str(value or "").strip() for value in (updates.get("bullets") or []) if str(value or "").strip()]
@@ -137,12 +132,25 @@ async def patch_portfolio_item(item_id: str, payload: PortfolioItemPatch, user=D
         {"$set": updates},
     )
     if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Portfolio item not found")
+        legacy_updates = dict(updates)
+        if "portfolio_item_type" in legacy_updates:
+            legacy_updates["type"] = legacy_updates.pop("portfolio_item_type")
+        legacy_updates.pop("text_excerpt", None)
+        legacy_res = await db["portfolio_items"].update_one(
+            {"_id": oid, "user_id": {"$in": ref_values(user["_id"])}},
+            {"$set": legacy_updates},
+        )
+        if legacy_res.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Portfolio item not found")
+        legacy_doc = await db["portfolio_items"].find_one({"_id": oid, "user_id": {"$in": ref_values(user["_id"])}})
+        if not legacy_doc:
+            raise HTTPException(status_code=404, detail="Portfolio item not found")
+        return serialize_portfolio_doc(legacy_doc)
 
     d = await db["evidence"].find_one({"_id": oid, "user_id": {"$in": ref_values(user["_id"])}, "structured_evidence": True})
     if not d:
         raise HTTPException(status_code=404, detail="Portfolio item not found")
-    return _serialize_portfolio_item(d)
+    return serialize_portfolio_doc(d)
 
 @router.delete("/items/{item_id}")
 async def delete_portfolio_item(item_id: str, user=Depends(require_user)):
@@ -154,5 +162,7 @@ async def delete_portfolio_item(item_id: str, user=Depends(require_user)):
 
     res = await db["evidence"].delete_one({"_id": oid, "user_id": {"$in": ref_values(user["_id"])}, "structured_evidence": True})
     if res.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Portfolio item not found")
+        legacy_res = await db["portfolio_items"].delete_one({"_id": oid, "user_id": {"$in": ref_values(user["_id"])}})
+        if legacy_res.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Portfolio item not found")
     return {"deleted": True, "id": item_id}

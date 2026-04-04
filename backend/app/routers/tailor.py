@@ -18,6 +18,7 @@ from app.core.auth import require_user
 from app.core.config import settings
 from app.core.db import get_db
 from app.models.tailor import (
+    BreakdownIncludedItem,
     AIPreferencesOut,
     AIPreferencesPatchIn,
     AISettingsDetailOut,
@@ -52,8 +53,10 @@ from app.utils.ai import (
     normalize_ai_preferences,
     rewrite_resume_bullets,
 )
-from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id
-from app.utils.rewards import increment_reward_counter
+from app.utils.job_records import derive_required_skills, normalize_extracted_skills, serialize_extracted_skill
+from app.utils.mongo import canonical_object_refs, oid_str, ref_query, ref_values, to_object_id
+from app.utils.portfolio_records import load_legacy_portfolio_docs
+from app.utils.rewards import safe_increment_reward_counter
 from app.utils.security import AI_RATE_LIMITS, build_rate_limit_identifier, enforce_rate_limit
 
 router = APIRouter()
@@ -123,6 +126,127 @@ TAILORED_RESUME_TEMPLATES: dict[str, dict[str, object]] = {
 
 def now_utc():
     return datetime.now(timezone.utc)
+
+
+def _job_text_preview(text: str, limit: int = 220) -> str:
+    preview = str(text or "").strip().replace("\n", " ")
+    preview = re.sub(r"\s+", " ", preview).strip()
+    if len(preview) > limit:
+        return preview[:limit] + "..."
+    return preview
+
+
+def _clean_display_text(value: str, limit: int | None = None) -> str:
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    if not limit or len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + "..."
+
+
+def _plain_language_excerpt(value: str, limit: int = 120) -> str:
+    text = _clean_display_text(value)
+    if not text:
+        return ""
+    sentence_end = re.search(r"[.!?]\s", text)
+    if sentence_end and sentence_end.start() > 20:
+        text = text[: sentence_end.start() + 1]
+    if len(text) > limit:
+        text = text[:limit].rstrip()
+        if text and text[-1] not in ".!?":
+            text += "..."
+    return text
+
+
+def _make_simple_semantic_example(title: str, snippet: str, *, prefix: str = "Evidence") -> str:
+    clean_title = _clean_display_text(title) or prefix
+    clean_snippet = _plain_language_excerpt(snippet)
+    if not clean_snippet:
+        return f"{clean_title} supports this match."
+    return f"{clean_title} supports this match because it says: {clean_snippet}"
+
+
+def _serialize_rag_context_item(context: dict) -> RAGContextItem:
+    title = _clean_display_text(context.get("title") or "")
+    snippet = _clean_display_text(context.get("snippet") or "")
+    source_type = str(context.get("source_type") or "").strip()
+    evidence_name = title or ("Evidence" if source_type == "evidence" else "Resume")
+    return RAGContextItem(
+        source_type=source_type,
+        source_id=str(context.get("source_id") or ""),
+        title=title or evidence_name,
+        snippet=snippet,
+        score=float(context.get("score") or 0.0),
+        chunk_index=int(context.get("chunk_index") or 0),
+        evidence_name=evidence_name,
+        supporting_excerpt=snippet,
+    )
+
+
+def _breakdown_item(label: str, detail: str, items: list[BreakdownIncludedItem], score: float) -> MatchScoreBreakdown:
+    return MatchScoreBreakdown(
+        label=label,
+        score=score,
+        detail=detail,
+        included_items=items,
+    )
+
+
+def _item_support_excerpt(item: dict, limit: int = 120) -> str:
+    snippets = [str(snippet or "").strip() for snippet in (item.get("rag_snippets") or []) if str(snippet or "").strip()]
+    if snippets:
+        return _plain_language_excerpt(snippets[0], limit)
+    fallback = " ".join(
+        [
+            str(item.get("summary") or "").strip(),
+            " ".join(str(line or "").strip() for line in (item.get("bullets") or []) if str(line or "").strip()),
+            " ".join(str(link or "").strip() for link in (item.get("links") or []) if str(link or "").strip()),
+        ]
+    ).strip()
+    return _plain_language_excerpt(fallback, limit)
+
+
+async def _sync_admin_review_job(
+    db,
+    *,
+    job_ingest_id: ObjectId,
+    user_id: str,
+    title: str | None,
+    company: str | None,
+    location: str | None,
+    text: str,
+    extracted_skills: list[ExtractedSkill],
+) -> None:
+    preview = _job_text_preview(text)
+    normalized_extracted = normalize_extracted_skills(extracted_skills)
+    required_skills, required_skill_ids = derive_required_skills(normalized_extracted)
+    now = now_utc()
+    existing = await db["jobs"].find_one({"job_ingest_id": job_ingest_id}, {"moderation_status": 1, "moderation_reason": 1, "created_at": 1})
+    update_doc = {
+        "title": str(title or "").strip(),
+        "company": str(company or "").strip(),
+        "location": str(location or "").strip(),
+        "source": "job-match submission",
+        "description_excerpt": preview,
+        "description_full": str(text or "").strip(),
+        "required_skills": required_skills,
+        "required_skill_ids": required_skill_ids,
+        "submitted_by_user_id": to_object_id(user_id),
+        "job_ingest_id": job_ingest_id,
+        "updated_at": now,
+    }
+    if existing:
+        await db["jobs"].update_one({"_id": existing["_id"]}, {"$set": update_doc})
+        return
+
+    await db["jobs"].insert_one(
+        {
+            **update_doc,
+            "moderation_status": "pending",
+            "moderation_reason": None,
+            "role_ids": [],
+            "created_at": now,
+        }
+    )
 
 
 def _normalize_tailored_resume_template(template_name: str | None) -> str:
@@ -357,7 +481,7 @@ async def search_rag_context(q: str, user=Depends(require_user), limit: int = 5)
         limit=max(1, min(limit, 10)),
         source_types=("evidence", "resume_snapshot"),
     )
-    return [RAGContextItem(**row) for row in rows]
+    return [_serialize_rag_context_item(row) for row in rows]
 
 
 @router.get("/user-vector", response_model=UserSkillVectorOut)
@@ -624,6 +748,11 @@ async def _load_user_items(db, user_id: str) -> list[dict]:
     user_filter = ref_query("user_id", user_id)
     items: list[dict] = []
     evidence_docs = await db["evidence"].find(user_filter).sort("updated_at", -1).to_list(length=1000)
+    known_legacy_ids = {
+        oid_str(evidence.get("legacy_portfolio_item_id")) or oid_str(evidence.get("_id"))
+        for evidence in evidence_docs
+        if evidence.get("structured_evidence") is True
+    }
     for evidence in evidence_docs:
         item = {
             "_id": evidence["_id"],
@@ -638,6 +767,26 @@ async def _load_user_items(db, user_id: str) -> list[dict]:
             "updated_at": evidence.get("updated_at"),
             "created_at": evidence.get("created_at"),
             "_source_collection": "evidence",
+        }
+        item["resume_display_title"] = _resume_display_title_for_item(item)
+        items.append(item)
+    legacy_items = await load_legacy_portfolio_docs(db, user_id)
+    for legacy in legacy_items:
+        if oid_str(legacy.get("_id")) in known_legacy_ids:
+            continue
+        item = {
+            "_id": legacy["_id"],
+            "type": f"evidence:{legacy.get('type', 'other')}",
+            "title": legacy.get("title", "") or "Evidence",
+            "org": legacy.get("org"),
+            "summary": legacy.get("summary") or "",
+            "bullets": legacy.get("bullets", []) or [],
+            "links": legacy.get("links", []) or [],
+            "skill_ids": canonical_object_refs(legacy.get("skill_ids") or []),
+            "priority": legacy.get("priority", 1),
+            "updated_at": legacy.get("updated_at"),
+            "created_at": legacy.get("created_at"),
+            "_source_collection": "portfolio_items",
         }
         item["resume_display_title"] = _resume_display_title_for_item(item)
         items.append(item)
@@ -940,7 +1089,7 @@ def _build_strength_areas(matched_skill_docs: list[dict], evidence_backed_ids: s
     for category, count in ordered_categories[:3]:
         evidence_count = evidence_category_counts.get(category, 0)
         if evidence_count > 0:
-            strengths.append(f"{category} ({count} matched, {evidence_count} evidence-backed)")
+            strengths.append(f"{category} ({count} matched, {evidence_count} backed by proof)")
         else:
             strengths.append(f"{category} ({count} matched skills)")
 
@@ -949,7 +1098,7 @@ def _build_strength_areas(matched_skill_docs: list[dict], evidence_backed_ids: s
         title = (top_item.get("title") or "").strip()
         item_type = str(top_item.get("type") or "work").replace("evidence:", "").replace("_", " ")
         if title:
-            strengths.append(f"{item_type.title()} evidence from {title}")
+            strengths.append(f"{item_type.title()} proof from {title}")
 
     return strengths[:4]
 
@@ -971,25 +1120,25 @@ def _build_gap_insights(
         if skill_id in required_ids:
             gap_type = "required"
             severity = "high"
-            reason = f"{name} appears in a likely required section of the posting and is not yet confirmed on the profile."
-            action = f"Add direct evidence or confirm recent work that proves {name}."
+            reason = f"{name} looks important for this job, but it is not on your profile yet."
+            action = f"Add proof or recent work that shows {name}."
             required_missing += 1
         elif skill_id in preferred_ids:
             gap_type = "preferred"
             severity = "medium"
-            reason = f"{name} appears in a preferred or secondary section, so it improves competitiveness but is less critical than the required set."
-            action = f"Strengthen the profile with a project, course, or evidence snippet tied to {name}."
+            reason = f"{name} would help for this job, but it does not seem as important as the top required skills."
+            action = f"Add a project, class, or proof item that shows {name}."
         elif skill_id in related_set:
             gap_type = "adjacent"
             severity = "medium"
-            reason = f"{name} is not confirmed directly, but the profile contains semantically related experience that could help bridge the gap."
-            action = f"Translate related work into explicit {name} evidence or add the closest supporting project."
+            reason = f"You may have related experience, but the job asks for {name} more directly."
+            action = f"Show how your related work connects to {name}, or add a project that makes it clearer."
             bridgeable_missing += 1
         else:
             gap_type = "general"
             severity = "medium"
-            reason = f"{name} was extracted from the posting but does not yet appear in confirmed skills or supporting evidence."
-            action = f"Decide whether to learn {name} or remove it from this analysis if the extraction is not relevant."
+            reason = f"{name} showed up in the job post, but it is not in your saved skills or proof."
+            action = f"Decide whether to learn {name}, add it to your profile, or leave it out if it is not really relevant."
 
         insights.append(
             GapInsight(
@@ -1004,14 +1153,14 @@ def _build_gap_insights(
 
     summary_parts: list[str] = []
     if required_missing:
-        summary_parts.append(f"{required_missing} missing skills appear to be required, which is the main reason the score is being capped.")
+        summary_parts.append(f"You are missing {required_missing} important skills, and that is the main reason the score is lower.")
     if bridgeable_missing:
-        summary_parts.append(f"{bridgeable_missing} gaps are partially offset by adjacent confirmed experience, so they are more about proof and positioning than total absence.")
+        summary_parts.append(f"You have related experience for {bridgeable_missing} of the gaps, but the link is not clear enough yet.")
     remaining = max(0, len(missing_ids) - required_missing - bridgeable_missing)
     if remaining:
-        summary_parts.append(f"{remaining} remaining gaps are lower-priority or secondary skills relative to the required set.")
+        summary_parts.append(f"There are {remaining} other lower-priority skills you could add later.")
     if not summary_parts:
-        summary_parts.append("No material skill gaps were identified beyond the confirmed coverage already shown in the score.")
+        summary_parts.append("No major skill gaps were found based on the skills already on your profile.")
 
     return " ".join(summary_parts), insights[:8]
 
@@ -1862,9 +2011,9 @@ def _serialize_tailored_resume(doc: dict) -> TailoredResumeOut:
     return TailoredResumeOut(
         id=oid_str(doc.get("_id")),
         user_id=oid_str(doc.get("user_id")),
-        job_id=str(doc.get("job_id")) if doc.get("job_id") is not None else None,
-        resume_snapshot_id=str(doc.get("resume_snapshot_id")) if doc.get("resume_snapshot_id") is not None else None,
-        resume_evidence_id=str(doc.get("resume_evidence_id")) if doc.get("resume_evidence_id") is not None else None,
+        job_id=oid_str(doc.get("job_id")) if doc.get("job_id") is not None else None,
+        resume_snapshot_id=oid_str(doc.get("resume_snapshot_id")) if doc.get("resume_snapshot_id") is not None else None,
+        resume_evidence_id=oid_str(doc.get("resume_evidence_id")) if doc.get("resume_evidence_id") is not None else None,
         template_source=str(doc.get("template_source") or "") or None,
         template=str(doc.get("template") or "ats_v1"),
         selected_skill_ids=[oid_str(value) for value in (doc.get("selected_skill_ids") or [])],
@@ -1928,6 +2077,7 @@ async def _persist_job_ingest_snapshot(
     skills = await _load_skill_catalog(db)
     extracted = _match_skills(text, skills)
     keywords = _tokenize_keywords(text, extracted)
+    normalized_extracted = normalize_extracted_skills(extracted[:200])
     now = now_utc()
     doc = {
         "user_id": to_object_id(user_id),
@@ -1935,7 +2085,7 @@ async def _persist_job_ingest_snapshot(
         "company": company,
         "location": location,
         "text": text,
-        "extracted_skills": [e.model_dump() for e in extracted[:200]],
+        "extracted_skills": normalized_extracted,
         "keywords": keywords,
         "created_at": now,
     }
@@ -1962,12 +2112,26 @@ async def ingest_job(payload: JobIngestIn, request: Request, user=Depends(requir
         location=payload.location,
         text=payload.text,
     )
-    extracted = [ExtractedSkill(**entry) for entry in (doc.get("extracted_skills") or [])]
+    extracted = [
+        ExtractedSkill(**serialized)
+        for serialized in (
+            serialize_extracted_skill(entry)
+            for entry in (doc.get("extracted_skills") or [])
+        )
+        if serialized is not None
+    ]
     keywords = list(doc.get("keywords") or [])
-
-    preview = payload.text.strip().replace("\n", " ")
-    if len(preview) > 220:
-        preview = preview[:220] + "..."
+    await _sync_admin_review_job(
+        db,
+        job_ingest_id=doc["_id"],
+        user_id=user_id,
+        title=payload.title,
+        company=payload.company,
+        location=payload.location,
+        text=payload.text,
+        extracted_skills=extracted,
+    )
+    preview = _job_text_preview(payload.text)
 
     return JobIngestOut(
         id=oid_str(doc["_id"]),
@@ -2012,8 +2176,18 @@ async def match_job(payload: dict, request: Request, user=Depends(require_user))
         raise HTTPException(status_code=404, detail="Job ingest not found for user_id")
 
     skills = await _load_skill_catalog(db)
-    recomputed_extracted = [entry.model_dump() for entry in _match_skills(job_doc.get("text", ""), skills)[:200]]
-    recomputed_keywords = _tokenize_keywords(job_doc.get("text", ""), [ExtractedSkill(**entry) for entry in recomputed_extracted])
+    recomputed_extracted = normalize_extracted_skills(_match_skills(job_doc.get("text", ""), skills)[:200])
+    recomputed_keywords = _tokenize_keywords(
+        job_doc.get("text", ""),
+        [
+            ExtractedSkill(**serialized)
+            for serialized in (
+                serialize_extracted_skill(entry)
+                for entry in recomputed_extracted
+            )
+            if serialized is not None
+        ],
+    )
     if recomputed_extracted != (job_doc.get("extracted_skills") or []) or recomputed_keywords != (job_doc.get("keywords") or []):
         await db["job_ingests"].update_one(
             {"_id": job_oid},
@@ -2140,17 +2314,22 @@ async def match_job(payload: dict, request: Request, user=Depends(require_user))
     item_text = " ".join(_normalize_text_blob(item) for item in items)
     matched_item_hits: list[dict] = []
     evidence_backed_ids: set[str] = set()
+    evidence_support_by_skill_id: dict[str, list[dict]] = {}
     for item in items:
         item_terms = {
             term
             for sid in (item.get("skill_ids") or [])
             for term in _skill_terms(all_skill_docs.get(str(sid)))
         }
+        item_id = oid_str(item.get("_id"))
         if item_terms & matched_term_lookup:
             matched_item_hits.append(item)
             for skill_id in matched_ids:
                 if _skill_terms(all_skill_docs.get(skill_id)) & item_terms:
                     evidence_backed_ids.add(skill_id)
+                    support_rows = evidence_support_by_skill_id.setdefault(skill_id, [])
+                    if item_id and all(oid_str(row.get("_id")) != item_id for row in support_rows):
+                        support_rows.append(item)
         elif context_score_by_item_id.get(oid_str(item.get("_id")), 0.0) >= 0.28:
             matched_item_hits.append(item)
     keywords = [str(keyword or "").strip().lower() for keyword in (job_doc.get("keywords") or []) if str(keyword or "").strip()]
@@ -2211,8 +2390,9 @@ async def match_job(payload: dict, request: Request, user=Depends(require_user))
                     combined_score = sim + bonus
                     weighted_item_scores.append(combined_score)
                     title = str(item.get("title") or item.get("summary") or "Saved evidence").strip()
+                    excerpt = _item_support_excerpt(item, limit=110)
                     if combined_score >= 0.22 and title:
-                        semantic_examples.append((combined_score, f"{title} aligns with the posting language and matched skills"))
+                        semantic_examples.append((combined_score, _make_simple_semantic_example(title, excerpt)))
                 top_item_alignment = _top_average(weighted_item_scores, 5)
             else:
                 top_item_alignment = 0.0
@@ -2225,7 +2405,12 @@ async def match_job(payload: dict, request: Request, user=Depends(require_user))
             for skill_id in related_skill_ids[:3]:
                 name = _display_skill_name(all_skill_docs.get(skill_id), skill_id)
                 if name:
-                    semantic_examples.append((skill_similarity_by_id.get(skill_id, 0.0), f"Related confirmed skill: {name}"))
+                    semantic_examples.append(
+                        (
+                            skill_similarity_by_id.get(skill_id, 0.0),
+                            f"Related skill: {name}. This uses similar words and tasks to the job.",
+                        )
+                    )
             semantic_alignment_score = _clamp_score(
                 (
                     (top_item_alignment * 0.50)
@@ -2263,44 +2448,162 @@ async def match_job(payload: dict, request: Request, user=Depends(require_user))
         + (semantic_alignment_score * 0.18)
     )
 
+    matched_skill_name_lookup = {
+        skill_id: _display_skill_name(all_skill_docs.get(skill_id), skill_id)
+        for skill_id in matched_ids
+        if skill_id in all_skill_docs
+    }
+    required_skill_items = [
+        BreakdownIncludedItem(
+            label=matched_skill_name_lookup.get(skill_id, skill_id),
+            detail="Counted because this job lists it as an important skill.",
+            source_type="skill",
+            source_id=skill_id,
+        )
+        for skill_id in matched_required_ids
+    ]
+    preferred_skill_items = [
+        BreakdownIncludedItem(
+            label=matched_skill_name_lookup.get(skill_id, skill_id),
+            detail="Counted because this job lists it as a helpful extra skill.",
+            source_type="skill",
+            source_id=skill_id,
+        )
+        for skill_id in matched_preferred_ids
+    ]
+    proof_items: list[BreakdownIncludedItem] = []
+    seen_proof_ids: set[str] = set()
+    for skill_id in matched_ids:
+        for item in evidence_support_by_skill_id.get(skill_id, []):
+            item_id = oid_str(item.get("_id"))
+            if not item_id or item_id in seen_proof_ids:
+                continue
+            seen_proof_ids.add(item_id)
+            proof_items.append(
+                BreakdownIncludedItem(
+                    label=_clean_display_text(item.get("title") or item.get("resume_display_title") or item.get("org") or "Evidence"),
+                    detail=_item_support_excerpt(item),
+                    source_type=str(item.get("type") or item.get("_source_collection") or "evidence"),
+                    source_id=item_id,
+                )
+            )
+    keyword_items = [
+        BreakdownIncludedItem(
+            label=keyword,
+            detail="This word also appears in your saved work.",
+            source_type="keyword",
+            source_id=keyword,
+        )
+        for keyword in keyword_overlap_terms
+    ]
+    semantic_items: list[BreakdownIncludedItem] = []
+    for item in matched_item_hits[:4]:
+        item_id = oid_str(item.get("_id"))
+        semantic_items.append(
+            BreakdownIncludedItem(
+                label=_clean_display_text(item.get("title") or item.get("resume_display_title") or item.get("org") or "Evidence"),
+                detail=_item_support_excerpt(item),
+                source_type=str(item.get("type") or item.get("_source_collection") or "evidence"),
+                source_id=item_id or None,
+            )
+        )
+    if not semantic_items:
+        for skill_id in related_skill_ids[:4]:
+            name = _display_skill_name(all_skill_docs.get(skill_id), skill_id)
+            if name:
+                semantic_items.append(
+                    BreakdownIncludedItem(
+                        label=name,
+                        detail="This confirmed skill uses similar language to the job.",
+                        source_type="skill",
+                        source_id=skill_id,
+                    )
+                )
+    overall_items = [
+        BreakdownIncludedItem(
+            label="Required skills",
+            detail=f"{len(matched_required_ids)} important skills counted in the score.",
+            source_type="metric",
+            source_id="required_skill_coverage",
+        ),
+        BreakdownIncludedItem(
+            label="Helpful skills",
+            detail=f"{len(matched_preferred_ids)} helpful skills counted in the score.",
+            source_type="metric",
+            source_id="preferred_skill_coverage",
+        ),
+        BreakdownIncludedItem(
+            label="Proof",
+            detail=f"{len(evidence_backed_ids)} matched skills already have proof attached.",
+            source_type="metric",
+            source_id="evidence_backed_count",
+        ),
+        BreakdownIncludedItem(
+            label="Job words",
+            detail=f"{keyword_overlap_count} important job words also show up in your saved work.",
+            source_type="metric",
+            source_id="keyword_overlap",
+        ),
+        BreakdownIncludedItem(
+            label="Similar work",
+            detail="The system checked whether your proof and skills sound like the job.",
+            source_type="metric",
+            source_id="semantic_alignment",
+        ),
+    ]
+
     breakdown = [
-        MatchScoreBreakdown(
-            label="Required skill coverage",
-            score=required_coverage_score,
-            detail=(
-                f"{len(matched_required_ids)} of {len(required_ids)} likely required skills are already confirmed"
+        _breakdown_item(
+            "Required skill coverage",
+            (
+                f"You already match {len(matched_required_ids)} of the {len(required_ids)} most important skills"
                 if required_ids
-                else "No clearly required skill section was detected, so this score starts at full credit"
+                else "The job post did not clearly separate required skills, so this part starts at full credit"
             ),
+            required_skill_items,
+            required_coverage_score,
         ),
-        MatchScoreBreakdown(
-            label="Preferred and secondary coverage",
-            score=_clamp_score((preferred_coverage_score * 0.6) + (overall_coverage_score * 0.4)),
-            detail=(
-                f"{len(matched_preferred_ids)} of {len(preferred_ids)} preferred skills are covered, with {len(matched_ids)} total matched job skills"
+        _breakdown_item(
+            "Nice-to-have skills",
+            (
+                f"You match {len(matched_preferred_ids)} extra skills, and {len(matched_ids)} job skills overall"
                 if preferred_ids
-                else f"{len(matched_ids)} of {len(extracted_skill_ids)} total extracted job skills are covered"
+                else f"You match {len(matched_ids)} of the {len(extracted_skill_ids)} skills found in the job post"
             ),
+            preferred_skill_items or [
+                BreakdownIncludedItem(
+                    label=matched_skill_name_lookup.get(skill_id, skill_id),
+                    detail="Counted in the broader job skill match.",
+                    source_type="skill",
+                    source_id=skill_id,
+                )
+                for skill_id in matched_ids[:6]
+            ],
+            _clamp_score((preferred_coverage_score * 0.6) + (overall_coverage_score * 0.4)),
         ),
-        MatchScoreBreakdown(
-            label="Evidence support",
-            score=evidence_score,
-            detail=f"{len(evidence_backed_ids)} matched skills are backed by evidence, leaving {evidence_gap_count} matched skills without proof",
+        _breakdown_item(
+            "Proof behind your skills",
+            f"{len(evidence_backed_ids)} matched skills have proof attached, and {evidence_gap_count} matched skills still need proof",
+            proof_items,
+            evidence_score,
         ),
-        MatchScoreBreakdown(
-            label="Keyword overlap",
-            score=keyword_score,
-            detail=f"{keyword_overlap_count} of {len(keywords)} job keywords appear in your saved work history",
+        _breakdown_item(
+            "Matching job words",
+            f"{keyword_overlap_count} of {len(keywords)} important job words also show up in your saved work",
+            keyword_items,
+            keyword_score,
         ),
-        MatchScoreBreakdown(
-            label="Semantic alignment",
-            score=semantic_alignment_score,
-            detail="Concept-level similarity between the job description and your saved work, even when the exact words do not match",
+        _breakdown_item(
+            "How close your work feels to the job",
+            "This checks whether your saved work sounds like the job, even when the wording is different",
+            semantic_items,
+            semantic_alignment_score,
         ),
-        MatchScoreBreakdown(
-            label="Personal skill vector",
-            score=personal_skill_vector_score,
-            detail="Embedding similarity between the job posting and your aggregated user profile built from confirmed skills, evidence, and resume context",
+        _breakdown_item(
+            "Overall profile match",
+            "This combines your skill match, proof, job words, and similar work into one final score",
+            overall_items,
+            personal_skill_vector_score,
         ),
     ]
 
@@ -2317,40 +2620,43 @@ async def match_job(payload: dict, request: Request, user=Depends(require_user))
     semantic_alignment_examples = [text for _score, text in sorted(semantic_examples, key=lambda item: item[0], reverse=True)[:4]]
     if retrieved_context:
         for context in retrieved_context[:3]:
-            title = str(context.get("title") or "Retrieved evidence").strip()
-            snippet = str(context.get("snippet") or "").strip()
-            if snippet:
-                semantic_alignment_examples.append(f"{title}: {snippet[:140]}")
+            title = _clean_display_text(context.get("title") or context.get("evidence_name") or "Evidence")
+            snippet = _plain_language_excerpt(context.get("snippet") or context.get("supporting_excerpt") or "", 150)
+            if title or snippet:
+                if snippet:
+                    semantic_alignment_examples.append(_make_simple_semantic_example(title, snippet))
+                else:
+                    semantic_alignment_examples.append(f"{title} supports this match.")
     semantic_alignment_examples = _dedupe_preserve_order(semantic_alignment_examples)[:4]
     strength_areas = _build_strength_areas(matched_docs, evidence_backed_ids, matched_item_hits)
     confidence_label = _match_confidence_label(overall_score)
     semantic_alignment_explanation = (
-        "Semantic alignment estimates how closely your saved evidence, projects, and confirmed skills resemble the responsibilities and tools in the job posting, even when the wording is different."
+        "This checks whether your saved work talks about the same tasks and tools as the job, even when the wording is different."
     )
     personal_skill_vector_explanation = (
-        "Your personal skill vector is a single embedding built from confirmed skills, evidence, and resume context, then compared directly against the job vector."
+        "This compares the whole job post to your full profile to see how closely they fit overall."
     )
     analysis_summary_parts = [
-        f"{confidence_label} fit based on {len(matched_ids)} matched skills out of {len(extracted_skill_ids)} extracted job skills."
+        f"{confidence_label} fit. You match {len(matched_ids)} of the {len(extracted_skill_ids)} skills found in this job post."
     ]
     if required_ids:
-        analysis_summary_parts.append(f"You currently cover {len(matched_required_ids)} of {len(required_ids)} likely required skills.")
+        analysis_summary_parts.append(f"You cover {len(matched_required_ids)} of the {len(required_ids)} most important skills.")
     if evidence_backed_ids:
-        analysis_summary_parts.append(f"{len(evidence_backed_ids)} matched skills are already supported by evidence.")
+        analysis_summary_parts.append(f"{len(evidence_backed_ids)} of your matched skills already have proof attached.")
     elif matched_ids:
-        analysis_summary_parts.append("Your confirmed skills are not yet strongly supported by evidence.")
+        analysis_summary_parts.append("Your matched skills still need more proof behind them.")
     analysis_summary = " ".join(analysis_summary_parts)
 
     next_steps: list[str] = []
     if missing_names:
-        prefix = "Prioritize" if required_ids and any(skill_id in required_ids for skill_id in missing_ids) else "Add evidence or learning proof for"
+        prefix = "Work on" if required_ids and any(skill_id in required_ids for skill_id in missing_ids) else "Add proof or learning work for"
         next_steps.append(f"{prefix} {', '.join(missing_names[:3])}")
     if evidence_gap_count > 0:
-        next_steps.append("Attach evidence to more matched skills so the tailored resume can prove capability instead of only claiming it")
+        next_steps.append("Add proof to more matched skills so your resume can show what you have done, not just say it")
     if not matched_item_hits:
-        next_steps.append("Add projects or evidence with measurable outcomes to improve resume tailoring")
+        next_steps.append("Add projects or proof with clear results to make the resume stronger")
     if related_skill_names:
-        next_steps.append(f"Consider positioning related experience like {', '.join(related_skill_names[:2])} when exact matches are limited")
+        next_steps.append(f"Point to related experience like {', '.join(related_skill_names[:2])} when you do not have an exact match")
 
     result = JobMatchOut(
         job_id=oid_str(job_doc["_id"]),
@@ -2377,7 +2683,7 @@ async def match_job(payload: dict, request: Request, user=Depends(require_user))
         strength_areas=strength_areas,
         related_skills=related_skill_names,
         semantic_alignment_examples=semantic_alignment_examples,
-        retrieved_context=[RAGContextItem(**context) for context in retrieved_context],
+        retrieved_context=[_serialize_rag_context_item(context) for context in retrieved_context],
         gap_reasoning_summary=gap_reasoning_summary,
         gap_insights=gap_insights,
         score_breakdown=breakdown,
@@ -2446,7 +2752,7 @@ async def match_job(payload: dict, request: Request, user=Depends(require_user))
     history_res = await db["job_match_runs"].insert_one(history_doc)
     result.history_id = oid_str(history_res.inserted_id)
     await db["job_match_runs"].update_one({"_id": history_res.inserted_id}, {"$set": {"analysis.history_id": result.history_id}})
-    await increment_reward_counter(db, user_id, "job_matches_run")
+    await safe_increment_reward_counter(db, user_id, "job_matches_run")
     return result
 
 @router.post("/preview", response_model=TailoredResumeOut)
@@ -2482,7 +2788,14 @@ async def preview_tailored_resume(payload: TailorPreviewIn, request: Request, us
         if not job_doc:
             raise HTTPException(status_code=404, detail="Job ingest not found for user_id")
         job_text = job_doc.get("text", "")
-        extracted = [ExtractedSkill(**e) for e in (job_doc.get("extracted_skills") or [])]
+        extracted = [
+            ExtractedSkill(**serialized)
+            for serialized in (
+                serialize_extracted_skill(entry)
+                for entry in (job_doc.get("extracted_skills") or [])
+            )
+            if serialized is not None
+        ]
         keywords = job_doc.get("keywords") or []
     else:
         if not job_text or len(job_text) < 50:
@@ -2533,10 +2846,10 @@ async def preview_tailored_resume(payload: TailorPreviewIn, request: Request, us
     conf = await db["resume_skill_confirmations"].find_one({"user_id": {"$in": ref_values(user_id)}}, sort=[("created_at", -1)])
     if conf:
         for c in conf.get("confirmed", []) or []:
-            sid = c.get("skill_id")
-            if sid is None:
+            sid = oid_str(c.get("skill_id"))
+            if not sid:
                 continue
-            confirmed_skill_ids.add(str(sid))
+            confirmed_skill_ids.add(sid)
 
     selected_skill_ids = [sid for sid in ordered_job_skill_ids if sid in confirmed_skill_ids]
     if len(selected_skill_ids) < 10:
@@ -2640,13 +2953,13 @@ async def preview_tailored_resume(payload: TailorPreviewIn, request: Request, us
     now = now_utc()
     record = {
         "user_id": to_object_id(user_id),
-        "job_id": job_id,
+        "job_id": to_object_id(job_id) if job_id and ObjectId.is_valid(job_id) else None,
         "resume_snapshot_id": resume_snapshot.get("_id") if resume_snapshot else None,
         "resume_evidence_id": resume_evidence.get("_id") if resume_evidence else None,
         "template_source": template_source,
         "job_text": job_text,
         "template": template_name,
-        "selected_skill_ids": selected_skill_ids,
+        "selected_skill_ids": canonical_object_refs(selected_skill_ids),
         "selected_item_ids": selected_item_ids,
         "retrieved_context": retrieved_context,
         "sections": [s.model_dump() for s in sections],
@@ -2655,7 +2968,7 @@ async def preview_tailored_resume(payload: TailorPreviewIn, request: Request, us
         "updated_at": now,
     }
     res = await db["tailored_resumes"].insert_one(record)
-    await increment_reward_counter(db, user_id, "tailored_resumes_generated")
+    await safe_increment_reward_counter(db, user_id, "tailored_resumes_generated")
 
     if job_id and ObjectId.is_valid(job_id):
         latest_history = await db["job_match_runs"].find_one(

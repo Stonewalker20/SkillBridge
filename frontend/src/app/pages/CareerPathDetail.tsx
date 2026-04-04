@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api, type CareerPathDetail as CareerPathDetailRecord } from "../services/api";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { ArrowLeft, Compass, Sparkles } from "lucide-react";
+import { ArrowLeft, Compass, RefreshCw, Sparkles } from "lucide-react";
 import { useHeaderTheme } from "../lib/headerTheme";
 
 export function CareerPathDetail() {
@@ -12,24 +12,39 @@ export function CareerPathDetail() {
   const { roleId } = useParams();
   const [detail, setDetail] = useState<CareerPathDetailRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadDetail = useCallback(async (options?: { background?: boolean }) => {
+    if (!roleId) return;
+    const background = Boolean(options?.background);
+    if (background) setRefreshing(true);
+    else setLoading(true);
+    try {
+      const result = await api.getCareerPathDetail(roleId);
+      setDetail(result);
+    } finally {
+      if (background) setRefreshing(false);
+      else setLoading(false);
+    }
+  }, [roleId]);
 
   useEffect(() => {
-    let active = true;
-    const load = async () => {
-      if (!roleId) return;
-      setLoading(true);
-      try {
-        const result = await api.getCareerPathDetail(roleId);
-        if (active) setDetail(result);
-      } finally {
-        if (active) setLoading(false);
+    void loadDetail();
+  }, [loadDetail]);
+
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadDetail({ background: true });
       }
     };
-    load();
+    window.addEventListener("focus", refreshIfVisible);
+    document.addEventListener("visibilitychange", refreshIfVisible);
     return () => {
-      active = false;
+      window.removeEventListener("focus", refreshIfVisible);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
     };
-  }, [roleId]);
+  }, [loadDetail]);
 
   if (loading) {
     return <div className="flex h-full items-center justify-center text-slate-500 dark:text-slate-400">Loading career path...</div>;
@@ -56,6 +71,16 @@ export function CareerPathDetail() {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Analytics
             </Link>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void loadDetail({ background: true })}
+            disabled={refreshing}
+            className="border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/70"
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "Refreshing" : "Refresh"}
           </Button>
         </div>
       </div>

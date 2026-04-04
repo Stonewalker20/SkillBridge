@@ -27,12 +27,49 @@ class AdminJobOut(BaseModel):
     location: str
     source: str
     description_excerpt: str
+    description_full: str | None = None
     moderation_status: str
     moderation_reason: str | None = None
+    submitted_by_user_id: str | None = None
     role_ids: list[str] = Field(default_factory=list)
     required_skills: list[str] = Field(default_factory=list)
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class AdminSkillOut(BaseModel):
+    id: str
+    name: str
+    category: str
+    aliases: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    origin: str = "default"
+    hidden: bool = False
+    created_by_user_id: str | None = None
+    evidence_count: int = 0
+    project_link_count: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class AdminHelpRequestOut(BaseModel):
+    id: str
+    user_id: str
+    user_email: str | None = None
+    username: str | None = None
+    category: str
+    subject: str
+    message: str
+    page: str | None = None
+    status: str
+    admin_response: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class AdminHelpRequestPatch(BaseModel):
+    status: str = Field(..., min_length=1, max_length=40)
+    admin_response: str | None = Field(default=None, max_length=2000)
 
 
 class AdminSummaryOut(BaseModel):

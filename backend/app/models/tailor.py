@@ -33,10 +33,18 @@ class JobIngestOut(BaseModel):
     created_at: datetime | None = None
 
 
+class BreakdownIncludedItem(BaseModel):
+    label: str
+    detail: str = ""
+    source_type: str | None = None
+    source_id: str | None = None
+
+
 class MatchScoreBreakdown(BaseModel):
     label: str
     score: float
     detail: str
+    included_items: list[BreakdownIncludedItem] = Field(default_factory=list)
 
 
 class GapInsight(BaseModel):
@@ -55,6 +63,8 @@ class RAGContextItem(BaseModel):
     snippet: str
     score: float
     chunk_index: int = 0
+    evidence_name: str = ""
+    supporting_excerpt: str = ""
 
 
 class AddedFromMissingSkill(BaseModel):

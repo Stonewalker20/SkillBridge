@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { toast } from "sonner";
 import { api, type AuthUser } from "../services/api";
 
 type User = AuthUser;
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
+  const [lastHelpUnreadCount, setLastHelpUnreadCount] = useState<number | null>(null);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -61,6 +63,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const me = await api.me();
     setUser(me);
   };
+
+  useEffect(() => {
+    if (bootstrapping || !api.getToken()) return undefined;
+
+    const refreshOnAttention = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void refreshUser().catch(() => {
+        // Keep the existing user state if the passive refresh fails.
+      });
+    };
+
+    window.addEventListener("focus", refreshOnAttention);
+    document.addEventListener("visibilitychange", refreshOnAttention);
+    return () => {
+      window.removeEventListener("focus", refreshOnAttention);
+      document.removeEventListener("visibilitychange", refreshOnAttention);
+    };
+  }, [bootstrapping]);
+
+  useEffect(() => {
+    const currentCount = Math.max(0, Number(user?.help_unread_response_count ?? 0) || 0);
+    if (!bootstrapping && lastHelpUnreadCount != null && currentCount > lastHelpUnreadCount) {
+      toast.success(
+        currentCount === 1 ? "You have a new help response waiting." : `You have ${currentCount} help responses waiting.`
+      );
+    }
+    setLastHelpUnreadCount(currentCount);
+  }, [bootstrapping, lastHelpUnreadCount, user?.help_unread_response_count]);
 
   return (
     <AuthContext.Provider

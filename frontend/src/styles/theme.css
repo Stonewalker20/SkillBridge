@@ -273,3 +273,31 @@
     background-position: 100% 50%;
   }
 }
+
+@keyframes theme-neptune-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+    filter: saturate(1) brightness(1);
+  }
+
+  50% {
+    background-position: 100% 50%;
+    filter: saturate(1.08) brightness(1.03);
+  }
+}
+
+@keyframes theme-supernova-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+    transform: translateY(0);
+    filter: saturate(1) brightness(1);
+  }
+
+  50% {
+    background-position: 100% 50%;
+    transform: translateY(-1px);
+    filter: saturate(1.1) brightness(1.05);
+  }
+}

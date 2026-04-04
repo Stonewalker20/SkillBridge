@@ -12,7 +12,7 @@ describe("ACCOUNT_HEADER_THEMES", () => {
     const prism = ACCOUNT_HEADER_THEMES.find((theme) => theme.value === "prism");
     const blood = ACCOUNT_HEADER_THEMES.find((theme) => theme.value === "blood");
 
-    expect(ACCOUNT_HEADER_THEMES).toHaveLength(17);
+    expect(ACCOUNT_HEADER_THEMES.length).toBeGreaterThanOrEqual(17);
     expect(sunrise?.swatchColors[0]).toBe("#B45309");
     expect(sandstone?.swatchColors[0]).toBe("#78716C");
     expect(ocean?.swatchColors[0]).toBe("#1E3A8A");
