@@ -131,7 +131,7 @@ export function AccountHelp() {
   };
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="max-w-6xl space-y-5">
       <AccountSectionNav />
 
       <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
@@ -173,7 +173,7 @@ export function AccountHelp() {
         </div>
       </div>
 
-      <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
@@ -197,8 +197,8 @@ export function AccountHelp() {
         </div>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2">
             <HelpCircle className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Submit a request</h2>
@@ -207,7 +207,7 @@ export function AccountHelp() {
             Include the workflow you were in and what you expected to happen. The current page is attached automatically.
           </p>
 
-          <div className="mt-5 space-y-4">
+          <div className="mt-4 space-y-3">
             <div className="space-y-2">
               <Label htmlFor="help-category">Category</Label>
               <Select value={category} onValueChange={setCategory}>
@@ -258,7 +258,7 @@ export function AccountHelp() {
           </div>
         </Card>
 
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Your recent requests</h2>
@@ -276,9 +276,9 @@ export function AccountHelp() {
               No help requests yet.
             </div>
           ) : (
-            <div className="mt-5 space-y-4">
+            <div className="mt-4 space-y-3">
               {requests.map((entry) => (
-                <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-950/30">
+                <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white/80 p-3.5 dark:border-slate-800 dark:bg-slate-950/30">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{entry.subject}</div>

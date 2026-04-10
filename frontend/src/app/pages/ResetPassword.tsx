@@ -10,6 +10,9 @@ import { api } from "../services/api";
 import LogoImage from "../../imports/skillbridge_logo.png";
 import { PublicThemeToggle } from "../components/PublicThemeToggle";
 
+const PASSWORD_MIN_LENGTH = 15;
+const PASSWORD_HELP_TEXT = "Use at least 15 characters. A mix of letters, numbers, and symbols is recommended.";
+
 export function ResetPassword() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -24,8 +27,8 @@ export function ResetPassword() {
       toast.error("This reset link is invalid.");
       return;
     }
-    if (formData.password.length < 8) {
-      toast.error("Password must be at least 8 characters.");
+    if (formData.password.length < PASSWORD_MIN_LENGTH) {
+      toast.error(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`);
       return;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -101,13 +104,14 @@ export function ResetPassword() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="At least 8 characters"
+                  placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
                   value={formData.password}
                   onChange={(event) => setFormData((current) => ({ ...current, password: event.target.value }))}
                   className="pl-10"
                   disabled={loading}
                 />
               </div>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{PASSWORD_HELP_TEXT}</p>
             </div>
 
             <div>

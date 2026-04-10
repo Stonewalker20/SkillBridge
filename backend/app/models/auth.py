@@ -5,16 +5,32 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+PASSWORD_MIN_LENGTH = 15
+PASSWORD_MAX_LENGTH = 128
+PASSWORD_POLICY_MESSAGE = (
+    f"Password must be at least {PASSWORD_MIN_LENGTH} characters. "
+    "Use a mix of letters, numbers, and symbols for stronger security."
+)
+
+
+def _validate_new_password(value: str) -> str:
+    password = str(value or "")
+    if len(password) < PASSWORD_MIN_LENGTH:
+        raise ValueError(PASSWORD_POLICY_MESSAGE)
+    return password
 
 class RegisterIn(BaseModel):
     email: EmailStr
     username: str = Field(min_length=2, max_length=50)
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+
+    _password_strength = field_validator("password")(_validate_new_password)
 
 class LoginIn(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=8, max_length=PASSWORD_MAX_LENGTH)
 
 
 class UserOnboardingOut(BaseModel):
@@ -63,8 +79,10 @@ class UserOnboardingPatchIn(BaseModel):
 
 
 class PasswordChangeIn(BaseModel):
-    current_password: str = Field(min_length=8, max_length=128)
-    new_password: str = Field(min_length=8, max_length=128)
+    current_password: str = Field(min_length=8, max_length=PASSWORD_MAX_LENGTH)
+    new_password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+
+    _password_strength = field_validator("new_password")(_validate_new_password)
 
 
 class PasswordResetRequestIn(BaseModel):
@@ -73,7 +91,9 @@ class PasswordResetRequestIn(BaseModel):
 
 class PasswordResetConfirmIn(BaseModel):
     token: str = Field(min_length=16, max_length=256)
-    new_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+
+    _password_strength = field_validator("new_password")(_validate_new_password)
 
 
 class PasswordResetOut(BaseModel):

@@ -21,6 +21,7 @@ from app.core.config import settings
 from app.routers import evidence as evidence_router
 from app.routers import tailor as tailor_router
 from app.routers import taxonomy as taxonomy_router
+from app.routers import auth as auth_router
 
 from .fake_mongo import FakeDatabase, FakeMongoClient
 
@@ -175,6 +176,15 @@ def test_context(monkeypatch):
         },
     )
     monkeypatch.setattr("app.main.settings.local_model_prewarm", False)
+    sent_password_reset_emails: list[dict[str, str]] = []
+    monkeypatch.setattr(auth_router, "password_reset_email_enabled", lambda: True)
+    monkeypatch.setattr(
+        auth_router,
+        "send_password_reset_email",
+        lambda recipient_email, reset_url, username=None: sent_password_reset_emails.append(
+            {"recipient_email": recipient_email, "reset_url": reset_url, "username": username or ""}
+        ),
+    )
     monkeypatch.setattr(evidence_router, "extract_skill_candidates", _async_fake_extract_skill_candidates)
     monkeypatch.setattr(evidence_router, "embed_texts", _async_fake_embed_texts)
     monkeypatch.setattr(tailor_router, "embed_texts", _async_fake_embed_texts)
@@ -197,6 +207,7 @@ def test_context(monkeypatch):
             "client": client,
             "db": fake_db,
             "headers": {"Authorization": f"Bearer {seeded['token']}"},
+            "sent_password_reset_emails": sent_password_reset_emails,
             **seeded,
         }
 

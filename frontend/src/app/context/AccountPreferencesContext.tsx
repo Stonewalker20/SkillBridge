@@ -10,10 +10,14 @@ export type StartPageValue =
   | "/app/analytics/skills";
 
 export type SidebarItemValue = "dashboard" | "skills" | "analytics" | "evidence" | "jobs" | "quickActions" | "admin";
+export type GradientModeValue = "full" | "soft" | "flat";
+export type PanelStyleValue = "tinted" | "glass" | "solid";
 
 export type AccountPreferences = {
   startPage: StartPageValue;
   sidebarItems: SidebarItemValue[];
+  gradientMode: GradientModeValue;
+  panelStyle: PanelStyleValue;
   showWelcomeHero: boolean;
   showRecentActivity: boolean;
   showPortfolioInsights: boolean;
@@ -30,6 +34,8 @@ type AccountPreferencesContextType = {
 const DEFAULT_PREFERENCES: AccountPreferences = {
   startPage: "/app",
   sidebarItems: ["dashboard", "skills", "analytics", "evidence", "jobs", "quickActions", "admin"],
+  gradientMode: "full",
+  panelStyle: "tinted",
   showWelcomeHero: true,
   showRecentActivity: true,
   showPortfolioInsights: true,
@@ -56,6 +62,18 @@ export const SIDEBAR_ITEM_OPTIONS: Array<{ value: SidebarItemValue; label: strin
   { value: "admin", label: "Admin", description: "Show the admin link when your account can access it." },
 ];
 
+export const GRADIENT_MODE_OPTIONS: Array<{ value: GradientModeValue; label: string; description: string }> = [
+  { value: "full", label: "Full", description: "Keep the full themed gradients and animated color flow." },
+  { value: "soft", label: "Soft", description: "Use lighter, calmer gradients with less visual intensity." },
+  { value: "flat", label: "Flat", description: "Use mostly solid surfaces with minimal gradient treatment." },
+];
+
+export const PANEL_STYLE_OPTIONS: Array<{ value: PanelStyleValue; label: string; description: string }> = [
+  { value: "tinted", label: "Tinted", description: "Keep panels color-matched to your active theme." },
+  { value: "glass", label: "Glass", description: "Use translucent blurred panels for a softer workspace." },
+  { value: "solid", label: "Solid", description: "Use cleaner, solid cards with less visual texture." },
+];
+
 const AccountPreferencesContext = createContext<AccountPreferencesContextType | undefined>(undefined);
 
 function storageKey(userId: string) {
@@ -71,6 +89,18 @@ function normalizeSidebarItems(value: unknown): SidebarItemValue[] {
   return SIDEBAR_ITEM_OPTIONS.map((option) => option.value).filter((item) => rawValues.includes(item));
 }
 
+function normalizeGradientMode(value: unknown): GradientModeValue {
+  return GRADIENT_MODE_OPTIONS.some((option) => option.value === value)
+    ? (value as GradientModeValue)
+    : DEFAULT_PREFERENCES.gradientMode;
+}
+
+function normalizePanelStyle(value: unknown): PanelStyleValue {
+  return PANEL_STYLE_OPTIONS.some((option) => option.value === value)
+    ? (value as PanelStyleValue)
+    : DEFAULT_PREFERENCES.panelStyle;
+}
+
 function normalizePreferences(raw: unknown): AccountPreferences {
   const parsed = raw && typeof raw === "object" ? (raw as Partial<AccountPreferences>) : {};
   const hasSidebarItems = Array.isArray((parsed as { sidebarItems?: unknown }).sidebarItems);
@@ -82,6 +112,8 @@ function normalizePreferences(raw: unknown): AccountPreferences {
       : legacyQuickActions === false
         ? DEFAULT_PREFERENCES.sidebarItems.filter((item) => item !== "quickActions")
         : DEFAULT_PREFERENCES.sidebarItems,
+    gradientMode: normalizeGradientMode(parsed.gradientMode),
+    panelStyle: normalizePanelStyle(parsed.panelStyle),
     showWelcomeHero: parsed.showWelcomeHero ?? DEFAULT_PREFERENCES.showWelcomeHero,
     showRecentActivity: parsed.showRecentActivity ?? DEFAULT_PREFERENCES.showRecentActivity,
     showPortfolioInsights: parsed.showPortfolioInsights ?? DEFAULT_PREFERENCES.showPortfolioInsights,
@@ -115,10 +147,14 @@ export function AccountPreferencesProvider({ children }: { children: ReactNode }
 
   useEffect(() => {
     document.documentElement.dataset.uiMotion = preferences.reducedMotion ? "reduced" : "full";
+    document.documentElement.dataset.uiGradient = preferences.gradientMode;
+    document.documentElement.dataset.uiPanel = preferences.panelStyle;
     return () => {
       delete document.documentElement.dataset.uiMotion;
+      delete document.documentElement.dataset.uiGradient;
+      delete document.documentElement.dataset.uiPanel;
     };
-  }, [preferences.reducedMotion]);
+  }, [preferences.gradientMode, preferences.panelStyle, preferences.reducedMotion]);
 
   const value = useMemo<AccountPreferencesContextType>(
     () => ({

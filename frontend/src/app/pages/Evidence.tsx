@@ -14,7 +14,7 @@ import { Checkbox } from "../components/ui/checkbox";
 import { Plus, ExternalLink, FileText, Upload, ScanSearch, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router";
-import { useHeaderTheme } from "../lib/headerTheme";
+import { getHeaderThemeSoftPanelClass, useHeaderTheme } from "../lib/headerTheme";
 import { useAccountPreferences } from "../context/AccountPreferencesContext";
 
 const EVIDENCE_TYPES = [
@@ -67,6 +67,7 @@ export function Evidence() {
   const { recordActivity } = useActivity();
   const { activeHeaderTheme } = useHeaderTheme();
   const { preferences } = useAccountPreferences();
+  const softPanelClass = getHeaderThemeSoftPanelClass(activeHeaderTheme, preferences.panelStyle, preferences.gradientMode);
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<EvidenceItem[]>([]);
   const [skillNameById, setSkillNameById] = useState<Record<string, string>>({});
@@ -727,7 +728,7 @@ export function Evidence() {
                     {analysisItems.map((analysis) => (
                       <Card key={analysis.analysis_id} className="overflow-hidden border-slate-200 p-0 dark:border-slate-800 dark:bg-slate-950">
                         <div className="space-y-4">
-                          <div className={`border-b px-4 py-3 dark:border-slate-800 ${activeHeaderTheme.softPanelClass}`}>
+                          <div className={`border-b px-4 py-3 dark:border-slate-800 ${softPanelClass}`}>
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <div className="text-sm font-medium text-gray-900 dark:text-slate-100">Ready to save</div>
@@ -865,7 +866,7 @@ export function Evidence() {
 
       {filteredItems.length === 0 ? (
         <Card className="overflow-hidden border-slate-200 p-0 text-center dark:border-slate-800 dark:bg-slate-950">
-          <div className={`${activeHeaderTheme.softPanelClass} px-6 py-12`}>
+          <div className={`${softPanelClass} px-6 py-12`}>
             <Upload className={`mx-auto h-10 w-10 ${activeHeaderTheme.accentTextClass}`} />
             <div className="mt-4 text-lg font-semibold text-slate-900 dark:text-slate-100">No evidence added yet</div>
             <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">Add text or upload files to start building your evidence library.</div>
@@ -886,7 +887,7 @@ export function Evidence() {
             return (
               <Card key={item.id} className="group aspect-square overflow-hidden border-slate-200 p-0 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950">
                 <div className="relative flex h-full flex-col">
-                  <div className={`border-b px-3 py-2.5 dark:border-slate-800 ${activeHeaderTheme.softPanelClass}`}>
+                  <div className={`border-b px-3 py-2.5 dark:border-slate-800 ${softPanelClass}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">

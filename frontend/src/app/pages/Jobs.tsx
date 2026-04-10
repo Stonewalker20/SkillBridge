@@ -13,7 +13,7 @@ import type { JobMatchHistoryEntry, ResumeSnapshotListEntry } from "../services/
 import { Download, CheckCircle2, AlertCircle, Sparkles, History, Trash2, RotateCw, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router";
-import { useHeaderTheme } from "../lib/headerTheme";
+import { getHeaderThemeSoftPanelClass, useHeaderTheme } from "../lib/headerTheme";
 import { useAccountPreferences } from "../context/AccountPreferencesContext";
 
 type RetrievedContextItem = {
@@ -303,6 +303,7 @@ export function Jobs() {
   const { recordActivity } = useActivity();
   const { activeHeaderTheme } = useHeaderTheme();
   const { preferences } = useAccountPreferences();
+  const softPanelClass = getHeaderThemeSoftPanelClass(activeHeaderTheme, preferences.panelStyle, preferences.gradientMode);
   const [searchParams, setSearchParams] = useSearchParams();
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const [jobDescription, setJobDescription] = useState("");
@@ -923,7 +924,7 @@ export function Jobs() {
         <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="space-y-5">
             <div className="flex items-center gap-3">
-              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+              <div className={`rounded-2xl p-2.5 ${softPanelClass}`}>
                 <Sparkles className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
               <div>
@@ -1005,7 +1006,7 @@ export function Jobs() {
 
         <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-center gap-2 mb-4">
-            <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+            <div className={`rounded-2xl p-2.5 ${softPanelClass}`}>
               <History className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
             </div>
             <div>
@@ -1130,7 +1131,7 @@ export function Jobs() {
 
       <Card id="job-summary" className="scroll-mt-24 border-slate-200 p-8 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="grid gap-6 lg:grid-cols-[240px_1fr] lg:items-center">
-          <div className={`flex flex-col items-center rounded-2xl p-6 text-center ${activeHeaderTheme.softPanelClass}`}>
+          <div className={`flex flex-col items-center rounded-2xl p-6 text-center ${softPanelClass}`}>
             <span className={`text-5xl font-bold ${getScoreColor(normalized.matchScore)}`}>{normalized.matchScore}%</span>
             <span className="mt-1 text-sm text-gray-600 dark:text-slate-300">Match Score</span>
             <Badge className="mt-4 border-gray-200 bg-white text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">{normalized.confidenceLabel} Fit</Badge>
@@ -1504,7 +1505,7 @@ export function Jobs() {
             </div>
           </div>
 
-          <div className={`mt-4 rounded-2xl border p-4 ${activeHeaderTheme.softPanelClass}`}>
+          <div className={`mt-4 rounded-2xl border p-4 ${softPanelClass}`}>
             <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               {availableResumeLayouts.find((template) => template.value === selectedResumeLayout)?.label ?? "Resume style"}
             </div>

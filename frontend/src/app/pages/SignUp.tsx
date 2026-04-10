@@ -17,6 +17,9 @@ import {
 import LogoImage from "../../imports/skillbridge_logo.png";
 import { PublicThemeToggle } from "../components/PublicThemeToggle";
 
+const PASSWORD_MIN_LENGTH = 15;
+const PASSWORD_HELP_TEXT = "Use at least 15 characters. A mix of letters, numbers, and symbols is recommended.";
+
 export function SignUp() {
   const navigate = useNavigate();
   const { signup } = useAuth();
@@ -43,8 +46,8 @@ export function SignUp() {
       return;
     }
 
-    if (formData.password.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    if (formData.password.length < PASSWORD_MIN_LENGTH) {
+      toast.error(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
       return;
     }
 
@@ -134,13 +137,14 @@ export function SignUp() {
               <Input
                 id="password"
                 type="password"
-                placeholder="At least 6 characters"
+                placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className="pl-10"
                 disabled={loading}
               />
             </div>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{PASSWORD_HELP_TEXT}</p>
           </div>
 
           <div>

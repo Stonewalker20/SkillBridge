@@ -539,7 +539,7 @@ export function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {preferences.showWelcomeHero ? (
         <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
           <div className="px-6 py-6 md:px-8">
@@ -559,7 +559,7 @@ export function Dashboard() {
       ) : null}
 
       {user?.is_new_user ? (
-        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-2xl">
               <div className="flex items-center gap-2">
@@ -585,7 +585,7 @@ export function Dashboard() {
           </div>
 
           {nextGuideStep ? (
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/30">
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-950/30">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recommended next step</div>
@@ -618,7 +618,7 @@ export function Dashboard() {
               return (
                 <div
                   key={step.key}
-                  className={`rounded-2xl border p-4 ${
+                  className={`rounded-2xl border p-3.5 ${
                     complete
                       ? "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20"
                       : "border-slate-200 bg-white/70 dark:border-slate-800 dark:bg-slate-950/20"
@@ -673,10 +673,10 @@ export function Dashboard() {
         </Card>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {stats.map((stat) => (
           <Card key={stat.name} className="border-slate-200 p-0 transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/80">
-            <Link to={stat.href ?? "/app"} className="block p-4">
+            <Link to={stat.href ?? "/app"} className="block p-3.5">
               <div className="flex items-center gap-3">
                 <div className={`rounded-2xl p-2.5 ${stat.bgColor}`}>
                   <stat.icon className={`h-5 w-5 ${stat.color}`} />
@@ -691,7 +691,7 @@ export function Dashboard() {
         ))}
       </div>
 
-      <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -709,9 +709,9 @@ export function Dashboard() {
           </Badge>
         </div>
 
-        <div className={`mt-5 grid gap-4 ${preferences.showNextAchievementCard ? "xl:grid-cols-[1.1fr_0.9fr]" : ""}`}>
+        <div className={`mt-4 grid gap-3 ${preferences.showNextAchievementCard ? "xl:grid-cols-[1.1fr_0.9fr]" : ""}`}>
           {preferences.showNextAchievementCard ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/60">
               {hasRewardsData && rewards?.nextAchievement ? (
                 <>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -761,7 +761,7 @@ export function Dashboard() {
             </div>
           ) : null}
 
-          <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/30">
+          <div className="rounded-2xl border border-slate-200 bg-white/70 p-3.5 dark:border-slate-800 dark:bg-slate-950/30">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recent Unlocks</div>
             {!hasRewardsData ? (
               <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Recent unlocks will appear here once reward sync returns.</p>
@@ -789,9 +789,9 @@ export function Dashboard() {
 
       </Card>
 
-      <div className={`grid grid-cols-1 gap-6 ${preferences.showRecentActivity ? "lg:grid-cols-2" : ""}`}>
+      <div className={`grid grid-cols-1 gap-5 ${preferences.showRecentActivity ? "lg:grid-cols-2" : ""}`}>
         {preferences.showRecentActivity ? (
-          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Recent Activity</h3>
               <div className="flex items-center gap-2">
@@ -823,7 +823,7 @@ export function Dashboard() {
         ) : null}
 
         {/* Top Skill Categories */}
-        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Top Skill Categories</h3>
             <div className="flex items-center gap-2">
@@ -863,8 +863,8 @@ export function Dashboard() {
       </div>
 
       {preferences.showPortfolioInsights ? (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Evidence to Job Match</h3>
@@ -876,9 +876,9 @@ export function Dashboard() {
                 <Link to="/app/analytics/skills">Open analytics</Link>
               </Button>
             </div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
               {portfolioVisualMetrics.map((metric) => (
-                <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/60">
+                <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-800/60">
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{metric.label}</p>
                   <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">{metric.value}</p>
                   <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{metric.detail}</p>
@@ -886,7 +886,7 @@ export function Dashboard() {
               ))}
             </div>
             {summary.recentMatchTrend.length > 0 ? (
-              <div className="mt-5 h-52 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/30">
+              <div className="mt-4 h-48 rounded-2xl border border-slate-200 bg-white/70 p-2.5 dark:border-slate-800 dark:bg-slate-950/30">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={summary.recentMatchTrend} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
@@ -908,7 +908,7 @@ export function Dashboard() {
             )}
           </Card>
 
-          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
             <div className="mb-5">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Evidence Signal Mix</h3>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">

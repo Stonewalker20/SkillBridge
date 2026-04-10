@@ -44,7 +44,7 @@ export function ForgotPassword() {
           </div>
           <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-slate-50">Reset your password</h1>
           <p className="text-gray-600 dark:text-slate-300">
-            We&apos;ll prepare a reset link so you can recover your account without losing your workspace.
+            Enter your account email and we&apos;ll send a reset link if that account exists.
           </p>
         </div>
 
@@ -57,7 +57,7 @@ export function ForgotPassword() {
                 </span>
                 <span className="font-semibold">Reset request recorded</span>
               </div>
-              If that email is registered, a password reset link is now available. Check your inbox or ask an admin to confirm outbound email is configured in production.
+              If that email is registered, a password reset email has been sent. Check your inbox and spam folder for the recovery link.
             </div>
             <Button asChild className="w-full bg-[#1E3A8A] hover:bg-[#1e3a8a]/90">
               <Link to="/login">Back to sign in</Link>
@@ -85,7 +85,7 @@ export function ForgotPassword() {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Preparing reset link...
+                  Sending reset email...
                 </>
               ) : (
                 "Send reset link"

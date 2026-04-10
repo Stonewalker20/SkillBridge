@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTheme } from "next-themes";
-import { Check, ChevronDown, Lock, MonitorCog, Palette, Sparkles, Upload } from "lucide-react";
+import { ChevronDown, Lock, MonitorCog, Palette, Sparkles, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router";
 import { Card } from "../components/ui/card";
@@ -29,8 +29,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/ui/collapsible";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
-import { useHeaderTheme } from "../lib/headerTheme";
+import { getHeaderThemeSoftPanelClass, useHeaderTheme } from "../lib/headerTheme";
 import {
+  GRADIENT_MODE_OPTIONS,
+  PANEL_STYLE_OPTIONS,
   SIDEBAR_ITEM_OPTIONS,
   START_PAGE_OPTIONS,
   useAccountPreferences,
@@ -92,7 +94,7 @@ function CollapsibleSettingsCard({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             {icon}
@@ -118,7 +120,7 @@ function CollapsibleSettingsCard({
           </div>
         </div>
         <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
-          <div className="pt-5">{children}</div>
+          <div className="pt-4">{children}</div>
         </CollapsibleContent>
       </Card>
     </Collapsible>
@@ -329,9 +331,18 @@ export function AccountPersonalization() {
     []
   );
   const currentThemeLabel = themes.find((themeOption) => themeOption.value === headerTheme)?.label ?? "Current";
+  const currentGradientLabel =
+    GRADIENT_MODE_OPTIONS.find((option) => option.value === preferences.gradientMode)?.label ?? "Full";
+  const currentPanelStyleLabel =
+    PANEL_STYLE_OPTIONS.find((option) => option.value === preferences.panelStyle)?.label ?? "Tinted";
   const currentAvatarLabel = useMemo(
     () => AVATAR_PRESETS.find((preset) => preset.value === avatarPreset)?.label ?? "Preset avatar",
     [avatarPreset]
+  );
+  const softPanelClass = getHeaderThemeSoftPanelClass(
+    activeHeaderTheme,
+    preferences.panelStyle,
+    preferences.gradientMode
   );
 
   const handleSelectAvatarPreset = async (preset: AvatarPresetValue) => {
@@ -444,9 +455,9 @@ export function AccountPersonalization() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl space-y-6">
+      <div className="max-w-6xl space-y-5">
         <AccountSectionNav />
-        <Card className="border-slate-200 p-8 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="text-gray-500 dark:text-slate-400">Loading personalization...</div>
         </Card>
       </div>
@@ -454,16 +465,16 @@ export function AccountPersonalization() {
   }
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="max-w-6xl space-y-5">
       <AccountSectionNav />
 
       <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
-        <div className="px-6 py-6 md:px-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="flex items-center gap-4">
-              <Avatar className="h-20 w-20 shadow-sm ring-4 ring-white/70 dark:ring-slate-950/50">
+        <div className="px-5 py-5 md:px-7">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-16 w-16 shadow-sm ring-4 ring-white/70 dark:ring-slate-950/50">
                 {avatarUrl ? <AvatarImage src={avatarUrl} alt={`${username || "Account"} avatar`} /> : null}
-                <AvatarFallback className={`text-2xl font-bold ${avatarPresetClass(avatarPreset) ?? activeHeaderTheme.avatarClass} text-white`}>
+                <AvatarFallback className={`text-xl font-bold ${avatarPresetClass(avatarPreset) ?? activeHeaderTheme.avatarClass} text-white`}>
                   {initials}
                 </AvatarFallback>
               </Avatar>
@@ -479,20 +490,20 @@ export function AccountPersonalization() {
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/70">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Theme</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{themeSummary}</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/70">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Start Page</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{startPageLabel}</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/70">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sidebar</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{sidebarSummaryLabel}</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/70">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Avatar</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{avatarUrl ? "Uploaded photo" : avatarPreset || "Preset"}</p>
               </div>
@@ -501,14 +512,14 @@ export function AccountPersonalization() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-4">
           <CollapsibleSettingsCard
             title="Workspace Colors"
-            description="Pick a theme visually and see the matching avatar accent before selecting it."
+            description="Pick a theme visually from compact swatches grouped by unlock tier."
             summary={`${themeSummary} mode with the ${currentThemeLabel} header theme. ${unlockedThemeCount}/${themes.length} themes available.`}
             icon={
-              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+              <div className={`rounded-2xl p-2.5 ${softPanelClass}`}>
                 <Palette className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
             }
@@ -518,7 +529,7 @@ export function AccountPersonalization() {
               </Button>
             }
           >
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <Label htmlFor="theme-mode">Theme Mode</Label>
                 <Select value={theme ?? "system"} onValueChange={(value) => setTheme(value)}>
@@ -534,7 +545,7 @@ export function AccountPersonalization() {
               </div>
             </div>
 
-            <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
+            <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
               {isAdminUser
                 ? `Admin access unlocks all ${themes.length} workspace themes and all ${AVATAR_PRESETS.length} avatar colorways automatically.`
                 : hasRewardsData
@@ -542,100 +553,68 @@ export function AccountPersonalization() {
                   : "Achievement sync is unavailable right now, so all header themes remain selectable until badge progress reloads."}
             </div>
 
-            <div className="mt-4 space-y-5">
+            <div className="mt-3 space-y-3.5">
               {themeGroups.map((group) => {
                 const tierClass = rewardTierClasses(group.tier);
                 const unlockedInGroup = group.items.filter((themeOption) => !hasRewardsData || isTierUnlockableUnlocked(themeOption, rewardItems, isAdminUser)).length;
                 const currentTierUnlocks = group.tier ? unlockableCountForTier(rewardItems, group.tier, isAdminUser) : group.items.length;
                 return (
-                  <div key={`theme-group:${group.key}`} className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div
+                    key={`theme-group:${group.key}`}
+                    className="rounded-2xl border border-slate-200 bg-white/75 px-3 py-3 dark:border-slate-800 dark:bg-slate-950/35"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2.5">
                       <div className="flex items-center gap-2">
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${group.tier ? tierClass.chip : "border-slate-200 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
                           {group.label}
                         </span>
-                        <p className="text-sm text-slate-600 dark:text-slate-300">
+                        <p className="text-xs text-slate-600 dark:text-slate-300">
                           {group.tier
                             ? `${Math.min(currentTierUnlocks, group.items.length)}/${group.items.length} colorways unlocked at this tier`
                             : `${group.items.length} starter colorways`}
                         </p>
                       </div>
-                      <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                      <Badge variant="outline" className="h-6 px-2 text-[11px] dark:border-slate-700 dark:text-slate-200">
                         {unlockedInGroup}/{group.items.length} available
                       </Badge>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="mt-3 flex flex-wrap gap-2.5">
                       {group.items.map((themeOption) => {
                         const isSelected = headerTheme === themeOption.value;
                         const isLocked = hasRewardsData && !isTierUnlockableUnlocked(themeOption, rewardItems, isAdminUser) && !isSelected;
-                        const optionTierClass = rewardTierClasses(themeOption.unlockTier);
                         return (
                           <button
                             key={themeOption.value}
                             type="button"
                             onClick={() => handleSelectTheme(themeOption.value, isLocked)}
                             disabled={isLocked}
-                            className={`rounded-2xl border p-3 text-left transition ${
+                            className={`relative h-11 w-11 rounded-full border transition ${
                               isSelected
-                                ? "border-slate-900 bg-slate-50 shadow-sm dark:border-slate-100 dark:bg-slate-900"
+                                ? "border-slate-900 shadow-[0_0_0_3px_rgba(15,23,42,0.08)] dark:border-slate-100 dark:shadow-[0_0_0_3px_rgba(248,250,252,0.1)]"
                                 : isLocked
-                                  ? "border-slate-200 bg-white/70 opacity-70 dark:border-slate-800 dark:bg-slate-950/40"
-                                  : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950/70 dark:hover:border-slate-500"
+                                  ? "border-slate-200 opacity-55 dark:border-slate-800"
+                                  : "border-slate-200 hover:scale-[1.03] hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-500"
                             }`}
                             aria-pressed={isSelected}
                             aria-label={`Use ${themeOption.label}`}
+                            title={themeOption.label}
                           >
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                                {themeOption.swatchColors.map((color) => (
-                                  <span
-                                    key={color}
-                                    className="h-5 w-5 rounded-full border border-white/70 shadow-sm dark:border-slate-900"
-                                    style={{ background: color }}
-                                  />
-                                ))}
-                              </div>
-                              <span
-                                className={`flex h-[18px] w-[18px] items-center justify-center rounded-full border ${
-                                  isSelected
-                                    ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950"
-                                    : "border-slate-300 text-transparent dark:border-slate-600"
-                                }`}
-                              >
-                                <Check className="h-3 w-3" />
+                            <span
+                              className="block h-full w-full rounded-full"
+                              style={{
+                                background: `linear-gradient(135deg, ${themeOption.swatchColors.join(", ")})`,
+                              }}
+                            />
+                            {isSelected ? (
+                              <span className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-white/80 dark:ring-slate-950/80" />
+                            ) : null}
+                            {isLocked ? (
+                              <span className="pointer-events-none absolute -bottom-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full border border-white bg-slate-900 text-white shadow-sm dark:border-slate-950 dark:bg-slate-100 dark:text-slate-950">
+                                <Lock className="h-2.5 w-2.5" />
                               </span>
-                            </div>
-                            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="min-w-0">
-                                <p className="min-w-0 text-sm font-semibold text-slate-900 dark:text-slate-100">{themeOption.label}</p>
-                                {themeOption.unlockTier ? (
-                                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                                    Unlock slot {themeOption.unlockCount ?? 1} at {rewardTierLabel(themeOption.unlockTier)} tier
-                                  </p>
-                                ) : null}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                {themeOption.unlockTier ? (
-                                  <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${isLocked ? optionTierClass.muted : optionTierClass.chip}`}>
-                                    {rewardTierLabel(themeOption.unlockTier)} #{themeOption.unlockCount ?? 1}
-                                  </span>
-                                ) : (
-                                  <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                                    Starter
-                                  </span>
-                                )}
-                                {isLocked ? (
-                                  <span className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                                    <Lock className="h-3 w-3" />
-                                    Locked
-                                  </span>
-                                ) : null}
-                                <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${themeOption.avatarClass} text-white`}>
-                                  {initials}
-                                </span>
-                              </div>
-                            </div>
+                            ) : null}
+                            <span className="sr-only">{themeOption.label}</span>
                           </button>
                         );
                       })}
@@ -648,10 +627,10 @@ export function AccountPersonalization() {
 
           <CollapsibleSettingsCard
             title="Workspace Behavior"
-            description="Choose where you land first and which sidebar items stay visible."
-            summary={`${startPageLabel} is your start page with ${selectedSidebarOptions.length} sidebar items visible.`}
+            description="Choose where you land first and how visually dense or expressive the workspace feels."
+            summary={`${startPageLabel} start page, ${currentGradientLabel.toLowerCase()} gradients, and ${currentPanelStyleLabel.toLowerCase()} panels.`}
             icon={
-              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+              <div className={`rounded-2xl p-2.5 ${softPanelClass}`}>
                 <MonitorCog className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
             }
@@ -675,13 +654,55 @@ export function AccountPersonalization() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label htmlFor="gradient-mode">Gradient Intensity</Label>
+                <Select
+                  value={preferences.gradientMode}
+                  onValueChange={(value) => updatePreferences({ gradientMode: value as typeof preferences.gradientMode })}
+                >
+                  <SelectTrigger id="gradient-mode" className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
+                    <SelectValue placeholder="Select gradient intensity" />
+                  </SelectTrigger>
+                  <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                    {GRADIENT_MODE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {GRADIENT_MODE_OPTIONS.find((option) => option.value === preferences.gradientMode)?.description}
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="panel-style">Panel Style</Label>
+                <Select
+                  value={preferences.panelStyle}
+                  onValueChange={(value) => updatePreferences({ panelStyle: value as typeof preferences.panelStyle })}
+                >
+                  <SelectTrigger id="panel-style" className="mt-1 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100">
+                    <SelectValue placeholder="Select panel style" />
+                  </SelectTrigger>
+                  <SelectContent className="dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                    {PANEL_STYLE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {PANEL_STYLE_OPTIONS.find((option) => option.value === preferences.panelStyle)?.description}
+                </p>
+              </div>
               <PreferenceRow
                 title="Reduce motion"
                 description="Tone down transitions and motion-heavy UI changes."
                 checked={preferences.reducedMotion}
                 onCheckedChange={(value) => updatePreferences({ reducedMotion: value })}
               />
-              <div className="md:col-span-2 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="md:col-span-2 rounded-3xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/40">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <Label>Sidebar Contents</Label>
@@ -693,7 +714,7 @@ export function AccountPersonalization() {
                     {selectedSidebarOptions.length}/{sidebarOptions.length} shown
                   </Badge>
                 </div>
-                <div className="mt-4 space-y-3">
+                <div className="mt-3 space-y-3">
                   {sidebarOptions.map((option) => {
                     const checked = preferences.sidebarItems.includes(option.value);
                     return (
@@ -736,22 +757,22 @@ export function AccountPersonalization() {
           </CollapsibleSettingsCard>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-5">
           <CollapsibleSettingsCard
             title="Profile Icon"
             description="Upload a photo or choose a preset color. Uploaded photos can be resized and repositioned before saving."
             summary={`${avatarUrl ? "Uploaded photo active" : `${currentAvatarLabel} preset active`}. ${unlockedAvatarPresetCount}/${AVATAR_PRESETS.length} avatar colorways available.`}
             icon={
-              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+              <div className={`rounded-2xl p-2.5 ${softPanelClass}`}>
                 <Upload className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
             }
           >
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-14 w-14">
                   {avatarUrl ? <AvatarImage src={avatarUrl} alt={`${username || "Account"} avatar preview`} /> : null}
-                  <AvatarFallback className={`text-lg font-bold ${avatarPresetClass(avatarPreset) ?? activeHeaderTheme.avatarClass} text-white`}>
+                  <AvatarFallback className={`text-base font-bold ${avatarPresetClass(avatarPreset) ?? activeHeaderTheme.avatarClass} text-white`}>
                     {initials}
                   </AvatarFallback>
                 </Avatar>
@@ -768,7 +789,7 @@ export function AccountPersonalization() {
               <Input
                 type="file"
                 accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
-                className="mt-4 bg-white dark:bg-slate-950/70"
+                className="mt-3 bg-white dark:bg-slate-950/70"
                 disabled={uploadingAvatar || !hasImageUploadAccess}
                 onChange={(event) => {
                   handleAvatarUpload(event.target.files?.[0] ?? null);
@@ -781,7 +802,7 @@ export function AccountPersonalization() {
                 </p>
               ) : null}
               {!hasImageUploadAccess ? (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
                   <span>Use avatar colorways now, or activate a subscription to upload a personal image.</span>
                   <Button asChild size="sm" variant="outline">
                     <Link to="/app/account">Open Billing</Link>
@@ -789,34 +810,36 @@ export function AccountPersonalization() {
                 </div>
               ) : null}
 
-              <div className="mt-4 space-y-5">
+              <div className="mt-3 space-y-3.5">
                 {avatarPresetGroups.map((group) => {
                   const tierClass = rewardTierClasses(group.tier);
                   const unlockedInGroup = group.items.filter((preset) => !hasRewardsData || isTierUnlockableUnlocked(preset, rewardItems, isAdminUser)).length;
                   const currentTierUnlocks = group.tier ? unlockableCountForTier(rewardItems, group.tier, isAdminUser) : group.items.length;
                   return (
-                    <div key={`avatar-group:${group.key}`} className="space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div
+                      key={`avatar-group:${group.key}`}
+                      className="rounded-2xl border border-slate-200 bg-white/75 px-3 py-3 dark:border-slate-800 dark:bg-slate-950/35"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2.5">
                         <div className="flex items-center gap-2">
                           <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${group.tier ? tierClass.chip : "border-slate-200 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
                             {group.label}
                           </span>
-                          <p className="text-sm text-slate-600 dark:text-slate-300">
+                          <p className="text-xs text-slate-600 dark:text-slate-300">
                             {group.tier
                               ? `${Math.min(currentTierUnlocks, group.items.length)}/${group.items.length} avatar colorways unlocked`
                               : `${group.items.length} starter presets`}
                           </p>
                         </div>
-                        <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
+                        <Badge variant="outline" className="h-6 px-2 text-[11px] dark:border-slate-700 dark:text-slate-200">
                           {unlockedInGroup}/{group.items.length} available
                         </Badge>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                      <div className="mt-3 flex flex-wrap gap-2.5">
                         {group.items.map((preset) => {
                           const selected = !avatarUrl && avatarPreset === preset.value;
                           const isLocked = hasRewardsData && !isTierUnlockableUnlocked(preset, rewardItems, isAdminUser) && !selected;
-                          const presetTierClass = rewardTierClasses(preset.unlockTier);
                           return (
                             <button
                               type="button"
@@ -829,30 +852,29 @@ export function AccountPersonalization() {
                                 handleSelectAvatarPreset(preset.value);
                               }}
                               disabled={isLocked}
-                              className={`rounded-2xl border p-3 text-left transition ${
+                              className={`relative h-11 w-11 rounded-full border transition ${
                                 selected
-                                  ? "border-slate-900 bg-white shadow-sm dark:border-slate-100 dark:bg-slate-900"
+                                  ? "border-slate-900 shadow-[0_0_0_3px_rgba(15,23,42,0.08)] dark:border-slate-100 dark:shadow-[0_0_0_3px_rgba(248,250,252,0.1)]"
                                   : isLocked
-                                    ? "border-slate-200 bg-white/70 opacity-70 dark:border-slate-700 dark:bg-slate-950/50"
-                                    : "border-slate-200 dark:border-slate-700"
+                                    ? "border-slate-200 opacity-55 dark:border-slate-700"
+                                    : "border-slate-200 hover:scale-[1.03] hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-500"
                               }`}
+                              aria-pressed={selected}
+                              aria-label={`Use ${preset.label}`}
+                              title={preset.label}
                             >
-                              <div className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold ${preset.className}`}>
+                              <div className={`flex h-full w-full items-center justify-center rounded-full text-sm font-bold ${preset.className}`}>
                                 {initials}
                               </div>
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</div>
-                                {preset.unlockTier ? (
-                                  <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${isLocked ? presetTierClass.muted : presetTierClass.chip}`}>
-                                    {rewardTierLabel(preset.unlockTier)} #{preset.unlockCount ?? 1}
-                                  </span>
-                                ) : null}
-                                {isLocked ? (
-                                  <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                                    Locked
-                                  </span>
-                                ) : null}
-                              </div>
+                              {selected ? (
+                                <span className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-white/80 dark:ring-slate-950/80" />
+                              ) : null}
+                              {isLocked ? (
+                                <span className="pointer-events-none absolute -bottom-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full border border-white bg-slate-900 text-white shadow-sm dark:border-slate-950 dark:bg-slate-100 dark:text-slate-950">
+                                  <Lock className="h-2.5 w-2.5" />
+                                </span>
+                              ) : null}
+                              <span className="sr-only">{preset.label}</span>
                             </button>
                           );
                         })}
@@ -867,27 +889,33 @@ export function AccountPersonalization() {
           <CollapsibleSettingsCard
             title="Current Setup"
             description="A quick summary of your active account personalization."
-            summary={`${themeSummary} mode, ${startPageLabel} start page, ${selectedSidebarOptions.length} sidebar items, and ${preferences.showNextAchievementCard ? "achievement card visible" : "achievement card hidden"}.`}
+            summary={`${themeSummary} mode, ${currentGradientLabel.toLowerCase()} gradients, ${currentPanelStyleLabel.toLowerCase()} panels, and ${selectedSidebarOptions.length} sidebar items.`}
             icon={
-              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+              <div className={`rounded-2xl p-2.5 ${softPanelClass}`}>
                 <Sparkles className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
             }
           >
-            <div className="space-y-3">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+            <div className="space-y-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950/40">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Theme + Header</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {themeSummary} with the {themes.find((item) => item.value === headerTheme)?.label ?? "current"} header style
                 </p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950/40">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Appearance</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {currentGradientLabel} gradients and {currentPanelStyleLabel.toLowerCase()} panels.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950/40">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Navigation</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {startPageLabel} is your start page, with {selectedSidebarOptions.length} sidebar items shown.
                 </p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950/40">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Dashboard Focus</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {preferences.showRecentActivity ? "Recent activity visible" : "Recent activity hidden"},{" "}
