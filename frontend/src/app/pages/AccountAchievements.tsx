@@ -118,7 +118,7 @@ export function AccountAchievements() {
   );
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="max-w-6xl space-y-5">
       <AccountSectionNav />
 
       <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
@@ -164,11 +164,11 @@ export function AccountAchievements() {
       </div>
 
       {loading ? (
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="text-sm text-slate-600 dark:text-slate-300">Loading achievement progress...</div>
         </Card>
       ) : !hasRewardData ? (
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Achievement sync is unavailable right now.</p>
@@ -183,8 +183,8 @@ export function AccountAchievements() {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-            <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+            <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
               <div className="flex items-center gap-2">
                 <Rocket className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Next milestone</h3>
@@ -217,7 +217,7 @@ export function AccountAchievements() {
               )}
             </Card>
 
-            <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+            <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
               <div className="flex items-center gap-2">
                 <Lock className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Recent unlocks</h3>
@@ -246,7 +246,7 @@ export function AccountAchievements() {
             </Card>
           </div>
 
-          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
             <div className="mb-5 flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Badge Vault</h3>
@@ -259,7 +259,7 @@ export function AccountAchievements() {
               </Badge>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
               {badges.map((badge) => {
                 const displayTier = badge.current_tier ?? badge.next_tier ?? badge.tier;
                 const tierClass = rewardTierClasses(displayTier);
@@ -268,7 +268,7 @@ export function AccountAchievements() {
                   <div key={badge.key} className="group relative flex flex-col items-center">
                     <div
                       tabIndex={0}
-                      className={`relative flex h-24 w-24 items-center justify-center rounded-3xl border bg-white/90 transition focus:outline-none focus:ring-2 ${unlocked ? `${tierClass.ring} border-slate-200 shadow-sm dark:border-slate-700 dark:bg-slate-950/70` : "border-slate-300 bg-slate-200/70 shadow-[inset_0_0_30px_rgba(15,23,42,0.55)] grayscale dark:border-slate-800 dark:bg-slate-950/60"}`}
+                      className={`relative flex h-20 w-20 items-center justify-center rounded-3xl border bg-white/90 transition focus:outline-none focus:ring-2 ${unlocked ? `${tierClass.ring} border-slate-200 shadow-sm dark:border-slate-700 dark:bg-slate-950/70` : "border-slate-300 bg-slate-200/70 shadow-[inset_0_0_30px_rgba(15,23,42,0.55)] grayscale dark:border-slate-800 dark:bg-slate-950/60"}`}
                     >
                       <RewardBadgeIcon
                         iconKey={badge.icon_key}
@@ -281,7 +281,7 @@ export function AccountAchievements() {
                     <div className="mt-2 text-center text-xs font-medium text-slate-700 dark:text-slate-300">
                       {badge.title}
                     </div>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-3 w-56 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white/95 p-3 opacity-0 shadow-xl transition group-hover:opacity-100 group-focus-within:opacity-100 dark:border-slate-700 dark:bg-slate-950/95">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-3 w-52 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white/95 p-3 opacity-0 shadow-xl transition group-hover:opacity-100 group-focus-within:opacity-100 dark:border-slate-700 dark:bg-slate-950/95">
                       <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{badge.current_value}/{badge.target_value} {milestoneCounterLabel(badge.counter_key)}</p>
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{badge.title}</p>
@@ -301,8 +301,8 @@ export function AccountAchievements() {
             </div>
           </Card>
 
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.12fr_0.88fr]">
-            <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.12fr_0.88fr]">
+            <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Milestone tracker</h3>
@@ -315,7 +315,7 @@ export function AccountAchievements() {
                 </Badge>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {badges.map((badge) => {
                   const remaining = Math.max(0, badge.target_value - badge.current_value);
                   const displayTier = badge.current_tier ?? badge.next_tier ?? badge.tier;
@@ -323,7 +323,7 @@ export function AccountAchievements() {
                   return (
                     <div
                       key={`${badge.key}:milestone`}
-                      className={`rounded-2xl border px-4 py-4 ${badge.unlocked ? "border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-950/60" : "border-slate-200 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-950/40"}`}
+                      className={`rounded-2xl border px-3.5 py-3.5 ${badge.unlocked ? "border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-950/60" : "border-slate-200 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-950/40"}`}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -360,7 +360,7 @@ export function AccountAchievements() {
                         <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{badge.reward}</p>
                       </div>
 
-                      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
                         {(badge.tier_progress ?? []).map((step) => {
                           const stepClass = rewardTierClasses(step.tier);
                           return (
@@ -380,7 +380,7 @@ export function AccountAchievements() {
               </div>
             </Card>
 
-            <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+            <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
               <div className="mb-5">
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Tier ladder</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-300">
@@ -388,7 +388,7 @@ export function AccountAchievements() {
                 </p>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {tierProgression.map((entry) => {
                   const tier = entry.tier as RewardTier;
                   const tierClass = rewardTierClasses(tier);
@@ -402,7 +402,7 @@ export function AccountAchievements() {
                   return (
                     <div
                       key={tier}
-                      className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/50"
+                      className="rounded-2xl border border-slate-200 bg-white/80 px-3.5 py-3.5 dark:border-slate-800 dark:bg-slate-950/50"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${rewardTierAtLeast(highestTier, tier) ? tierClass.chip : tierClass.muted}`}>
@@ -423,7 +423,7 @@ export function AccountAchievements() {
                 })}
               </div>
 
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-slate-950/40">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Customization unlocks</p>
                 <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
                   {unlockedThemeCount}/{themes.length} header themes and {unlockedAvatarPresetCount}/{AVATAR_PRESETS.length} avatar colorways are currently available from your unlocked badge tiers.

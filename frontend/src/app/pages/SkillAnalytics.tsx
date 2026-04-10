@@ -390,10 +390,10 @@ export function SkillAnalytics() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className={`relative overflow-hidden rounded-[2rem] border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.55),_transparent_38%),linear-gradient(135deg,rgba(15,23,42,0.04),rgba(14,116,144,0.06),rgba(245,158,11,0.06))] dark:bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.08),_transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.12),rgba(14,116,144,0.18),rgba(245,158,11,0.12))]" />
-        <div className="relative grid gap-6 px-6 py-7 md:px-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <div className="relative grid gap-5 px-5 py-6 md:px-7 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-300">
               <BarChart3 className="h-3.5 w-3.5" />
@@ -432,7 +432,7 @@ export function SkillAnalytics() {
               return (
                 <div
                   key={`${item.label}:${index}`}
-                  className="rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-700/60 dark:bg-slate-950/60"
+                  className="rounded-3xl border border-white/70 bg-white/75 p-3.5 shadow-[0_12px_40px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-700/60 dark:bg-slate-950/60"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -512,7 +512,7 @@ export function SkillAnalytics() {
         ))}
       </div>
 
-      <div id="overview" className="grid grid-cols-1 gap-6 scroll-mt-24">
+      <div id="overview" className="grid grid-cols-1 gap-5 scroll-mt-24">
         <AnalyticsSection title="Evidence Mix" description="What is feeding the engine right now.">
           {analytics.evidenceTypes.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">No evidence added yet.</div>
@@ -560,7 +560,7 @@ export function SkillAnalytics() {
         </AnalyticsSection>
       </div>
 
-      <div id="support" className="grid grid-cols-1 gap-6 xl:grid-cols-2 scroll-mt-24">
+      <div id="support" className="grid grid-cols-1 gap-5 xl:grid-cols-2 scroll-mt-24">
         <AnalyticsSection title="Confirmed Categories" description="Where your strongest signals cluster.">
           {analytics.topCategories.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">No confirmed categories yet.</div>
@@ -591,9 +591,9 @@ export function SkillAnalytics() {
                   <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="var(--color-count)" />
                 </BarChart>
               </ChartContainer>
-              <div className="mt-4 max-h-[14rem] space-y-3 overflow-y-auto pr-1">
+              <div className="mt-3 max-h-[14rem] space-y-2.5 overflow-y-auto pr-1">
                 {analytics.proficiencyData.map((bucket) => (
-                  <div key={bucket.level} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-800/60">
+                  <div key={bucket.level} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-2.5 dark:border-slate-800 dark:bg-slate-800/60">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{bucket.label}</span>
                       <Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">
@@ -614,14 +614,14 @@ export function SkillAnalytics() {
         </AnalyticsSection>
       </div>
 
-      <div id="trajectory" className="grid grid-cols-1 gap-6 xl:grid-cols-[0.92fr_1.08fr] scroll-mt-24">
+      <div id="trajectory" className="grid grid-cols-1 gap-5 xl:grid-cols-[0.92fr_1.08fr] scroll-mt-24">
         <AnalyticsSection title="Skill Clusters" description="Patterns that keep repeating." compact>
           {analytics.trajectoryClusters.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">Confirm more skills to generate cluster-level signals.</div>
           ) : (
-            <div className="max-h-[21rem] space-y-2.5 overflow-y-auto pr-1">
+            <div className="max-h-[21rem] space-y-2 overflow-y-auto pr-1">
               {analytics.trajectoryClusters.map((cluster) => (
-                <div key={cluster.category} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/60">
+                <div key={cluster.category} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-800/60">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{cluster.category}</p>
@@ -650,7 +650,7 @@ export function SkillAnalytics() {
           {analytics.careerPaths.length === 0 ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">Add roles and analyze jobs to unlock career path predictions.</div>
           ) : (
-            <div className="max-h-[21rem] space-y-2.5 overflow-y-auto pr-1">
+            <div className="max-h-[21rem] space-y-2 overflow-y-auto pr-1">
               {analytics.careerPaths.map((path) => (
                 <button
                   type="button"
@@ -659,7 +659,7 @@ export function SkillAnalytics() {
                     setSelectedCareerPathId(path.role_id);
                     navigate(`/app/analytics/career-paths/${path.role_id}`);
                   }}
-                  className={`w-full rounded-2xl border p-3.5 text-left transition ${selectedCareerPathId === path.role_id ? "border-slate-400 bg-white dark:border-slate-600 dark:bg-slate-900/70" : "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-800/60"}`}
+                  className={`w-full rounded-2xl border p-3 text-left transition ${selectedCareerPathId === path.role_id ? "border-slate-400 bg-white dark:border-slate-600 dark:bg-slate-900/70" : "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-800/60"}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -677,7 +677,7 @@ export function SkillAnalytics() {
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Vector {Math.round(path.personal_vector_alignment_score ?? 0)}%</p>
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div className="mt-2.5 grid gap-2.5 md:grid-cols-2">
                     <div>
                       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                         Matched ({path.matched_skills.length})
@@ -718,7 +718,7 @@ export function SkillAnalytics() {
           description={selectedCareerPathDetail.reasoning}
           actions={<Badge variant="outline" className="dark:border-slate-700 dark:text-slate-200">Vector {Math.round(selectedCareerPathDetail.personal_vector_alignment_score)}%</Badge>}
         >
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Top Skills</p>
               <BadgeCloud items={selectedCareerPathDetail.top_role_skills} emptyLabel="None" className="mt-2" badgeClassName="dark:bg-slate-900 dark:text-slate-200" />
@@ -751,12 +751,12 @@ export function SkillAnalytics() {
         {analytics.learningPath.length === 0 ? (
           <div className="text-sm text-slate-500 dark:text-slate-400">Confirm more skills and analyze target roles to generate a learning path.</div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.08fr_0.92fr]">
-            <div className="max-h-[28rem] space-y-2.5 overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.08fr_0.92fr]">
+            <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
               {analytics.learningPath.map((step) => (
                 <div
                   key={`${step.phase}:${step.title}`}
-                  className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/60"
+                  className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-800/60"
                 >
                   <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
                     <div className="min-w-0">
@@ -769,7 +769,7 @@ export function SkillAnalytics() {
                       <h4 className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{step.title}</h4>
                       <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{step.rationale}</p>
                     </div>
-                    <div className="space-y-2 rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+                    <div className="space-y-2 rounded-2xl border border-slate-200 bg-white/70 p-2.5 dark:border-slate-800 dark:bg-slate-950/40">
                       <BadgeCloud
                         items={step.target_skills}
                         emptyLabel="No target skills."
@@ -787,7 +787,7 @@ export function SkillAnalytics() {
               ))}
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/60">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/60">
               {progressImpact ? (
                 <div className="mb-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 dark:border-emerald-900/80 dark:bg-emerald-950/40 dark:text-emerald-200">
                   {progressImpact.roleName} trajectory {progressImpact.delta >= 0 ? "increased" : "decreased"} by {Math.abs(progressImpact.delta).toFixed(2)} points after the latest update.

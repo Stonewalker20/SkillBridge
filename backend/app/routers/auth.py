@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import hashlib
+import logging
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
 from bson import ObjectId
@@ -34,12 +35,14 @@ from app.models.auth import (
     PasswordResetOut,
     SubscriptionActivateIn,
 )
+from app.utils.email_delivery import password_reset_email_enabled, send_password_reset_email
 from app.utils.mongo import oid_str, unique_strings
 from app.utils.media_storage import avatar_storage_key_from_user, get_avatar_storage_provider
 from app.utils.security import AUTH_RATE_LIMITS, build_rate_limit_identifier, enforce_rate_limit
 from app.core.config import settings
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 AVATAR_PRESETS = {
     "midnight",
     "sunset",
@@ -288,8 +291,18 @@ async def request_password_reset(payload: PasswordResetRequestIn, request: Reque
         return response
 
     raw_token = await _issue_password_reset_token(user)
+    reset_url = _build_password_reset_url(raw_token)
+    if password_reset_email_enabled():
+        try:
+            send_password_reset_email(
+                recipient_email=user["email"],
+                reset_url=reset_url,
+                username=str(user.get("username") or "").strip() or None,
+            )
+        except Exception:
+            logger.exception("Failed to send password reset email")
     if settings.app_env_normalized == "development":
-        response.reset_url = _build_password_reset_url(raw_token)
+        response.reset_url = reset_url
     return response
 
 

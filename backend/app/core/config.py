@@ -25,6 +25,15 @@ class Settings(BaseSettings):
     stripe_cancel_url: str = ""
     stripe_billing_portal_return_url: str = ""
     password_reset_token_ttl_minutes: int = 60
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_from_name: str = "SkillBridge"
+    smtp_reply_to: str = ""
+    smtp_use_starttls: bool = True
+    smtp_use_ssl: bool = False
     openai_embed_model: str = "text-embedding-3-small"
     openai_chat_model: str = "gpt-4o-mini"
     local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"

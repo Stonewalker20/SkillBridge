@@ -24,6 +24,10 @@ backend/backend/data/uploads/
 .venv/
 venv/
 backend/.venv/
+backend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.production.local
 
 # OS / IDE
 .DS_Store
@@ -64,4 +68,7 @@ reports/*.snm
 reports/*.synctex.gz
 reports/*.toc
 reports/*.vrb
+reports/*.pptx
 reports/~$*.pptx
+submission/
+backend/backend/

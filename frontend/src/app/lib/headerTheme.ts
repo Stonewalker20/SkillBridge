@@ -4,6 +4,8 @@ import type { RewardTier } from "./rewardTiers";
 
 export const ACCOUNT_HEADER_THEME_STORAGE_KEY = "account:headerTheme";
 export const ACCOUNT_HEADER_THEME_EVENT = "skillbridge:header-theme-change";
+export type UiGradientMode = "full" | "soft" | "flat";
+export type UiPanelStyle = "tinted" | "glass" | "solid";
 
 type HeaderThemeConfig = {
   value: string;
@@ -601,7 +603,13 @@ export function getAccessibleHeaderThemes(role: string | null | undefined) {
   return ACCOUNT_HEADER_THEMES.filter((theme) => !theme.adminOnly || admin);
 }
 
-export function getHeaderThemePageClass(theme: AccountHeaderTheme): string {
+export function getHeaderThemePageClass(theme: AccountHeaderTheme, gradientMode: UiGradientMode = "full"): string {
+  if (gradientMode === "flat") {
+    return "bg-slate-50 dark:bg-slate-950";
+  }
+  if (gradientMode === "soft") {
+    return "bg-[linear-gradient(180deg,_#f8fafc,_#f1f5f9_48%,_#f8fafc)] dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_48%,_#020617)]";
+  }
   switch (theme.value) {
     case "voltage":
     case "neon":
@@ -627,6 +635,46 @@ export function getHeaderThemePageClass(theme: AccountHeaderTheme): string {
     default:
       return "bg-[linear-gradient(180deg,_#f8fafc,_#eef2ff_45%,_#f8fafc)] dark:bg-[linear-gradient(180deg,_#020617,_#0f172a_48%,_#020617)]";
   }
+}
+
+export function getHeaderThemeSoftPanelClass(
+  theme: AccountHeaderTheme,
+  panelStyle: UiPanelStyle = "tinted",
+  gradientMode: UiGradientMode = "full"
+): string {
+  if (panelStyle === "solid") {
+    return "bg-white dark:bg-slate-900";
+  }
+  if (panelStyle === "glass") {
+    return "bg-white/75 backdrop-blur-xl dark:bg-slate-950/55";
+  }
+  if (gradientMode === "flat") {
+    return "bg-slate-50/95 dark:bg-slate-900/90";
+  }
+  if (gradientMode === "soft") {
+    return "bg-[linear-gradient(135deg,_rgba(255,255,255,0.95),_rgba(248,250,252,0.92))] dark:bg-[linear-gradient(135deg,_rgba(15,23,42,0.92),_rgba(15,23,42,0.82))]";
+  }
+  return theme.softPanelClass;
+}
+
+export function getHeaderThemeSidebarClass(
+  theme: AccountHeaderTheme,
+  panelStyle: UiPanelStyle = "tinted",
+  gradientMode: UiGradientMode = "full"
+): string {
+  if (panelStyle === "solid") {
+    return "bg-white dark:bg-slate-950";
+  }
+  if (panelStyle === "glass") {
+    return "bg-white/82 backdrop-blur-xl dark:bg-slate-950/76";
+  }
+  if (gradientMode === "flat") {
+    return "bg-slate-100 dark:bg-slate-950";
+  }
+  if (gradientMode === "soft") {
+    return "bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.94)_52%,_rgba(241,245,249,0.98))] dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.98))]";
+  }
+  return theme.sidebarClass;
 }
 
 export function readStoredHeaderTheme(): AccountHeaderThemeValue {

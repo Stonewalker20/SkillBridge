@@ -16,13 +16,13 @@ def test_auth_register_login_profile_and_logout(test_context):
     client = test_context["client"]
     register = client.post(
         "/auth/register",
-        json={"email": "newuser@example.com", "username": "newuser", "password": "password123"},
+        json={"email": "newuser@example.com", "username": "newuser", "password": "password123456789"},
     )
     assert register.status_code == 200
     token = register.json()["token"]
     assert register.json()["user"]["subscription_status"] == "inactive"
 
-    login = client.post("/auth/login", json={"email": "newuser@example.com", "password": "password123"})
+    login = client.post("/auth/login", json={"email": "newuser@example.com", "password": "password123456789"})
     assert login.status_code == 200
     auth_headers = {"Authorization": f"Bearer {login.json()['token']}"}
 
@@ -86,7 +86,7 @@ def test_subscription_activation_unlocks_core_routes(test_context):
     client = test_context["client"]
     register = client.post(
         "/auth/register",
-        json={"email": "locked@example.com", "username": "lockeduser", "password": "password123"},
+        json={"email": "locked@example.com", "username": "lockeduser", "password": "password123456789"},
     )
     assert register.status_code == 200
     auth_headers = {"Authorization": f"Bearer {register.json()['token']}"}
@@ -139,7 +139,7 @@ def test_password_change_verifies_current_password_and_rotates_session(test_cont
     wrong = client.post(
         "/auth/me/password",
         headers=headers,
-        json={"current_password": "wrongpass123", "new_password": "newpassword123"},
+        json={"current_password": "wrongpass123", "new_password": "newpassword123456"},
     )
     assert wrong.status_code == 401
     assert wrong.json()["detail"] == "Current password is incorrect"
@@ -147,7 +147,7 @@ def test_password_change_verifies_current_password_and_rotates_session(test_cont
     changed = client.post(
         "/auth/me/password",
         headers=headers,
-        json={"current_password": "password123", "new_password": "newpassword123"},
+        json={"current_password": "password123", "new_password": "newpassword123456"},
     )
     assert changed.status_code == 200
     changed_payload = changed.json()
@@ -164,7 +164,7 @@ def test_password_change_verifies_current_password_and_rotates_session(test_cont
     old_login = client.post("/auth/login", json={"email": "tester@example.com", "password": "password123"})
     assert old_login.status_code == 401
 
-    new_login = client.post("/auth/login", json={"email": "tester@example.com", "password": "newpassword123"})
+    new_login = client.post("/auth/login", json={"email": "tester@example.com", "password": "newpassword123456"})
     assert new_login.status_code == 200
 
 
@@ -172,6 +172,7 @@ def test_password_reset_flow_rotates_credentials_and_sessions(test_context):
     client = test_context["client"]
     db = test_context["db"]
     original_headers = test_context["headers"]
+    sent_password_reset_emails = test_context["sent_password_reset_emails"]
 
     request_reset = client.post("/auth/password-reset/request", json={"email": "tester@example.com"})
     assert request_reset.status_code == 200
@@ -179,11 +180,13 @@ def test_password_reset_flow_rotates_credentials_and_sessions(test_context):
     assert payload["ok"] is True
     assert payload["reset_url"].startswith(settings.public_app_url)
     assert len(db["password_reset_tokens"].docs) == 1
+    assert len(sent_password_reset_emails) == 1
+    assert sent_password_reset_emails[0]["recipient_email"] == "tester@example.com"
 
     reset_token = payload["reset_url"].split("token=", 1)[-1]
     confirm = client.post(
         "/auth/password-reset/confirm",
-        json={"token": reset_token, "new_password": "renewedpass123"},
+        json={"token": reset_token, "new_password": "renewedpass12345"},
     )
     assert confirm.status_code == 200
     assert confirm.json()["ok"] is True
@@ -195,13 +198,14 @@ def test_password_reset_flow_rotates_credentials_and_sessions(test_context):
     old_login = client.post("/auth/login", json={"email": "tester@example.com", "password": "password123"})
     assert old_login.status_code == 401
 
-    new_login = client.post("/auth/login", json={"email": "tester@example.com", "password": "renewedpass123"})
+    new_login = client.post("/auth/login", json={"email": "tester@example.com", "password": "renewedpass12345"})
     assert new_login.status_code == 200
 
 
 def test_password_reset_request_is_generic_for_unknown_email(test_context):
     client = test_context["client"]
     db = test_context["db"]
+    sent_password_reset_emails = test_context["sent_password_reset_emails"]
 
     response = client.post("/auth/password-reset/request", json={"email": "missing@example.com"})
     assert response.status_code == 200
@@ -209,6 +213,7 @@ def test_password_reset_request_is_generic_for_unknown_email(test_context):
     assert payload["ok"] is True
     assert payload["reset_url"] is None
     assert db["password_reset_tokens"].docs == []
+    assert sent_password_reset_emails == []
 
 
 def test_password_reset_token_cannot_be_reused(test_context):
@@ -219,13 +224,13 @@ def test_password_reset_token_cannot_be_reused(test_context):
 
     first = client.post(
         "/auth/password-reset/confirm",
-        json={"token": token, "new_password": "renewedpass123"},
+        json={"token": token, "new_password": "renewedpass12345"},
     )
     assert first.status_code == 200
 
     second = client.post(
         "/auth/password-reset/confirm",
-        json={"token": token, "new_password": "anotherpass123"},
+        json={"token": token, "new_password": "anotherpass12345"},
     )
     assert second.status_code == 400
     assert second.json()["detail"] == "Invalid or expired reset token"

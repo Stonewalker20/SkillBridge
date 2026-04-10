@@ -13,6 +13,15 @@ This matrix lists the runtime variables required to deploy SkillBridge safely.
 | `PUBLIC_APP_URL` | yes | Public frontend base URL used for links and billing callbacks. | `https://skillbridge.app` |
 | `PUBLIC_API_URL` | yes | Public backend base URL. | `https://api.skillbridge.app` |
 | `PASSWORD_RESET_TOKEN_TTL_MINUTES` | recommended | Lifetime for password reset tokens. | `60` |
+| `SMTP_HOST` | recommended for password reset email delivery | SMTP hostname for outbound transactional email. | `smtp.sendgrid.net` |
+| `SMTP_PORT` | recommended | SMTP port. Usually `587` for STARTTLS or `465` for SSL. | `587` |
+| `SMTP_USERNAME` | recommended when SMTP auth is required | SMTP username or API user. | `apikey` |
+| `SMTP_PASSWORD` | recommended when SMTP auth is required | SMTP password or API key. | `replace-me` |
+| `SMTP_FROM_EMAIL` | recommended for password reset email delivery | Sender email address for auth emails. | `no-reply@skillbridge.app` |
+| `SMTP_FROM_NAME` | optional | Sender display name for auth emails. | `SkillBridge` |
+| `SMTP_REPLY_TO` | optional | Reply-to address for auth emails. | `support@skillbridge.app` |
+| `SMTP_USE_STARTTLS` | optional | Whether to upgrade SMTP connections with STARTTLS. | `true` |
+| `SMTP_USE_SSL` | optional | Whether to connect via implicit SSL. | `false` |
 | `ADMIN_OWNER_EMAILS` | recommended | Comma-separated emails that should receive owner access on registration. | `owner@example.com` |
 | `ADMIN_TEAM_EMAILS` | recommended | Comma-separated emails that should receive team access on registration. | `team@example.com` |
 
@@ -68,4 +77,5 @@ This matrix lists the runtime variables required to deploy SkillBridge safely.
 
 - `frontend/.env.staging.example` and `frontend/.env.production.example` cover the public frontend runtime.
 - `backend/.env.staging.example` and `backend/.env.production.example` cover the backend runtime.
-- Password reset is implemented in-app, but real customer email delivery still requires an outbound email provider and sender configuration outside this repo.
+- Password reset emails are sent through SMTP when the SMTP settings above are configured.
+- New passwords should be at least 15 characters long. A mix of letters, numbers, and symbols is recommended.

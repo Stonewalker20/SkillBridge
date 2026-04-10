@@ -14,7 +14,8 @@ import {
 import { api, type AISettingsDetail, type BillingPlan } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
-import { useHeaderTheme } from "../lib/headerTheme";
+import { useAccountPreferences } from "../context/AccountPreferencesContext";
+import { getHeaderThemeSoftPanelClass, useHeaderTheme } from "../lib/headerTheme";
 import { AccountSectionNav } from "../components/AccountSectionNav";
 import { SubscriptionGate } from "../components/SubscriptionGate";
 
@@ -55,6 +56,8 @@ export function AccountAI() {
   const { refreshUser } = useAuth();
   const { recordActivity } = useActivity();
   const { activeHeaderTheme } = useHeaderTheme();
+  const { preferences } = useAccountPreferences();
+  const softPanelClass = getHeaderThemeSoftPanelClass(activeHeaderTheme, preferences.panelStyle, preferences.gradientMode);
 
   const [loading, setLoading] = useState(true);
   const [savingAI, setSavingAI] = useState(false);
@@ -189,9 +192,9 @@ export function AccountAI() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl space-y-6">
+      <div className="max-w-6xl space-y-5">
         <AccountSectionNav />
-        <Card className="border-slate-200 p-8 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="text-gray-500 dark:text-slate-400">Loading AI settings...</div>
         </Card>
       </div>
@@ -199,12 +202,12 @@ export function AccountAI() {
   }
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="max-w-6xl space-y-5">
       <AccountSectionNav />
 
       <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
-        <div className="px-6 py-6 md:px-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="px-5 py-5 md:px-7">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                 AI Settings
@@ -214,16 +217,16 @@ export function AccountAI() {
                 Choose how evidence analysis, embeddings, and zero-shot inference run for your account.
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/70">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Runtime</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{aiSettings?.provider_mode ?? "Unavailable"}</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/70">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Plan</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{subscriptionPlan || (isAdminRole ? "Included" : "Inactive")}</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/70">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Access</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{hasSubscriptionAccess ? "Unlocked" : "Subscription required"}</p>
               </div>
@@ -246,9 +249,9 @@ export function AccountAI() {
         statusMessage={billingMessage || billingStatus?.message || undefined}
       />
 
-      <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="mb-5 flex items-center gap-3">
-          <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+      <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="mb-4 flex items-center gap-3">
+          <div className={`rounded-2xl p-2 ${softPanelClass}`}>
             <Sparkles className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
           </div>
           <div>

@@ -6,7 +6,8 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/ui/collapsible";
 import { useAuth } from "../context/AuthContext";
-import { useHeaderTheme } from "../lib/headerTheme";
+import { useAccountPreferences } from "../context/AccountPreferencesContext";
+import { getHeaderThemeSoftPanelClass, useHeaderTheme } from "../lib/headerTheme";
 import {
   getHelpWalkthroughSections,
   HELP_WALKTHROUGH_MEDIA_TIPS,
@@ -73,10 +74,10 @@ function CollapsibleGuideCard({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <Card className="border-slate-200 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="flex min-w-0 items-start gap-3">
-            <div className={`rounded-2xl p-3 ${softPanelClass}`}>
+            <div className={`rounded-2xl p-2.5 ${softPanelClass}`}>
               <Icon className={`h-5 w-5 ${accentTextClass}`} />
             </div>
             <div className="min-w-0">
@@ -101,9 +102,9 @@ function CollapsibleGuideCard({
           </div>
         </div>
         <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
-          <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_0.95fr]">
+          <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_0.95fr]">
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-950/40">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">What to do</p>
                 <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
                   {section.steps.map((step) => (
@@ -111,7 +112,7 @@ function CollapsibleGuideCard({
                   ))}
                 </ul>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-950/40">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">What you should see</p>
                 <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">{section.result}</p>
               </div>
@@ -138,17 +139,19 @@ function OverviewCard({ title, children }: { title: string; children: ReactNode 
 
 export function AccountHelpGuide() {
   const { activeHeaderTheme } = useHeaderTheme();
+  const { preferences } = useAccountPreferences();
   const { user } = useAuth();
   const isAdminUser = ["owner", "admin", "team"].includes(String(user?.role ?? "").toLowerCase());
   const sections = useMemo(() => getHelpWalkthroughSections(isAdminUser), [isAdminUser]);
+  const softPanelClass = getHeaderThemeSoftPanelClass(activeHeaderTheme, preferences.panelStyle, preferences.gradientMode);
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="max-w-6xl space-y-5">
       <AccountSectionNav />
 
       <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
-        <div className="px-6 py-6 md:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="px-5 py-5 md:px-7">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                 <BookOpen className="h-3.5 w-3.5" />
@@ -169,7 +172,7 @@ export function AccountHelpGuide() {
         </div>
       </div>
 
-      <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
         <div className="grid gap-4 md:grid-cols-2">
           <OverviewCard title="Start here">
             <ol className="space-y-2">
@@ -193,7 +196,7 @@ export function AccountHelpGuide() {
           <CollapsibleGuideCard
             key={section.key}
             section={section}
-            softPanelClass={activeHeaderTheme.softPanelClass}
+            softPanelClass={softPanelClass}
             accentTextClass={activeHeaderTheme.accentTextClass}
           />
         ))}

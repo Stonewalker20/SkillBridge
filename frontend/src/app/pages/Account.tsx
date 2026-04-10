@@ -21,7 +21,8 @@ import {
 import { api, type BillingPlan } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useActivity } from "../context/ActivityContext";
-import { useHeaderTheme } from "../lib/headerTheme";
+import { useAccountPreferences } from "../context/AccountPreferencesContext";
+import { getHeaderThemeSoftPanelClass, useHeaderTheme } from "../lib/headerTheme";
 import { avatarPresetClass } from "../lib/avatarPresets";
 import { AccountSectionNav } from "../components/AccountSectionNav";
 import { SubscriptionGate } from "../components/SubscriptionGate";
@@ -58,11 +59,15 @@ const DEFAULT_BILLING_PLANS: BillingPlan[] = [
     checkout_available: false,
   },
 ];
+const PASSWORD_MIN_LENGTH = 15;
+const PASSWORD_HELP_TEXT = "Use at least 15 characters. A mix of letters, numbers, and symbols is recommended.";
 
 export function Account() {
   const { refreshUser } = useAuth();
   const { recordActivity } = useActivity();
   const { activeHeaderTheme } = useHeaderTheme();
+  const { preferences } = useAccountPreferences();
+  const softPanelClass = getHeaderThemeSoftPanelClass(activeHeaderTheme, preferences.panelStyle, preferences.gradientMode);
 
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -272,6 +277,10 @@ export function Account() {
       toast.error("New passwords do not match");
       return;
     }
+    if (newPassword.length < PASSWORD_MIN_LENGTH) {
+      toast.error(`New password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+      return;
+    }
     setSavingPassword(true);
     try {
       await api.changeMyPassword({
@@ -308,9 +317,9 @@ export function Account() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl space-y-6">
+      <div className="max-w-6xl space-y-5">
         <AccountSectionNav />
-        <Card className="border-slate-200 p-8 dark:border-slate-800 dark:bg-slate-900/80">
+        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="text-gray-500 dark:text-slate-400">Loading account...</div>
         </Card>
       </div>
@@ -318,40 +327,40 @@ export function Account() {
   }
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="max-w-6xl space-y-5">
       <AccountSectionNav />
 
       <div className={`overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 ${activeHeaderTheme.heroClass}`}>
-        <div className="px-6 py-6 md:px-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="flex items-center gap-4">
-              <Avatar className="h-20 w-20 shadow-sm ring-4 ring-white/70 dark:ring-slate-950/50">
+        <div className="px-5 py-5 md:px-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-16 w-16 shadow-sm ring-4 ring-white/70 dark:ring-slate-950/50">
                 {avatarUrl ? <AvatarImage src={avatarUrl} alt={`${username || "Account"} avatar`} /> : null}
-                <AvatarFallback className={`text-2xl font-bold ${avatarPresetClass(avatarPreset) ?? activeHeaderTheme.avatarClass} text-white`}>
+                <AvatarFallback className={`text-xl font-bold ${avatarPresetClass(avatarPreset) ?? activeHeaderTheme.avatarClass} text-white`}>
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                   Account
                 </div>
-                <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{username || "Account"}</h1>
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{email || ""}</p>
+                <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{username || "Account"}</h1>
+                <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">{email || ""}</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-3.5 py-2.5 dark:border-slate-700 dark:bg-slate-900/70">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Profile</p>
-                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Identity + contact</p>
+                <p className="mt-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">Identity + contact</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-3.5 py-2.5 dark:border-slate-700 dark:bg-slate-900/70">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Security</p>
-                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Password management</p>
+                <p className="mt-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">Password management</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 px-3.5 py-2.5 dark:border-slate-700 dark:bg-slate-900/70">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Customize</p>
-                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Moved to a separate page</p>
+                <p className="mt-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">Moved to a separate page</p>
               </div>
             </div>
           </div>
@@ -373,14 +382,14 @@ export function Account() {
       />
 
       {!hasSubscriptionAccess ? (
-        <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="flex flex-col gap-3.5 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Subscription plans</h3>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Subscription plans</h3>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
                 Pick the plan that fits your budget and usage. Stripe handles live checkout, and local development can still use the explicit fallback.
               </p>
-              <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+              <div className="mt-2.5 space-y-1 text-xs text-slate-500 dark:text-slate-400">
                 <p>Provider: {billingStatus?.provider || "stripe"}</p>
                 <p>Mode: {billingStatus?.mode || "unavailable"}</p>
                 {billingStatus?.stripe_customer_id ? <p>Customer id: {billingStatus.stripe_customer_id}</p> : null}
@@ -402,7 +411,7 @@ export function Account() {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 xl:grid-cols-3">
+          <div className="mt-5 grid gap-3 xl:grid-cols-3">
             {billingPlans.map((plan) => {
               const isSelected = selectedPlan === plan.key;
               return (
@@ -410,7 +419,7 @@ export function Account() {
                   key={plan.key}
                   type="button"
                   onClick={() => setSelectedPlan(plan.key)}
-                  className={`rounded-3xl border p-5 text-left transition ${
+                  className={`rounded-2xl border p-4 text-left transition ${
                     isSelected
                       ? "border-slate-900 bg-slate-50 shadow-sm dark:border-slate-100 dark:bg-slate-900"
                       : "border-slate-200 bg-white/80 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/50 dark:hover:border-slate-700"
@@ -419,23 +428,23 @@ export function Account() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plan.label}</h4>
+                        <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100">{plan.label}</h4>
                         {plan.recommended ? (
                           <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200">
                             Recommended
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{plan.price_display}</p>
+                      <p className="mt-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{plan.price_display}</p>
                     </div>
                     {isSelected ? (
-                      <span className="rounded-full border border-slate-900 bg-slate-900 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950">
+                      <span className="rounded-full border border-slate-900 bg-slate-900 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950">
                         Selected
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{plan.description}</p>
-                  <div className="mt-4 space-y-2">
+                  <p className="mt-2.5 text-sm leading-6 text-slate-600 dark:text-slate-300">{plan.description}</p>
+                  <div className="mt-3 space-y-1.5">
                     {plan.features.map((feature) => (
                       <div key={`${plan.key}:${feature}`} className="text-sm text-slate-700 dark:text-slate-200">
                         • {feature}
@@ -443,7 +452,7 @@ export function Account() {
                     ))}
                   </div>
                   {!plan.checkout_available ? (
-                    <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">Live checkout is not configured for this plan yet.</p>
+                    <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Live checkout is not configured for this plan yet.</p>
                   ) : null}
                 </button>
               );
@@ -452,11 +461,11 @@ export function Account() {
         </Card>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-6">
-          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-            <div className="mb-5 flex items-center gap-3">
-              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-5">
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="mb-4 flex items-center gap-3">
+              <div className={`rounded-2xl p-2.5 ${softPanelClass}`}>
                 <User className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
               <div>
@@ -465,34 +474,34 @@ export function Account() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-                <div className="mb-3 flex items-center gap-2">
+            <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-950/40">
+                <div className="mb-2.5 flex items-center gap-2">
                   <User className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                   <Label htmlFor="username" className="text-sm font-semibold text-slate-900 dark:text-slate-100">Username</Label>
                 </div>
                 <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} className="bg-white dark:bg-slate-950/70" />
-                <Button onClick={handleUpdateUsername} disabled={savingProfile} className={`mt-3 w-full ${activeHeaderTheme.buttonClass}`}>
+                <Button onClick={handleUpdateUsername} disabled={savingProfile} className={`mt-2.5 w-full ${activeHeaderTheme.buttonClass}`}>
                   Update Username
                 </Button>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-                <div className="mb-3 flex items-center gap-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-950/40">
+                <div className="mb-2.5 flex items-center gap-2">
                   <Mail className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                   <Label htmlFor="email" className="text-sm font-semibold text-slate-900 dark:text-slate-100">Email Address</Label>
                 </div>
                 <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="bg-white dark:bg-slate-950/70" />
-                <Button onClick={handleUpdateEmail} disabled={savingProfile} className={`mt-3 w-full ${activeHeaderTheme.buttonClass}`}>
+                <Button onClick={handleUpdateEmail} disabled={savingProfile} className={`mt-2.5 w-full ${activeHeaderTheme.buttonClass}`}>
                   Update Email
                 </Button>
               </div>
             </div>
           </Card>
 
-          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-            <div className="mb-5 flex items-center gap-3">
-              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="mb-4 flex items-center gap-3">
+              <div className={`rounded-2xl p-2.5 ${softPanelClass}`}>
                 <Lock className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
               <div>
@@ -501,7 +510,7 @@ export function Account() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Label htmlFor="current-password">Current Password</Label>
                 <Input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Enter current password" className="mt-1 bg-white dark:bg-slate-950/70" />
@@ -509,22 +518,23 @@ export function Account() {
               <div>
                 <Label htmlFor="new-password">New Password</Label>
                 <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Enter new password" className="mt-1 bg-white dark:bg-slate-950/70" />
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{PASSWORD_HELP_TEXT}</p>
               </div>
               <div>
                 <Label htmlFor="confirm-password">Confirm New Password</Label>
                 <Input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" className="mt-1 bg-white dark:bg-slate-950/70" />
               </div>
             </div>
-            <Button onClick={handleChangePassword} disabled={savingPassword} className={`mt-4 ${activeHeaderTheme.buttonClass}`}>
+            <Button onClick={handleChangePassword} disabled={savingPassword} className={`mt-3.5 ${activeHeaderTheme.buttonClass}`}>
               {savingPassword ? "Changing Password..." : "Change Password"}
             </Button>
           </Card>
         </div>
 
-        <div className="space-y-6">
-          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-            <div className="mb-5 flex items-center gap-3">
-              <div className={`rounded-2xl p-2.5 ${activeHeaderTheme.softPanelClass}`}>
+        <div className="space-y-5">
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="mb-4 flex items-center gap-3">
+              <div className={`rounded-2xl p-2.5 ${softPanelClass}`}>
                 <Wand2 className={`h-5 w-5 ${activeHeaderTheme.accentTextClass}`} />
               </div>
               <div>
@@ -533,12 +543,12 @@ export function Account() {
               </div>
             </div>
 
-            <div className={`rounded-2xl border p-5 ${activeHeaderTheme.softPanelClass}`}>
+            <div className={`rounded-2xl border p-4 ${softPanelClass}`}>
               <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Open dedicated account settings</p>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
                 Use dedicated pages to adjust appearance, upload a profile photo, tune AI behavior, and review achievement unlocks.
               </p>
-              <div className="mt-4 flex flex-wrap gap-3">
+              <div className="mt-3.5 flex flex-wrap gap-2.5">
                 <Button asChild className={activeHeaderTheme.buttonClass}>
                   <Link to="/app/account/personalization">
                     <Settings2 className="h-4 w-4" />
@@ -561,10 +571,10 @@ export function Account() {
             </div>
           </Card>
 
-          <Card className="border-slate-200 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-            <h3 className="mb-5 text-lg font-semibold text-slate-900 dark:text-slate-100">Account Actions</h3>
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
-              <div className="flex items-start justify-between gap-4">
+          <Card className="border-slate-200 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">Account Actions</h3>
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-3.5 dark:border-red-900/60 dark:bg-red-950/30">
+              <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <Trash2 className="mt-1 h-5 w-5 text-red-600" />
                   <div>
