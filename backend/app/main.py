@@ -26,14 +26,64 @@ from app.routers.rewards import router as rewards_router
 from app.core.config import settings
 from app.utils.observability import configure_logging, emit_app_event, request_logging_middleware
 from app.utils.ai import get_inference_status, release_local_models, warm_local_models
+from app.utils.skill_catalog import normalize_skill_text
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
+
+def _sort_datetime(value):
+    if isinstance(value, datetime):
+        return value
+    return datetime.min
+
+async def normalize_learning_path_progress_records():
+    db = get_db()
+    collection = db["learning_path_progress"]
+    if not hasattr(collection, "find"):
+        return
+    rows = await collection.find(
+        {},
+        {"_id": 1, "user_id": 1, "skill_name": 1, "skill_key": 1, "status": 1, "created_at": 1, "updated_at": 1},
+    ).to_list(length=5000)
+
+    grouped: dict[tuple[str, str], list[dict]] = {}
+    invalid_ids: list[object] = []
+
+    for row in rows:
+        normalized_key = normalize_skill_text(row.get("skill_key") or row.get("skill_name"))
+        if not normalized_key or row.get("user_id") is None:
+            if row.get("_id") is not None:
+                invalid_ids.append(row["_id"])
+            continue
+        grouped.setdefault((str(row.get("user_id")), normalized_key), []).append(row)
+
+    if invalid_ids:
+        await collection.delete_many({"_id": {"$in": invalid_ids}})
+
+    for (_user_id, normalized_key), docs in grouped.items():
+        docs.sort(
+            key=lambda doc: (
+                _sort_datetime(doc.get("updated_at")),
+                _sort_datetime(doc.get("created_at")),
+                str(doc.get("_id") or ""),
+            ),
+            reverse=True,
+        )
+        keeper = docs[0]
+        if str(keeper.get("skill_key") or "") != normalized_key:
+            await db["learning_path_progress"].update_one(
+                {"_id": keeper["_id"]},
+                {"$set": {"skill_key": normalized_key}},
+            )
+        stale_ids = [doc["_id"] for doc in docs[1:] if doc.get("_id") is not None]
+        if stale_ids:
+            await collection.delete_many({"_id": {"$in": stale_ids}})
 
 async def ensure_indexes():
     # These indexes support the hot paths we exercise on every authenticated session:
     # login/session lookup, saved analyses, tailored resumes, and the derived RAG index.
     db = get_db()
     await db["users"].create_index("email", unique=True)
+    await db["users"].create_index("username", unique=True)
     await db["sessions"].create_index("token", unique=True)
     await db["sessions"].create_index("expires_at", expireAfterSeconds=0)
     await db["password_reset_tokens"].create_index("token_hash", unique=True)
@@ -51,7 +101,13 @@ async def ensure_indexes():
     await db["jobs"].create_index("role_ids")
     await db["project_skill_links"].create_index([("project_id", 1), ("skill_id", 1)], unique=True)
     await db["project_skill_links"].create_index("project_id")
-    await db["learning_path_progress"].create_index([("user_id", 1), ("skill_name", 1)], unique=True)
+    await normalize_learning_path_progress_records()
+    await db["learning_path_progress"].create_index(
+        [("user_id", 1), ("skill_key", 1)],
+        unique=True,
+        partialFilterExpression={"skill_key": {"$type": "string"}},
+    )
+    await db["resume_skill_confirmations"].create_index([("user_id", 1), ("scope_key", 1)], unique=True)
     await db["skill_relations"].create_index([("from_skill_id", 1), ("to_skill_id", 1), ("relation_type", 1)], unique=True)
     await db["evidence"].create_index([("user_id", 1), ("origin", 1), ("updated_at", -1)])
     await db["evidence"].create_index([("user_id", 1), ("structured_evidence", 1), ("updated_at", -1)])

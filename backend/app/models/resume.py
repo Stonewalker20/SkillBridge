@@ -7,7 +7,7 @@ from datetime import datetime
 
 
 class ResumeSnapshotIn(BaseModel):
-    user_id: str = Field(default="student1")
+    user_id: str | None = Field(default=None)
     text: str = Field(min_length=1)
 
 

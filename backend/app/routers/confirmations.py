@@ -39,6 +39,10 @@ def parse_optional_oid(value: str | None, field_name: str) -> ObjectId | None:
         raise HTTPException(status_code=400, detail=f"Invalid {field_name}")
 
 
+def confirmation_scope_key(snapshot_oid: ObjectId | None) -> str:
+    return f"snapshot:{snapshot_oid}" if snapshot_oid is not None else "profile"
+
+
 async def find_skill_by_id_ref(db, skill_id: str, field_name: str) -> dict:
     sid = str(skill_id or "").strip()
     if not sid:
@@ -252,7 +256,7 @@ async def upsert_confirmation(payload: ConfirmationIn, user=Depends(require_user
 
     # Optional snapshot id; None means "default profile"
     snapshot_oid = parse_optional_oid(payload.resume_snapshot_id, "resume_snapshot_id")
-    snapshot_refs = [None] if snapshot_oid is None else [snapshot_oid, payload.resume_snapshot_id]
+    scope_key = confirmation_scope_key(snapshot_oid)
 
     # If snapshot provided, verify it exists
     if snapshot_oid is not None:
@@ -312,10 +316,10 @@ async def upsert_confirmation(payload: ConfirmationIn, user=Depends(require_user
             {"from_text": getattr(e, "from_text", "") or "", "to_skill_id": skill["_id"]}
         )
 
-    # ---- Atomic upsert (safe with unique index on (user_id, resume_snapshot_id)) ----
+    # ---- Atomic upsert (safe with unique index on (user_id, scope_key)) ----
     existing_docs = await (
         db["resume_skill_confirmations"]
-        .find({"user_id": {"$in": user_refs}, "resume_snapshot_id": {"$in": snapshot_refs}})
+        .find({"user_id": {"$in": user_refs}, "scope_key": scope_key})
         .sort("updated_at", -1)
         .to_list(length=50)
     )
@@ -329,6 +333,7 @@ async def upsert_confirmation(payload: ConfirmationIn, user=Depends(require_user
                 "$set": {
                     "user_id": user_oid,
                     "resume_snapshot_id": snapshot_oid,
+                    "scope_key": scope_key,
                     "confirmed": confirmed_docs,
                     "rejected": rejected_docs,
                     "edited": edited_docs,
@@ -345,6 +350,7 @@ async def upsert_confirmation(payload: ConfirmationIn, user=Depends(require_user
             {
                 "user_id": user_oid,
                 "resume_snapshot_id": snapshot_oid,
+                "scope_key": scope_key,
                 "confirmed": confirmed_docs,
                 "rejected": rejected_docs,
                 "edited": edited_docs,
@@ -353,8 +359,8 @@ async def upsert_confirmation(payload: ConfirmationIn, user=Depends(require_user
             }
         )
         d = await db["resume_skill_confirmations"].find_one(
-            {"user_id": user_oid, "resume_snapshot_id": snapshot_oid}
-    )
+            {"user_id": user_oid, "scope_key": scope_key}
+        )
     if not d:
         raise HTTPException(status_code=500, detail="Failed to read confirmation document")
     if snapshot_oid is None:
