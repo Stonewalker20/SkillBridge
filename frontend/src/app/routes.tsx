@@ -6,6 +6,7 @@ import { RootLayout } from "./components/RootLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 const Landing = lazy(() => import("./pages/Landing").then((module) => ({ default: module.Landing })));
+const ExpoDemo = lazy(() => import("./pages/ExpoDemo").then((module) => ({ default: module.ExpoDemo })));
 const Login = lazy(() => import("./pages/Login").then((module) => ({ default: module.Login })));
 const SignUp = lazy(() => import("./pages/SignUp").then((module) => ({ default: module.SignUp })));
 const ForgotPassword = lazy(() =>
@@ -62,6 +63,10 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: page("SkillBridge", <Landing />),
+      },
+      {
+        path: "expo-demo",
+        element: page("SkillBridge Expo Demo", <ExpoDemo />),
       },
       {
         path: "login",
