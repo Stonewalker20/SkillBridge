@@ -8,6 +8,13 @@ from datetime import datetime, timezone
 from app.core.db import get_db
 from app.models.evidence import EvidenceIn, EvidenceOut, EvidencePatch
 from app.utils.ai import extract_skill_candidates, embed_texts, cosine_similarity, normalize_ai_preferences
+from app.utils.link_extraction import (
+    LinkExtractionError,
+    extract_link_evidence_content,
+    github_evidence_title,
+    is_github_url,
+    is_http_url,
+)
 from app.utils.rag import delete_rag_document, sync_rag_document
 from app.utils.rewards import safe_increment_reward_counter
 from app.utils.security import AI_RATE_LIMITS, build_rate_limit_identifier, enforce_rate_limit
@@ -18,13 +25,14 @@ from app.utils.skill_catalog import (
     normalize_skill_text,
     should_use_strict_exact_match,
 )
+from app.utils.text_safety import sanitize_user_evidence_text
 from app.utils.mongo import oid_str, ref_query, ref_values, to_object_id, try_object_id
+import json
 import io
 import os
 import re
 import logging
 from hashlib import sha1
-from urllib.parse import urlparse
 
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
@@ -40,6 +48,7 @@ BAD_SKILL_PHRASES = [
     "benefits package",
 ]
 ALLOWED_SHORT_SKILLS = {"c", "c#", "c++", "go", "r", "ui", "ux", "qa", "bi", "ml", "ai"}
+MAX_EVIDENCE_UPLOAD_BYTES = 5 * 1024 * 1024
 
 def now_utc():
     return datetime.now(timezone.utc)
@@ -62,6 +71,19 @@ def is_hidden_skill(doc: dict) -> bool:
 
 
 def serialize_evidence(doc: dict) -> dict:
+    extracted_skill_ids = [oid_str(x) for x in doc.get("extracted_skill_ids", []) if oid_str(x)]
+    stored_manual_skill_ids = [oid_str(x) for x in doc.get("manual_skill_ids", []) if oid_str(x)]
+    fallback_skill_ids = [oid_str(x) for x in doc.get("skill_ids", []) if oid_str(x)]
+    manual_skill_ids = stored_manual_skill_ids or [
+        skill_id for skill_id in fallback_skill_ids if skill_id not in set(extracted_skill_ids)
+    ]
+    skill_ids = []
+    seen_skill_ids: set[str] = set()
+    for skill_id in [*extracted_skill_ids, *manual_skill_ids, *fallback_skill_ids]:
+        if not skill_id or skill_id in seen_skill_ids:
+            continue
+        seen_skill_ids.add(skill_id)
+        skill_ids.append(skill_id)
     return {
         "id": oid_str(doc["_id"]),
         "user_email": doc.get("user_email"),
@@ -69,8 +91,11 @@ def serialize_evidence(doc: dict) -> dict:
         "type": doc["type"],
         "title": doc["title"],
         "source": doc["source"],
-        "text_excerpt": doc["text_excerpt"],
-        "skill_ids": [oid_str(x) for x in doc.get("skill_ids", [])],
+        "text_excerpt": str(doc.get("text_excerpt") or ""),
+        "skill_ids": skill_ids,
+        "extracted_skill_ids": extracted_skill_ids,
+        "manual_skill_ids": manual_skill_ids,
+        "manual_skill_names": [str(value or "").strip() for value in (doc.get("manual_skill_names") or []) if str(value or "").strip()],
         "project_id": oid_str(doc.get("project_id")) if doc.get("project_id") is not None else None,
         "tags": doc.get("tags", []),
         "origin": doc.get("origin", "user"),
@@ -85,19 +110,19 @@ def extract_text_from_upload(filename: str, raw: bytes) -> str:
         from pypdf import PdfReader
 
         reader = PdfReader(io.BytesIO(raw))
-        return "\n".join((page.extract_text() or "") for page in reader.pages).strip()
+        return sanitize_user_evidence_text("\n".join((page.extract_text() or "") for page in reader.pages).strip())
     if lower.endswith(".docx"):
         from docx import Document
 
         doc = Document(io.BytesIO(raw))
-        return "\n".join(p.text for p in doc.paragraphs).strip()
+        return sanitize_user_evidence_text("\n".join(p.text for p in doc.paragraphs).strip())
     if lower.endswith(".txt") or lower.endswith(".md"):
-        return raw.decode("utf-8", errors="ignore").strip()
+        return sanitize_user_evidence_text(raw.decode("utf-8", errors="ignore").strip())
     raise HTTPException(status_code=400, detail="Unsupported file type. Use PDF, DOCX, or TXT.")
 
 
 def make_excerpt(text: str) -> str:
-    return str(text or "").strip()
+    return sanitize_user_evidence_text(str(text or "").strip())
 
 
 def infer_source(url: str | None, filename: str | None) -> str:
@@ -108,31 +133,24 @@ def infer_source(url: str | None, filename: str | None) -> str:
     return "manual-entry"
 
 
-def is_github_url(value: str | None) -> bool:
-    parsed = urlparse(str(value or "").strip())
-    host = parsed.netloc.lower()
-    if host.startswith("www."):
-        host = host[4:]
-    return host == "github.com" or host.endswith(".github.com")
+async def require_owned_project_id(db, user: dict, project_id: str | None) -> object | None:
+    cleaned = str(project_id or "").strip()
+    if not cleaned:
+        return None
 
+    try:
+        project_oid = to_object_id(cleaned)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project_id")
 
-def github_evidence_title(url: str | None) -> str:
-    parsed = urlparse(str(url or "").strip())
-    parts = [part for part in parsed.path.split("/") if part]
-    if len(parts) >= 2:
-        owner = parts[0].strip()
-        repo = parts[1].strip()
-        repo = repo[:-4] if repo.endswith(".git") else repo
-        if owner and repo:
-            return f"{owner}/{repo}"
-    if parts:
-        return parts[0].strip()
-    return "GitHub Evidence"
+    own_project = await db["projects"].find_one({"_id": project_oid, **ref_query("user_id", user["_id"])}, {"_id": 1})
+    if own_project:
+        return project_oid
 
+    if await db["projects"].find_one({"_id": project_oid}, {"_id": 1}):
+        raise HTTPException(status_code=403, detail="You do not have access to this project")
 
-def github_evidence_excerpt(url: str | None) -> str:
-    title = github_evidence_title(url)
-    return f"GitHub link: {title}" if title else "GitHub link"
+    raise HTTPException(status_code=404, detail="Project not found")
 
 
 def normalize_skill_ids(skill_ids: list[str] | None) -> list[object]:
@@ -144,6 +162,161 @@ def normalize_skill_ids(skill_ids: list[str] | None) -> list[object]:
         if oid not in normalized:
             normalized.append(oid)
     return normalized
+
+
+def normalize_text_list(values: list[str] | None) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        key = normalize_skill_text(text)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    return out
+
+
+def parse_form_list(value: str | None) -> list[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        parsed = None
+    if isinstance(parsed, list):
+        return normalize_text_list([str(item or "").strip() for item in parsed])
+    return normalize_text_list([part.strip() for part in raw.split(",") if part.strip()])
+
+
+def combine_skill_refs(*skill_id_sets: list[object]) -> list[object]:
+    combined: list[object] = []
+    seen: set[str] = set()
+    for values in skill_id_sets:
+        for value in values or []:
+            skill_id = oid_str(value)
+            if not skill_id or skill_id in seen:
+                continue
+            seen.add(skill_id)
+            combined.append(value)
+    return combined
+
+
+def should_derive_text_from_source(text: str | None, source: str | None) -> bool:
+    cleaned = str(text or "").strip()
+    source_text = str(source or "").strip()
+    if len(cleaned) < 20:
+        return True
+    lowered = cleaned.casefold()
+    if lowered.startswith("github link:") or lowered == source_text.casefold():
+        return True
+    if is_http_url(cleaned):
+        return True
+    return False
+
+
+async def derive_link_content(url: str | None) -> dict:
+    cleaned = str(url or "").strip()
+    if not cleaned or not is_http_url(cleaned):
+        return {"title": "", "text_excerpt": "", "source_kind": ""}
+    try:
+        extracted = await extract_link_evidence_content(cleaned)
+    except LinkExtractionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    excerpt = make_excerpt(" ".join(part for part in [extracted.description, extracted.text] if part))
+    return {
+        "title": extracted.title,
+        "text_excerpt": excerpt,
+        "source_kind": extracted.source_kind,
+    }
+
+
+async def extract_catalog_skill_ids(visible_skills: list[dict], text: str, ai_preferences: dict | None = None) -> list[object]:
+    matches = await extract_skill_matches_from_catalog(visible_skills, text, ai_preferences=ai_preferences)
+    return normalize_skill_ids(
+        [str(match.get("skill_id") or "").strip() for match in matches if not str(match.get("skill_id") or "").startswith("candidate:")]
+    )
+
+
+async def resolve_manual_skill_ids(
+    db,
+    user: dict,
+    visible_skills: list[dict],
+    *,
+    manual_skill_ids: list[str] | None = None,
+    manual_skill_names: list[str] | None = None,
+) -> tuple[list[object], list[str]]:
+    normalized_skill_ids = normalize_skill_ids(manual_skill_ids)
+    normalized_names = normalize_text_list(manual_skill_names)
+    if not normalized_names:
+        return normalized_skill_ids, []
+
+    name_index: dict[str, dict] = {}
+    for skill in visible_skills:
+        names = [(skill.get("name") or "").strip()]
+        names.extend(str(alias or "").strip() for alias in (skill.get("aliases") or []))
+        for label in names:
+            key = normalize_skill_text(label)
+            if key and key not in name_index:
+                name_index[key] = skill
+
+    resolved_names: list[str] = []
+    for skill_name in normalized_names:
+        key = normalize_skill_text(skill_name)
+        matched = name_index.get(key)
+        if matched is not None:
+            oid = try_object_id(matched.get("_id"))
+            if oid is not None and oid not in normalized_skill_ids:
+                normalized_skill_ids.append(oid)
+            resolved_names.append(str(matched.get("name") or skill_name).strip() or skill_name)
+            continue
+
+        now = now_utc()
+        created_doc = {
+            "name": skill_name,
+            "category": "General",
+            "categories": ["General"],
+            "aliases": [],
+            "tags": ["manual-evidence"],
+            "origin": "user",
+            "created_by_user_id": user["_id"],
+            "hidden": False,
+            "created_at": now,
+            "updated_at": now,
+        }
+        result = await db["skills"].insert_one(created_doc)
+        created_doc["_id"] = result.inserted_id
+        visible_skills.append(created_doc)
+        name_index[key] = created_doc
+        normalized_skill_ids.append(result.inserted_id)
+        resolved_names.append(skill_name)
+
+    return normalized_skill_ids, resolved_names
+
+
+async def resolve_evidence_payload_skills(
+    db,
+    user: dict,
+    visible_skills: list[dict],
+    *,
+    legacy_skill_ids: list[str] | None = None,
+    extracted_skill_ids: list[str] | None = None,
+    manual_skill_ids: list[str] | None = None,
+    manual_skill_names: list[str] | None = None,
+) -> tuple[list[object], list[object], list[object], list[str]]:
+    normalized_extracted_skill_ids = normalize_skill_ids(extracted_skill_ids)
+    normalized_manual_skill_ids, resolved_manual_skill_names = await resolve_manual_skill_ids(
+        db,
+        user,
+        visible_skills,
+        manual_skill_ids=[*(legacy_skill_ids or []), *(manual_skill_ids or [])],
+        manual_skill_names=manual_skill_names,
+    )
+    combined_skill_ids = combine_skill_refs(normalized_extracted_skill_ids, normalized_manual_skill_ids)
+    return normalized_extracted_skill_ids, normalized_manual_skill_ids, combined_skill_ids, resolved_manual_skill_names
 
 
 async def safe_sync_rag_document(
@@ -279,12 +452,21 @@ async def _semantic_catalog_match(candidate_name: str, visible_skills: list[dict
 
 
 async def extract_skill_matches(db, text: str, ai_preferences: dict | None = None) -> list[dict]:
+    visible_skills = await _load_visible_skill_catalog(db)
+    return await extract_skill_matches_from_catalog(visible_skills, text, ai_preferences=ai_preferences)
+
+
+async def _load_visible_skill_catalog(db) -> list[dict]:
+    skills = await db["skills"].find({}, {"name": 1, "aliases": 1, "category": 1, "hidden": 1}).to_list(length=5000)
+    return merge_skill_docs([skill for skill in skills if not is_hidden_skill(skill)])
+
+
+async def extract_skill_matches_from_catalog(visible_skills: list[dict], text: str, ai_preferences: dict | None = None) -> list[dict]:
+    text = sanitize_user_evidence_text(text)
     lowered = (text or "").lower()
     if not lowered:
         return []
 
-    skills = await db["skills"].find({}, {"name": 1, "aliases": 1, "category": 1, "hidden": 1}).to_list(length=5000)
-    visible_skills = merge_skill_docs([skill for skill in skills if not is_hidden_skill(skill)])
     exact_index, term_index = build_canonical_skill_index(visible_skills)
     skill_by_id = {oid_str(skill.get("_id")): skill for skill in visible_skills}
     matches: dict[str, dict] = {}
@@ -395,9 +577,23 @@ async def extract_skill_matches(db, text: str, ai_preferences: dict | None = Non
     return sorted(matches.values(), key=lambda item: (item["skill_name"].lower(), item["skill_id"]))
 
 
-def build_analysis_item(title: str, evidence_type: str, source: str, text: str, filename: str | None, extracted_skills: list[dict], index: int) -> dict:
+def build_analysis_item(
+    title: str,
+    evidence_type: str,
+    source: str,
+    text: str,
+    filename: str | None,
+    extracted_skills: list[dict],
+    manual_skill_ids: list[object],
+    manual_skill_names: list[str],
+    index: int,
+) -> dict:
     key_source = filename or source or title or str(index)
     analysis_id = f"analysis:{sha1(f'{index}:{key_source}'.encode('utf-8')).hexdigest()[:12]}"
+    extracted_skill_ids = normalize_skill_ids(
+        [str(skill.get("skill_id") or "").strip() for skill in extracted_skills if not str(skill.get("skill_id") or "").startswith("candidate:")]
+    )
+    combined_skill_ids = [oid_str(value) for value in combine_skill_refs(extracted_skill_ids, manual_skill_ids)]
     return {
         "analysis_id": analysis_id,
         "title": title,
@@ -406,6 +602,10 @@ def build_analysis_item(title: str, evidence_type: str, source: str, text: str, 
         "text_excerpt": make_excerpt(text),
         "filename": filename,
         "extracted_skills": extracted_skills,
+        "skill_ids": combined_skill_ids,
+        "extracted_skill_ids": [oid_str(value) for value in extracted_skill_ids],
+        "manual_skill_ids": [oid_str(value) for value in manual_skill_ids],
+        "manual_skill_names": manual_skill_names,
     }
 
 
@@ -416,6 +616,8 @@ async def analyze_evidence(
     type: str = Form(default="project"),
     text: str | None = Form(default=None),
     url: str | None = Form(default=None),
+    manual_skill_ids: str | None = Form(default=None),
+    manual_skill_names: str | None = Form(default=None),
     file: UploadFile | None = File(default=None),
     files: list[UploadFile] | None = File(default=None),
     user=Depends(require_user),
@@ -429,36 +631,40 @@ async def analyze_evidence(
         window_seconds=AI_RATE_LIMITS["evidence_analyze"][1],
     )
     ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
+    visible_skills = await _load_visible_skill_catalog(db)
+    resolved_manual_skill_ids, resolved_manual_skill_names = await resolve_manual_skill_ids(
+        db,
+        user,
+        visible_skills,
+        manual_skill_ids=parse_form_list(manual_skill_ids),
+        manual_skill_names=parse_form_list(manual_skill_names),
+    )
     upload_list = [upload for upload in (files or []) if upload is not None]
     if file is not None:
         upload_list.append(file)
 
     items: list[dict] = []
-    manual_text = (text or "").strip()
-    if manual_text:
-        extracted_skills = await extract_skill_matches(db, manual_text, ai_preferences=ai_preferences)
-        resolved_title = (title or "").strip() or "Untitled Evidence"
+    manual_text = sanitize_user_evidence_text((text or "").strip())
+    derived_url = str(url or "").strip()
+    link_content = await derive_link_content(derived_url) if derived_url else {"title": "", "text_excerpt": "", "source_kind": ""}
+    if manual_text or link_content.get("text_excerpt"):
+        analysis_text = manual_text
+        if link_content.get("text_excerpt"):
+            analysis_text = sanitize_user_evidence_text(
+                " ".join(part for part in [manual_text, link_content.get("title"), link_content.get("text_excerpt")] if part).strip()
+            )
+        extracted_skills = await extract_skill_matches_from_catalog(visible_skills, analysis_text, ai_preferences=ai_preferences)
+        resolved_title = (title or "").strip() or str(link_content.get("title") or "").strip() or "Untitled Evidence"
         items.append(
             build_analysis_item(
                 resolved_title,
                 type,
-                infer_source(url, None),
-                manual_text,
+                infer_source(derived_url, None),
+                analysis_text,
                 None,
                 extracted_skills,
-                0,
-            )
-        )
-    elif url and is_github_url(url):
-        resolved_title = (title or "").strip() or github_evidence_title(url)
-        items.append(
-            build_analysis_item(
-                resolved_title,
-                type,
-                infer_source(url, None),
-                github_evidence_excerpt(url),
-                None,
-                [],
+                resolved_manual_skill_ids,
+                resolved_manual_skill_names,
                 0,
             )
         )
@@ -468,10 +674,12 @@ async def analyze_evidence(
         raw = await upload.read()
         if not raw:
             continue
+        if len(raw) > MAX_EVIDENCE_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Evidence uploads must be 5 MB or smaller")
         extracted_text = extract_text_from_upload(filename, raw)
         if len(extracted_text.strip()) < 20:
             continue
-        extracted_skills = await extract_skill_matches(db, extracted_text, ai_preferences=ai_preferences)
+        extracted_skills = await extract_skill_matches_from_catalog(visible_skills, extracted_text, ai_preferences=ai_preferences)
         resolved_title = os.path.splitext(filename)[0] or "Untitled Evidence"
         items.append(
             build_analysis_item(
@@ -481,12 +689,14 @@ async def analyze_evidence(
                 extracted_text,
                 filename,
                 extracted_skills,
+                resolved_manual_skill_ids,
+                resolved_manual_skill_names,
                 index,
             )
         )
 
     if not items:
-        raise HTTPException(status_code=400, detail="Provide at least 20 characters of evidence text or one or more supported files")
+        raise HTTPException(status_code=400, detail="Provide at least 20 characters of evidence text, a supported link, or one or more supported files")
 
     return {
         "items": items,
@@ -527,6 +737,9 @@ async def list_evidence(
             "source": 1,
             "text_excerpt": 1,
             "skill_ids": 1,
+            "extracted_skill_ids": 1,
+            "manual_skill_ids": 1,
+            "manual_skill_names": 1,
             "project_id": 1,
             "tags": 1,
             "origin": 1,
@@ -543,18 +756,44 @@ async def list_evidence(
 async def create_evidence(payload: EvidenceIn, user=Depends(require_user)):
     db = get_db()
     ai_preferences = normalize_ai_preferences((user or {}).get("ai_preferences"))
+    visible_skills = await _load_visible_skill_catalog(db)
+    source = str(payload.source or "").strip()
+    text_excerpt = sanitize_user_evidence_text(str(payload.text_excerpt or "").strip())
+    link_content = {"title": "", "text_excerpt": "", "source_kind": ""}
+    if is_http_url(source):
+        link_content = await derive_link_content(source)
+        if should_derive_text_from_source(text_excerpt, source):
+            text_excerpt = sanitize_user_evidence_text(str(link_content.get("text_excerpt") or "").strip())
+    if not text_excerpt:
+        raise HTTPException(status_code=400, detail="Provide evidence text, upload-derived text, or a supported link that can be summarized")
 
-    skill_ids = normalize_skill_ids(payload.skill_ids)
+    project_id = await require_owned_project_id(db, user, payload.project_id)
+
+    extracted_skill_ids = normalize_skill_ids(payload.extracted_skill_ids)
+    if not extracted_skill_ids:
+        extracted_skill_ids = await extract_catalog_skill_ids(visible_skills, text_excerpt, ai_preferences=ai_preferences)
+    extracted_skill_ids, manual_skill_ids, skill_ids, resolved_manual_skill_names = await resolve_evidence_payload_skills(
+        db,
+        user,
+        visible_skills,
+        legacy_skill_ids=payload.skill_ids,
+        extracted_skill_ids=[oid_str(value) for value in extracted_skill_ids],
+        manual_skill_ids=payload.manual_skill_ids,
+        manual_skill_names=payload.manual_skill_names,
+    )
 
     doc = {
         "user_email": payload.user_email,
         "type": payload.type,
-        "title": payload.title,
-        "source": payload.source,
-        "text_excerpt": payload.text_excerpt,
+        "title": str(payload.title or "").strip() or str(link_content.get("title") or "").strip() or (github_evidence_title(source) if is_github_url(source) else "Untitled Evidence"),
+        "source": source,
+        "text_excerpt": text_excerpt,
         "skill_ids": skill_ids,
+        "extracted_skill_ids": extracted_skill_ids,
+        "manual_skill_ids": manual_skill_ids,
+        "manual_skill_names": resolved_manual_skill_names,
         "user_id": user["_id"],
-        "project_id": to_object_id(payload.project_id) if payload.project_id else None,
+        "project_id": project_id,
         "tags": payload.tags or [],
         "origin": payload.origin or "user",
         "created_at": now_utc(),
@@ -602,15 +841,54 @@ async def patch_evidence(evidence_id: str, payload: EvidencePatch, user=Depends(
     if not updates:
         raise HTTPException(status_code=400, detail="No fields provided to update")
 
-    if "skill_ids" in updates:
-        raw_skill_ids = updates.get("skill_ids") or []
-        normalized_skill_ids = normalize_skill_ids(raw_skill_ids)
-        if raw_skill_ids and not normalized_skill_ids:
-            updates.pop("skill_ids", None)
-        else:
-            updates["skill_ids"] = normalized_skill_ids
+    visible_skills = await _load_visible_skill_catalog(db)
+    source = str(updates.get("source", existing.get("source")) or "").strip()
+    text_excerpt = sanitize_user_evidence_text(str(updates.get("text_excerpt", existing.get("text_excerpt")) or "").strip())
+    if is_http_url(source) and should_derive_text_from_source(text_excerpt, source):
+        link_content = await derive_link_content(source)
+        if link_content.get("text_excerpt"):
+            text_excerpt = sanitize_user_evidence_text(str(link_content.get("text_excerpt") or "").strip())
+            updates["text_excerpt"] = text_excerpt
+        if not str(updates.get("title") or "").strip() and not str(existing.get("title") or "").strip():
+            updates["title"] = str(link_content.get("title") or "").strip() or github_evidence_title(source)
+    elif "text_excerpt" in updates:
+        updates["text_excerpt"] = text_excerpt
+
+    if "extracted_skill_ids" in updates or "manual_skill_ids" in updates or "manual_skill_names" in updates or "skill_ids" in updates or "text_excerpt" in updates or "source" in updates:
+        extracted_input = updates.get("extracted_skill_ids")
+        if extracted_input is None:
+            extracted_input = [oid_str(value) for value in (existing.get("extracted_skill_ids") or [])]
+            if ("text_excerpt" in updates or "source" in updates) and text_excerpt:
+                extracted_input = [oid_str(value) for value in await extract_catalog_skill_ids(visible_skills, text_excerpt, ai_preferences=ai_preferences)]
+
+        manual_input = updates.get("manual_skill_ids")
+        if manual_input is None and ("manual_skill_names" in updates or "skill_ids" in updates):
+            manual_input = updates.get("skill_ids") or [oid_str(value) for value in (existing.get("manual_skill_ids") or existing.get("skill_ids") or [])]
+        elif manual_input is None:
+            manual_input = [oid_str(value) for value in (existing.get("manual_skill_ids") or existing.get("skill_ids") or [])]
+
+        manual_names_input = updates.get("manual_skill_names")
+        if manual_names_input is None:
+            manual_names_input = existing.get("manual_skill_names") or []
+
+        extracted_skill_ids, manual_skill_ids, combined_skill_ids, resolved_manual_skill_names = await resolve_evidence_payload_skills(
+            db,
+            user,
+            visible_skills,
+            legacy_skill_ids=[],
+            extracted_skill_ids=extracted_input,
+            manual_skill_ids=manual_input,
+            manual_skill_names=manual_names_input,
+        )
+        updates["extracted_skill_ids"] = extracted_skill_ids
+        updates["manual_skill_ids"] = manual_skill_ids
+        updates["manual_skill_names"] = resolved_manual_skill_names
+        updates["skill_ids"] = combined_skill_ids
+
+    if "skill_ids" in updates and "manual_skill_ids" not in updates and "extracted_skill_ids" not in updates:
+        updates["skill_ids"] = normalize_skill_ids(updates.get("skill_ids") or [])
     if "project_id" in updates:
-        updates["project_id"] = to_object_id(updates["project_id"]) if updates["project_id"] else None
+        updates["project_id"] = await require_owned_project_id(db, user, updates["project_id"])
 
     updates["updated_at"] = now_utc()
     await db["evidence"].update_one({"_id": evidence_oid}, {"$set": updates})

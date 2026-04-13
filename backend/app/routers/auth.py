@@ -132,15 +132,6 @@ async def _delete_avatar_if_present(user: dict):
         pass
 
 
-def bootstrap_role_for_email(email: str) -> str:
-    normalized = str(email or "").strip().lower()
-    if normalized in settings.admin_owner_emails_set:
-        return "owner"
-    if normalized in settings.admin_team_emails_set:
-        return "team"
-    return "user"
-
-
 def is_user_active(user: dict) -> bool:
     return user.get("is_active", True) is not False
 
@@ -208,7 +199,7 @@ async def register(payload: RegisterIn, request: Request):
         "username": payload.username,
         "password_salt": password_parts["salt"],
         "password_hash": password_parts["hash"],
-        "role": bootstrap_role_for_email(payload.email),
+        "role": "user",
         "is_active": True,
         "avatar_preset": "midnight",
         "subscription_status": SUBSCRIPTION_DEFAULT_STATUS,

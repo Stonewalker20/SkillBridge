@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     media_s3_public_base_url: str = ""
     media_s3_key_prefix: str = "avatars"
     user_avatar_upload_dir: str = "backend/data/uploads/avatars"
+    trusted_proxy_cidrs: str = ""
 
     @property
     def admin_owner_emails_set(self) -> set[str]:
@@ -119,6 +120,10 @@ class Settings(BaseSettings):
     @property
     def user_avatar_upload_path(self) -> Path:
         return Path(self.user_avatar_upload_dir).expanduser()
+
+    @property
+    def trusted_proxy_cidrs_list(self) -> list[str]:
+        return [value.strip() for value in self.trusted_proxy_cidrs.split(",") if value.strip()]
 
     def validate_runtime_settings(self) -> list[str]:
         issues: list[str] = []

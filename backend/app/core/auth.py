@@ -13,6 +13,14 @@ from bson import ObjectId
 
 TOKEN_TTL_DAYS = 30
 ADMIN_ROLES = {"owner", "admin", "team"}
+ROLE_PRIORITY = {
+    "user": 0,
+    "team": 1,
+    "admin": 2,
+    "owner": 3,
+}
+ROLE_HIERARCHY = ("user", "team", "admin", "owner")
+ROLE_RANKS = {role: index for index, role in enumerate(ROLE_HIERARCHY)}
 
 
 def now_utc() -> datetime:
@@ -79,11 +87,55 @@ def new_token() -> str:
 
 
 def has_subscription_access(user: Dict[str, Any]) -> bool:
-    role = str(user.get("role") or "user").strip().lower()
+    role = normalize_role(user.get("role"))
     if role in ADMIN_ROLES:
         return True
     status = str(user.get("subscription_status") or "inactive").strip().lower()
     return status == "active"
+
+
+def normalize_role(role: Any) -> str:
+    value = str(role or "user").strip().lower()
+    return value if value in ROLE_PRIORITY else "user"
+
+
+def role_priority(role: Any) -> int:
+    return ROLE_PRIORITY.get(normalize_role(role), 0)
+
+
+def can_manage_user_role(actor_role: Any, target_role: Any, next_role: Any) -> bool:
+    actor_priority = role_priority(actor_role)
+    target_priority = role_priority(target_role)
+    next_priority = role_priority(next_role)
+
+    if actor_priority <= 0:
+        return False
+    if actor_priority <= target_priority:
+        return False
+    if actor_priority <= next_priority:
+        return False
+    return True
+
+
+def can_deactivate_user(actor_role: Any, target_role: Any) -> bool:
+    actor_priority = role_priority(actor_role)
+    target_priority = role_priority(target_role)
+    if actor_priority <= 0:
+        return False
+    return actor_priority > target_priority
+
+
+def normalized_role(value: Any) -> str:
+    role = str(value or "user").strip().lower()
+    return role or "user"
+
+
+def role_rank(value: Any) -> int:
+    return ROLE_RANKS.get(normalized_role(value), -1)
+
+
+def can_manage_role(actor_role: Any, target_role: Any) -> bool:
+    return role_rank(actor_role) >= role_rank(target_role)
 
 
 async def require_user(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
@@ -131,7 +183,7 @@ async def require_active_subscription(user=Depends(require_user)) -> Dict[str, A
 
 
 async def require_admin_user(user=Depends(require_user)) -> Dict[str, Any]:
-    role = str(user.get("role") or "user").strip().lower()
+    role = normalize_role(user.get("role"))
     if role not in ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user

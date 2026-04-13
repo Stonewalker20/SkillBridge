@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
 
-from app.core.auth import require_admin_user
+from app.core.auth import can_deactivate_user, can_manage_user_role, normalize_role, require_admin_user
 from app.core.db import get_db
 from app.models.admin import (
     AdminHelpRequestOut,
@@ -332,6 +332,11 @@ async def admin_update_user_role(
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
+    actor_role = normalize_role(current_user.get("role"))
+    target_role = normalize_role(target.get("role"))
+    if next_role != target_role and not can_manage_user_role(actor_role, target_role, next_role):
+        raise HTTPException(status_code=403, detail="Insufficient privileges for target role")
+
     if oid_str(target["_id"]) == oid_str(current_user["_id"]) and next_role not in {"owner", "admin"}:
         raise HTTPException(status_code=400, detail="You cannot remove your own admin access")
 
@@ -439,6 +444,11 @@ async def admin_deactivate_user(user_id: str, request: Request, current_user=Dep
 
     if oid_str(target["_id"]) == oid_str(current_user["_id"]):
         raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
+
+    actor_role = normalize_role(current_user.get("role"))
+    target_role = normalize_role(target.get("role"))
+    if not can_deactivate_user(actor_role, target_role):
+        raise HTTPException(status_code=403, detail="Insufficient privileges for target role")
 
     if target.get("is_active", True) is False:
         return {"ok": True}

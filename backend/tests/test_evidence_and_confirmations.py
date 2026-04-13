@@ -1,9 +1,10 @@
 """Tests for evidence ingestion, evidence CRUD, and user skill confirmation flows."""
 
-from io import BytesIO
 from bson import ObjectId
+import pytest
 
 from app.core.auth import now_utc
+from app.routers.evidence import MAX_EVIDENCE_UPLOAD_BYTES
 
 
 def test_evidence_skill_matching_resolves_aliases_and_acronyms(test_context):
@@ -112,6 +113,261 @@ def test_evidence_analysis_and_crud(test_context):
     deleted = client.delete(f"/evidence/{evidence_id}", headers=headers)
     assert deleted.status_code == 200
     assert not any(str(doc.get("source_id")) == evidence_id for doc in db["rag_chunks"].docs)
+
+
+def test_evidence_enforces_project_ownership(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+    db = test_context["db"]
+
+    user_oid = ObjectId(test_context["user_id"])
+    owned_project_id = ObjectId()
+    foreign_project_id = ObjectId()
+    now = now_utc()
+
+    db["projects"].docs.extend(
+        [
+            {
+                "_id": owned_project_id,
+                "user_id": user_oid,
+                "title": "Owned Project",
+                "description": "Visible to the authenticated user",
+                "start_date": None,
+                "end_date": None,
+                "tags": [],
+                "created_at": now,
+                "updated_at": now,
+            },
+            {
+                "_id": foreign_project_id,
+                "user_id": ObjectId(),
+                "title": "Foreign Project",
+                "description": "Belongs to another user",
+                "start_date": None,
+                "end_date": None,
+                "tags": [],
+                "created_at": now,
+                "updated_at": now,
+            },
+        ]
+    )
+
+    created = client.post(
+        "/evidence/",
+        headers=headers,
+        json={
+            "user_id": test_context["user_id"],
+            "type": "project",
+            "title": "Project-Owned Evidence",
+            "source": "manual-entry",
+            "text_excerpt": "Built Python ML dashboards with FastAPI APIs.",
+            "project_id": str(owned_project_id),
+            "origin": "user",
+        },
+    )
+    assert created.status_code == 200
+    assert created.json()["project_id"] == str(owned_project_id)
+
+    rejected = client.post(
+        "/evidence/",
+        headers=headers,
+        json={
+            "user_id": test_context["user_id"],
+            "type": "project",
+            "title": "Foreign Project Evidence",
+            "source": "manual-entry",
+            "text_excerpt": "Built Python ML dashboards with FastAPI APIs.",
+            "project_id": str(foreign_project_id),
+            "origin": "user",
+        },
+    )
+    assert rejected.status_code == 403
+
+    patched = client.patch(
+        f"/evidence/{created.json()['id']}",
+        headers=headers,
+        json={"project_id": str(foreign_project_id)},
+    )
+    assert patched.status_code == 403
+
+
+def test_evidence_analysis_rejects_oversized_uploads(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+
+    response = client.post(
+        "/evidence/analyze",
+        headers=headers,
+        data={"title": "Large Upload", "type": "project"},
+        files={"file": ("large.txt", b"x" * (MAX_EVIDENCE_UPLOAD_BYTES + 1), "text/plain")},
+    )
+
+    assert response.status_code == 413
+
+
+def test_evidence_analysis_strips_citation_sections(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+
+    response = client.post(
+        "/evidence/analyze",
+        headers=headers,
+        data={
+            "title": "Research Project Summary",
+            "type": "project",
+            "text": (
+                "Built Python ML dashboards for internal decision support.\n\n"
+                "References\n"
+                "[1] Smith, J. (2024). Deep learning systems. Journal of AI, 12(3), 1-9. doi:10.1000/xyz\n"
+                "[2] Retrieved from https://example.com/paper"
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert "Built Python ML dashboards" in item["text_excerpt"]
+    assert "References" not in item["text_excerpt"]
+    assert "doi:" not in item["text_excerpt"].lower()
+
+
+def test_link_extraction_blocks_private_hosts_and_caps_remote_fetch_size(monkeypatch):
+    from app.utils import link_extraction
+
+    with monkeypatch.context() as m:
+        called = False
+
+        def _should_not_fetch(*_args, **_kwargs):
+            nonlocal called
+            called = True
+            raise AssertionError("private hosts should not be fetched")
+
+        m.setattr(link_extraction, "_fetch_html", _should_not_fetch)
+        with pytest.raises(link_extraction.LinkExtractionError):
+            link_extraction._extract_link_sync("http://127.0.0.1/private")
+        assert not called
+
+    class _Headers:
+        def __init__(self, content_length: str | None = None):
+            self.content_length = content_length
+
+        def get_content_charset(self):
+            return "utf-8"
+
+        def get(self, key: str, default=None):
+            if key.lower() == "content-length":
+                return self.content_length
+            return default
+
+    class _Response:
+        def __init__(self, body: bytes, *, content_length: str | None = None):
+            self.body = body
+            self.headers = _Headers(content_length)
+            self.read_sizes: list[int] = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self, size: int = -1):
+            self.read_sizes.append(size)
+            return self.body[:size]
+
+    response = _Response(b"<html><title>Example</title>" + b"a" * (link_extraction.MAX_REMOTE_FETCH_BYTES + 128))
+    with monkeypatch.context() as m:
+        m.setattr(
+            link_extraction,
+            "build_opener",
+            lambda *_handlers: type("FakeOpener", (), {"open": staticmethod(lambda _request, timeout=8: response)})(),
+        )
+        with pytest.raises(link_extraction.LinkExtractionError):
+            link_extraction._fetch_html("https://example.com")
+    assert response.read_sizes == [link_extraction.MAX_REMOTE_FETCH_BYTES + 1]
+
+
+def test_evidence_manual_skill_overrides_are_kept_separate_from_extracted_skills(test_context):
+    client = test_context["client"]
+    headers = test_context["headers"]
+
+    created = client.post(
+        "/evidence/",
+        headers=headers,
+        json={
+            "user_id": test_context["user_id"],
+            "type": "project",
+            "title": "Manual Skill Override",
+            "source": "manual-entry",
+            "text_excerpt": "Built Python APIs for analytics delivery.",
+            "extracted_skill_ids": [test_context["skill_python"]],
+            "manual_skill_ids": [test_context["skill_ml"]],
+            "manual_skill_names": ["ML"],
+            "origin": "user",
+        },
+    )
+    assert created.status_code == 200
+    payload = created.json()
+    assert payload["extracted_skill_ids"] == [test_context["skill_python"]]
+    assert payload["manual_skill_ids"] == [test_context["skill_ml"]]
+    assert payload["manual_skill_names"] == ["ML"]
+    assert payload["skill_ids"] == [test_context["skill_python"], test_context["skill_ml"]]
+
+    patched = client.patch(
+        f"/evidence/{payload['id']}",
+        headers=headers,
+        json={"manual_skill_ids": [test_context["skill_python"]], "manual_skill_names": ["Python"]},
+    )
+    assert patched.status_code == 200
+    patched_payload = patched.json()
+    assert patched_payload["manual_skill_ids"] == [test_context["skill_python"]]
+    assert patched_payload["manual_skill_names"] == ["Python"]
+
+
+def test_evidence_analyze_and_create_can_derive_text_from_link(test_context, monkeypatch):
+    client = test_context["client"]
+    headers = test_context["headers"]
+
+    async def _fake_extract_link(_url: str):
+        from app.utils.link_extraction import LinkExtractionResult
+
+        return LinkExtractionResult(
+            url="https://github.com/example/python-ml-dashboard",
+            source_kind="github",
+            title="example/python-ml-dashboard",
+            description="Python ML dashboard repo",
+            text="Python ML dashboard repo with FastAPI services and analytics charts.",
+        )
+
+    monkeypatch.setattr("app.routers.evidence.extract_link_evidence_content", _fake_extract_link)
+
+    analysis = client.post(
+        "/evidence/analyze",
+        headers=headers,
+        data={"type": "project", "url": "https://github.com/example/python-ml-dashboard"},
+    )
+    assert analysis.status_code == 200
+    item = analysis.json()["items"][0]
+    assert item["title"] == "example/python-ml-dashboard"
+    extracted_names = {entry["skill_name"] for entry in item["extracted_skills"]}
+    assert {"Python", "ML"} <= extracted_names
+
+    created = client.post(
+        "/evidence/",
+        headers=headers,
+        json={
+            "user_id": test_context["user_id"],
+            "type": "project",
+            "title": "Repo Link",
+            "source": "https://github.com/example/python-ml-dashboard",
+            "text_excerpt": "",
+            "origin": "user",
+        },
+    )
+    assert created.status_code == 200
+    payload = created.json()
+    assert "FastAPI services" in payload["text_excerpt"]
+    assert test_context["skill_python"] in payload["skill_ids"]
 
 
 def test_resume_evidence_unlocks_template_ready_achievement(test_context):

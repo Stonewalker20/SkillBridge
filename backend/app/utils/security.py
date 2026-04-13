@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import ipaddress
+import socket
 from typing import Any
 
 from fastapi import HTTPException, Request
+from app.core.config import settings
 
 AUTH_RATE_LIMITS: dict[str, tuple[int, int]] = {
     "register": (5, 60),
@@ -31,21 +34,81 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _is_trusted_proxy_host(host: str | None) -> bool:
+    candidate = str(host or "").strip()
+    if not candidate:
+        return False
+
+    trusted_entries = settings.trusted_proxy_cidrs_list
+    if not trusted_entries:
+        return False
+
+    try:
+        address = ipaddress.ip_address(candidate)
+    except ValueError:
+        return False
+
+    for entry in trusted_entries:
+        try:
+            if address in ipaddress.ip_network(entry, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _is_safe_forwarded_host(value: str) -> bool:
+    candidate = str(value or "").strip().lower()
+    if not candidate:
+        return False
+    if candidate in {"localhost", "localhost.localdomain"}:
+        return False
+    if candidate.endswith(".local"):
+        return False
+
+    try:
+        address = ipaddress.ip_address(candidate)
+    except ValueError:
+        try:
+            infos = socket.getaddrinfo(candidate, None, type=socket.SOCK_STREAM)
+        except OSError:
+            return False
+        if not infos:
+            return False
+        for family, _socktype, _proto, _canonname, sockaddr in infos:
+            if family not in {socket.AF_INET, socket.AF_INET6}:
+                continue
+            resolved = ipaddress.ip_address(sockaddr[0])
+            if resolved.is_private or resolved.is_loopback or resolved.is_link_local or resolved.is_reserved or resolved.is_multicast:
+                return False
+        return True
+
+    return not (
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_reserved
+        or address.is_multicast
+        or address.is_unspecified
+    )
+
+
 def get_request_ip(request: Request | None) -> str:
     if request is None:
         return "unknown"
 
-    forwarded_for = str(request.headers.get("x-forwarded-for") or "").strip()
-    if forwarded_for:
-        first = forwarded_for.split(",")[0].strip()
-        if first:
-            return first
-
-    real_ip = str(request.headers.get("x-real-ip") or "").strip()
-    if real_ip:
-        return real_ip
-
     client_host = getattr(getattr(request, "client", None), "host", None)
+    if client_host and _is_trusted_proxy_host(client_host):
+        forwarded_for = str(request.headers.get("x-forwarded-for") or "").strip()
+        if forwarded_for:
+            first = forwarded_for.split(",")[0].strip()
+            if first and _is_safe_forwarded_host(first):
+                return first
+
+        real_ip = str(request.headers.get("x-real-ip") or "").strip()
+        if real_ip and _is_safe_forwarded_host(real_ip):
+            return real_ip
+
     if client_host:
         return str(client_host)
 

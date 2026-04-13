@@ -90,6 +90,59 @@ def test_admin_workspace_endpoints(test_context):
     assert "admin.job.moderation_updated" in audit_actions
 
 
+def test_admin_team_role_cannot_manage_higher_roles(test_context):
+    client = test_context["client"]
+    db = test_context["db"]
+
+    db["users"].docs[0]["role"] = "team"
+    seeded_user = db["users"].docs[0]
+    password_parts = {
+        "salt": seeded_user["password_salt"],
+        "hash": seeded_user["password_hash"],
+    }
+    created_at = seeded_user["created_at"]
+
+    def add_user(*, email: str, username: str, role: str) -> ObjectId:
+        user_id = ObjectId()
+        db["users"].docs.append(
+            {
+                "_id": user_id,
+                "email": email,
+                "username": username,
+                "password_salt": password_parts["salt"],
+                "password_hash": password_parts["hash"],
+                "role": role,
+                "is_active": True,
+                "created_at": created_at,
+            }
+        )
+        return user_id
+
+    lower_user_id = add_user(email="lower@example.com", username="lower", role="user")
+    higher_user_id = add_user(email="higher@example.com", username="higher", role="admin")
+    owner_user_id = add_user(email="owner@example.com", username="owner", role="owner")
+
+    promote = client.patch(
+        f"/admin/users/{lower_user_id}",
+        headers=test_context["headers"],
+        json={"role": "admin"},
+    )
+    assert promote.status_code == 403
+    assert promote.json()["detail"] == "Insufficient privileges for target role"
+
+    demote_higher = client.patch(
+        f"/admin/users/{higher_user_id}",
+        headers=test_context["headers"],
+        json={"role": "user"},
+    )
+    assert demote_higher.status_code == 403
+    assert demote_higher.json()["detail"] == "Insufficient privileges for target role"
+
+    deactivate = client.delete(f"/admin/users/{owner_user_id}", headers=test_context["headers"])
+    assert deactivate.status_code == 403
+    assert deactivate.json()["detail"] == "Insufficient privileges for target role"
+
+
 def test_admin_mlflow_endpoints(test_context, monkeypatch):
     client = test_context["client"]
     db = test_context["db"]

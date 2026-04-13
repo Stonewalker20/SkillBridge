@@ -1,15 +1,43 @@
 """Smoke tests covering authentication flows and health endpoints."""
 
-from bson import ObjectId
+from types import SimpleNamespace
 from pathlib import Path
 
+from bson import ObjectId
+
 from app.core.config import settings
+from app.utils.security import get_request_ip
 
 def test_health_endpoints(test_context):
     client = test_context["client"]
-    assert client.get("/health/").status_code == 200
-    counts = client.get("/health/db_counts").json()
-    assert counts["skills"] >= 2
+    db = test_context["db"]
+
+    assert client.get("/health/").json() == {"status": "ok"}
+
+    locked = client.get("/health/db_counts", headers=test_context["headers"])
+    assert locked.status_code == 403
+
+    db["users"].docs[0]["role"] = "admin"
+    counts = client.get("/health/db_counts", headers=test_context["headers"])
+    assert counts.status_code == 200
+    assert counts.json()["skills"] >= 2
+
+
+def test_forwarded_headers_are_only_trusted_from_configured_proxies(monkeypatch):
+    request = SimpleNamespace(
+        headers={"x-forwarded-for": "8.8.8.8, 10.0.0.4", "x-real-ip": "1.1.1.1"},
+        client=SimpleNamespace(host="10.1.2.3"),
+    )
+
+    assert get_request_ip(request) == "10.1.2.3"
+
+    monkeypatch.setattr(settings, "trusted_proxy_cidrs", "10.0.0.0/8")
+    trusted_request = SimpleNamespace(
+        headers={"x-forwarded-for": "8.8.8.8, 10.0.0.4", "x-real-ip": "1.1.1.1"},
+        client=SimpleNamespace(host="10.1.2.3"),
+    )
+
+    assert get_request_ip(trusted_request) == "8.8.8.8"
 
 
 def test_auth_register_login_profile_and_logout(test_context):
@@ -80,6 +108,20 @@ def test_auth_register_login_profile_and_logout(test_context):
 
     delete = client.delete("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert delete.status_code == 401
+
+
+def test_auth_register_defaults_to_user_for_admin_allowlisted_email(test_context, monkeypatch):
+    client = test_context["client"]
+    monkeypatch.setattr(settings, "admin_owner_emails", "owner@example.com")
+    monkeypatch.setattr(settings, "admin_team_emails", "team@example.com")
+
+    register = client.post(
+        "/auth/register",
+        json={"email": "owner@example.com", "username": "ownerish", "password": "password123456789"},
+    )
+    assert register.status_code == 200
+    payload = register.json()
+    assert payload["user"]["role"] == "user"
 
 
 def test_subscription_activation_unlocks_core_routes(test_context):
